@@ -4,8 +4,9 @@
     blender --factory-startup --python tools/make_examples.py [-- --only NF031]
 
 Writes examples/NF0xx.blend, each holding one Geometry Nodes group named "NF0xx <rule name>"
-(with a fake user, no objects, no screens). Runs with Blender's window: reroutes are placed
-from socket positions, which only exist once a tree is drawn. Blender closes itself.
+(with a fake user, no objects, no screens), and examples/selection.blend for Sort Selection.
+Runs with Blender's window: reroutes are placed from socket positions, which only exist once a
+tree is drawn. Blender closes itself.
 """
 import argparse
 import os
@@ -27,10 +28,11 @@ ARGS = ap.parse_args(argv)
 class Tree:
     """A Geometry Nodes group under construction: nodes, links and orthogonal wires."""
 
-    def __init__(self, code, inputs=(("Geometry", 'Geometry'),), outputs=(("Geometry", 'Geometry'),)):
-        """A new group "<code> <rule name>" with the given interface sockets (name, type)."""
+    def __init__(self, code, inputs=(("Geometry", 'Geometry'),), outputs=(("Geometry", 'Geometry'),), name=None):
+        """A new group "<code> <rule name>" (or `name`) with the given interface sockets (name,
+        type)."""
         from nodefmt import rules
-        self.nt = bpy.data.node_groups.new(f"{code} {rules.NAMES[code]}", 'GeometryNodeTree')
+        self.nt = bpy.data.node_groups.new(name or f"{code} {rules.NAMES[code]}", 'GeometryNodeTree')
         self.nt.use_fake_user = True
         for name, kind in inputs:
             self.nt.interface.new_socket(name, in_out='INPUT', socket_type='NodeSocket' + kind)
@@ -38,6 +40,7 @@ class Tree:
             self.nt.interface.new_socket(name, in_out='OUTPUT', socket_type='NodeSocket' + kind)
         self.wires = []
         self.levels = []
+        self.selected = set()  # nodes saved selected (the others are not)
 
     def node(self, kind, x, y, name=None, parent=None, **props):
         """Add a node of type `kind` with its top-left corner at (x, y)."""
@@ -112,6 +115,8 @@ class Tree:
                 self.nt.links.new(prev, r.inputs[0])
                 prev = r.outputs[0]
             self.nt.links.new(prev, dst)
+        for n in self.nt.nodes:
+            n.select = n in self.selected
         editor.redraw()
 
 
@@ -327,6 +332,36 @@ def nf040():
     return t
 
 
+def selection():
+    """For Sort Selection: a messy frame "Sort me" in a sorted tree, linked to the rest on both
+    sides (a Value node feeds it, Join Geometry takes two of its outputs). The frame is selected."""
+    t = Tree("selection", name="Sort selection")
+    gi = t.node('NodeGroupInput', 0, 0)
+    sp = t.node('GeometryNodeSetPosition', 220, 0)
+    val = t.node('ShaderNodeValue', 220, -240)
+    fr = t.nt.nodes.new('NodeFrame')
+    fr.label = "Sort me"
+    tr = t.node('GeometryNodeTransform', 560, -80, parent=fr)
+    sd = t.node('GeometryNodeSubdivideMesh', 820, 40, parent=fr)
+    tri = t.node('GeometryNodeTriangulate', 760, -260, parent=fr)
+    mp = t.node('GeometryNodeMeshToPoints', 1160, 0)
+    jo = t.node('GeometryNodeJoinGeometry', 1400, 0)
+    go = t.node('NodeGroupOutput', 1600, 0)
+    chain(t, [gi, sp])
+    t.link(sp, 0, tr, 0)
+    t.link(val, 0, tr, "Scale")
+    t.link(tr, 0, sd, 0)
+    t.link(sd, 0, tri, 0)
+    t.link(tri, 0, mp, 0)
+    t.link(mp, 0, jo, 0)
+    t.link(sd, 0, jo, 0)
+    chain(t, [jo, go])
+    t.selected = {fr}
+    return t
+
+
+EXTRAS = {"selection": selection}  # examples for other tests (not of a rule)
+
 EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF004": nf004, "NF010": nf010,
             "NF011": nf011, "NF020": nf020, "NF021": nf021, "NF030": nf030, "NF031": nf031,
             "NF032": nf032, "NF033": nf033, "NF034": nf034, "NF040": nf040}
@@ -339,7 +374,7 @@ def main():
     os.makedirs(ARGS.out, exist_ok=True)
     ed = Editor()
     try:
-        for code, make in EXAMPLES.items():
+        for code, make in {**EXAMPLES, **EXTRAS}.items():
             if ARGS.only and code not in ARGS.only:
                 continue
             t = make()

@@ -132,6 +132,17 @@ class RankingMixin:
         for i in items:
             if i.pin == 'last':
                 r[i] = R
+        # the pins of a part of the tree (part.py) take columns of their own: before and after
+        # everything else, even nodes with no links inside the part
+        own = [i for i in items if getattr(i, 'own_column', False)]
+        if own:
+            rest = [i for i in items if not getattr(i, 'own_column', False)]
+            if any(i.pin == 'first' for i in own):
+                for i in rest:
+                    r[i] += 1
+            R = max((r[i] for i in rest), default=0)
+            for i in own:
+                r[i] = 0 if i.pin == 'first' else R + 1
         # compress empty ranks
         used = sorted(set(r.values()))
         remap = {v: k for k, v in enumerate(used)}

@@ -7,7 +7,8 @@ Runs with Blender's window at UI scale 1.0 and closes itself; the examples are a
 saved. For each examples/NF0xx.blend it writes OUT_DIR/NF0xx-before.png (the tree as it is,
 each place that breaks the rule ringed in red with its code) and OUT_DIR/NF0xx-after.png (a
 copy sorted with the default rules), both at one zoom, and OUT_DIR/boxes.json with the part of
-each screenshot that holds the tree. tools/finish_images.py crops and compresses them.
+each screenshot that holds the tree. examples/selection.blend gives selection-before.png and
+selection-after.png (Sort Selection). tools/finish_images.py crops and compresses them.
 """
 import argparse
 import glob
@@ -119,12 +120,13 @@ def fit(nt, cx, cy, zoom):
     yield 0.3
 
 
-def shoot(nt, path, zoom):
-    """Screenshot the tree at `zoom`; returns the crop box (pixels from the top left)."""
+def shoot(nt, path, zoom, selected=()):
+    """Screenshot the tree at `zoom`, with the nodes `selected` selected; returns the crop box
+    (pixels from the top left)."""
     l, b, r, t = bbox(nt)
     yield from fit(nt, (l + r) / 2, (b + t) / 2, zoom)
     for n in nt.nodes:
-        n.select = False
+        n.select = n.name in selected
     yield 0.3
     win, area, region = area_region()
     with bpy.context.temp_override(window=win, area=area, region=region):
@@ -142,7 +144,7 @@ def shoot(nt, path, zoom):
 
 def run():
     """Capture every example (a generator: the timer waits between steps)."""
-    from nodefmt import api, rules
+    from nodefmt import api
     from nodefmt.draw import Editor
     bpy.context.preferences.view.ui_scale = 1.0  # in memory only
     bpy.context.preferences.view.smooth_view = 0
@@ -188,6 +190,26 @@ def run():
             bpy.data.node_groups.remove(before)
             bpy.data.node_groups.remove(after)
             print(f"captured {code} at zoom {zoom:.2f}", flush=True)
+        sel = os.path.join(ARGS.examples, "selection.blend")
+        if os.path.exists(sel) and (not ARGS.only or "selection" in ARGS.only):
+            from nodefmt import part
+            ed = Editor(area_region()[1])
+            before, after = append(sel), append(sel)
+            chosen = {n.name for n in before.nodes if n.select}
+            ed.show(after)
+            part.sort_selection(after, ed)
+            ed.show(after)
+            kept = {n.name for n in after.nodes if n.select}
+            wa = bbox(after)
+            ed.show(before)
+            wb = bbox(before)
+            zoom = min(ARGS.zoom, 1.5 * ARGS.width / max(wb[2] - wb[0], wa[2] - wa[0]))  # a wider tree
+            boxes["selection-before"] = yield from shoot(before, os.path.join(ARGS.out, "selection-before.png"),
+                                                         zoom, chosen)
+            ed.show(after)
+            boxes["selection-after"] = yield from shoot(after, os.path.join(ARGS.out, "selection-after.png"),
+                                                        zoom, kept)
+            print(f"captured selection at zoom {zoom:.2f}", flush=True)
     finally:
         bpy.types.SpaceNodeEditor.draw_handler_remove(handle, 'WINDOW')
     with open(os.path.join(ARGS.out, "boxes.json"), "w", encoding="utf-8") as fh:

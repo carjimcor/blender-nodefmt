@@ -10,4 +10,7 @@
   layout puts them where they are clean.
 - Inserting a node usually adds a column, so a small edit can reorder what is before it.
 - "Keep layout" mode is experimental.
+- Sort Selection lays the part out on its own: its links to the rest are routed afterwards and
+  may cross other wires or take long detours, and a part that grows may have to move down or
+  right to clear the nodes around it. Sort the whole tree for the best result.
 - Line style and texture node trees are not supported.

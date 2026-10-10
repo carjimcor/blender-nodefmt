@@ -18,7 +18,11 @@ drawn), at UI scale 1.0 (--factory-startup), and closes itself. For each example
            default sort; 'n/a': the example sorts the same either way)
 
 VARIANTS run an example again after a change that real trees often have (a Group Input that
-shows every socket, Blender's default). Prints a table and exits 1 if any test fails.
+shows every socket, Blender's default). examples/selection.blend tests Sort Selection: the rest
+of the tree does not move, the sorted part keeps its top-left corner (or moves just enough to
+clear the rest) and overlaps nothing, its wires and its links to the rest are orthogonal and
+pass behind no node, the logic is unchanged, the selection is kept (plus the new reroutes)
+and a second sort changes nothing. Prints the tables and exits 1 if any test fails.
 """
 import argparse
 import glob
@@ -167,6 +171,78 @@ def run_one(path, ed, prepare=None):
     return out
 
 
+# ---------------------------------------------------------------- Sort Selection
+SEL_COLUMNS = ("rest", "anchored", "overlap", "wires", "logic", "kept", "again")
+# scenario, nodes to select (None: as saved, the frame "Sort me")
+SCENARIOS = [("frame", None), ("two nodes", ["Group Input", "Set Position"]),
+             ("split", ["Transform Geometry", "Triangulate Mesh"])]
+
+
+def link_faults(nt, names):
+    """(segments not orthogonal, segments behind a node) of the drawn links that touch the nodes
+    `names`."""
+    from nodefmt import ortho, wires
+    ui = bpy.context.preferences.system.ui_scale
+    boxes = {}
+    for n in nt.nodes:
+        if n.bl_idname not in ('NodeFrame', 'NodeReroute'):
+            x, y = n.location_absolute
+            boxes[n.name] = (x, -y, x + n.dimensions.x / ui, -y + n.dimensions.y / ui)
+    bent = behind = 0
+    for l, a, b in ortho.drawn(nt):
+        if l.from_node.name not in names and l.to_node.name not in names:
+            continue
+        bent += ortho.bad(a, b)
+        seg = (None, (a[0], -a[1]), (b[0], -b[1]))
+        behind += any(wires.behind(seg, box) for k, box in boxes.items() if k not in (l.from_node.name, l.to_node.name))
+    return bent, behind
+
+
+def run_selection(path, ed, names):
+    """The results of one Sort Selection scenario: {column: (ok, text)}."""
+    from nodefmt import api, check, part
+    nt = append(path)[0]
+    if names is not None:
+        for n in nt.nodes:
+            n.select = n.name in names
+    ed.show(nt)
+    ui = bpy.context.preferences.system.ui_scale
+    real, rr, frames = part.selection(nt)
+    rest = {n.name: tuple(n.location_absolute) for n in nt.nodes
+            if n.name not in real | rr | frames and n.bl_idname != 'NodeFrame'}
+    selected = {n.name for n in nt.nodes if n.select}
+    old_names = {n.name for n in nt.nodes}
+    fp = check.fingerprint(nt)
+    out = {}
+    st = part.sort_selection(nt, ed)
+    ed.show(nt)
+    moved = [k for k, p in rest.items() if k not in nt.nodes or tuple(nt.nodes[k].location_absolute) != p]
+    out["rest"] = (not moved, f"{len(moved)} moved" if moved else f"{len(rest)} in place")
+    box, old = st["box"], st["old"]
+    if any(st["moved"]):
+        out["anchored"] = (True, f"moved {st['moved']} to clear the rest")
+    else:
+        d = (abs(box[0] - old[0]), abs(box[3] - old[3]))
+        out["anchored"] = (max(d) <= 1.0, f"top-left off by {d[0]:g}, {d[1]:g}")
+    boxes = {n.name: part._box(n, ui) for n in nt.nodes if n.bl_idname not in ('NodeFrame', 'NodeReroute')}
+    hits = [(a, b) for a in real for b in rest if b in boxes and part._overlaps(boxes[a], boxes[b])]
+    out["overlap"] = (not hits, f"{hits[:2]}" if hits else "none")
+    new = {n.name for n in nt.nodes if n.name not in old_names}
+    bent, behind = link_faults(nt, real | rr | new)
+    out["wires"] = (not bent and not behind, f"{bent} not orthogonal, {behind} behind nodes")
+    d = check.diff(fp, check.fingerprint(nt))
+    out["logic"] = (not d, "same" if not d else "; ".join(d[:2]))
+    now = {n.name for n in nt.nodes if n.select}
+    want = {k for k in selected if k in nt.nodes} | new
+    out["kept"] = (now == want, f"{len(now)} selected")
+    sig = api._signature(nt)
+    part.sort_selection(nt, ed)
+    ed.show(nt)
+    out["again"] = (api.same_layout(api._signature(nt), sig), "")
+    bpy.data.node_groups.remove(nt)
+    return out
+
+
 def main():
     """Run every example and print the table; returns the exit code."""
     from nodefmt.draw import Editor
@@ -174,7 +250,7 @@ def main():
     files = sorted(glob.glob(os.path.join(ARGS.examples, "NF*.blend")))
     if ARGS.only:
         files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in ARGS.only]
-    if not files:
+    if not files and "selection" not in ARGS.only:
         print("run_tests: no examples found", flush=True)
         return 1
     runs = [(os.path.splitext(os.path.basename(f))[0], f, None) for f in files]
@@ -207,6 +283,25 @@ def main():
             cells.append(" ".join(x for x in (mark, f"({text})" if text and ok is not None else text) if x))
         print(f"| {code} | " + " | ".join(cells) + " |")
     print(f"\n{len(rows) - failed} of {len(rows)} examples pass ({time.perf_counter() - t0:.1f} s)", flush=True)
+    sel = os.path.join(ARGS.examples, "selection.blend")
+    if os.path.exists(sel) and (not ARGS.only or "selection" in ARGS.only):
+        print("\n| Sort Selection | " + " | ".join(SEL_COLUMNS) + " |")
+        print("|---" * (len(SEL_COLUMNS) + 1) + "|")
+        ed = Editor()
+        try:
+            for name, nodes in SCENARIOS:
+                try:
+                    res = run_selection(sel, ed, nodes)
+                except Exception as e:
+                    traceback.print_exc()
+                    res = {"rest": (False, f"error: {e}")}
+                bad = [c for c in SEL_COLUMNS if res.get(c, (False,))[0] is False]
+                failed += bool(bad)
+                cells = [("ok" if res[c][0] else "FAIL") + (f" ({res[c][1]})" if res[c][1] else "")
+                         if c in res else "not run" for c in SEL_COLUMNS]
+                print(f"| {name} | " + " | ".join(cells) + " |", flush=True)
+        finally:
+            ed.close()
     return 1 if failed else 0
 
 

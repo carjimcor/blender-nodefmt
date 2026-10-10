@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests of the add-on operators: sorting with progress, Esc, undo.
+"""Tests of the add-on operators: sorting with progress, Esc, undo, Sort Selection.
 
     blender --factory-startup --enable-event-simulate --python tests/test_operators.py
 
@@ -137,6 +137,23 @@ def run():
         bpy.ops.ed.undo()
     yield 0.3
     test("one undo step puts every tree back", state(names) == start)
+
+    # Sort Selection (the frame saved selected in examples/selection.blend): one undo step
+    sel = append("selection")
+    show(sel)
+    yield 0.3
+    with override():
+        bpy.ops.ed.undo_push(message="before selection")
+    before = state([sel])
+    with override():
+        r = bpy.ops.node.nodefmt_sort_selection('INVOKE_DEFAULT', True)
+    yield 0.3
+    test("sort selection", r == {'FINISHED'} and state([sel])[sel][0] != before[sel][0], str(r))
+    test("sort selection keeps the logic", state([sel])[sel][1] == before[sel][1])
+    with override():
+        bpy.ops.ed.undo()
+    yield 0.3
+    test("one undo step puts the selection back", state([sel]) == before)
 
     # scripts: EXEC_DEFAULT sorts at once
     with override():

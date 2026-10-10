@@ -33,6 +33,7 @@ from Disk.
 In a Geometry Nodes, Shader or Compositor editor, open the sidebar (N) and the nodefmt tab:
 
 - **Sort Current Tree**: the tree shown in the editor.
+- **Sort Selection**: only the selected nodes, or what is inside a selected frame.
 - **Sort All Trees**: every node tree in the file.
 - **Check Current Tree**: the rules the tree breaks, without changing it.
 
@@ -46,7 +47,6 @@ back.
 - [Configuration](docs/CONFIGURATION.md): `nodefmt.toml`.
 - [Command line](docs/CLI.md): `--check`, `--fix` and the git pre-commit hook.
 - [Limitations](docs/LIMITATIONS.md)
-- [Roadmap](docs/ROADMAP.md)
 - [How it works](docs/ALGORITHM.md): the layout pipeline and its references.
 
 ## Contributing

@@ -250,9 +250,12 @@ class Formatter:
                 pin = 'last'
             elif m.type(name) in OUTPUTS and c.kind == 'root':
                 pin = 'last'
+            elif m.info[name].get("pin") and c.kind == 'root':
+                pin = m.info[name]["pin"]  # a link to the rest of the tree (sort of a part)
             kind = 'label' if m.type(name) == 'NodeReroute' else 'node'  # a kept (labelled) reroute
             it = engine.Item(name, kind, w, h, dict(m.ins[name]), dict(m.outs[name]), x, y,
                              m.main.get(name), pin)
+            it.own_column = bool(m.info[name].get("pin")) and c.kind == 'root'  # see ranking.rank
             it.geo_out = any(m.geo.get(g, False) for g in m.outs[name])
             it.src = not any(d[0] == name for _, d, _, _ in m.links)
             if name in m.comm and self.swaps_on:

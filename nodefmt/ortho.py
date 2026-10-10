@@ -85,18 +85,22 @@ def count(nt):
     return len(faults(nt))
 
 
-def straighten(nt, editor):
+def straighten(nt, editor, movable=None):
     """Make every drawn link segment of `nt` horizontal or vertical (see the module docstring).
-    Returns stats: reroutes snapped, nodes nudged, bends added, segments left."""
+    movable (a set of node names): only these nodes and reroutes may move, and only links that
+    touch them are mended (a sort of a part of the tree). Returns stats: reroutes snapped, nodes
+    nudged, bends added, segments left."""
     s = ui_scale()
     gap = slot_gap(s)
     st = {"snapped": 0, "nudged": 0, "bends": 0, "left": 0}
     moves = {}
+    mine = (lambda l: True) if movable is None else (
+        lambda l: l.from_node.name in movable or l.to_node.name in movable)
     for k in range(ROUNDS):
         editor.redraw()
-        if _snap_reroutes(nt, drawn(nt, gap), st):
+        if _snap_reroutes(nt, drawn(nt, gap), st, movable):
             editor.redraw()
-        segs = drawn(nt, gap)
+        segs = [x for x in drawn(nt, gap) if mine(x[0])]
         left = [(l, a, b) for l, a, b in segs if bad(a, b)]
         if DEBUG:
             print(f"straighten {nt.name} round {k}: {len(left)} off", [
@@ -104,11 +108,11 @@ def straighten(nt, editor):
                  [round(v, 3) for v in a], [round(v, 3) for v in b]) for l, a, b in left], flush=True)
         if not left:
             break
-        if k < ROUNDS - 2 and _nudge(nt, segs, moves, s, st):
+        if k < ROUNDS - 2 and _nudge(nt, segs, moves, s, st, movable):
             continue
         _bend(nt, left, s, st)
     editor.redraw()
-    st["left"] = len(faults(nt, gap))
+    st["left"] = sum(1 for l, _, _ in faults(nt, gap) if mine(l))
     return st
 
 
@@ -117,10 +121,11 @@ def _axis(a, b):
     return 'h' if abs(b[1] - a[1]) <= abs(b[0] - a[0]) else 'v'
 
 
-def _snap_reroutes(nt, segs, st):
+def _snap_reroutes(nt, segs, st, movable=None):
     """Reroutes joined by horizontal (vertical) wires share one height (x): the exact height (x)
-    of the socket that wire runs to, the source socket first. Returns the number moved."""
-    rr = {n.name: n for n in nt.nodes if n.bl_idname == REROUTE}
+    of the socket that wire runs to, the source socket first. Only reroutes in `movable` move
+    (default all; a fixed reroute counts as a socket). Returns the number moved."""
+    rr = {n.name: n for n in nt.nodes if n.bl_idname == REROUTE and (movable is None or n.name in movable)}
     parent = {}
 
     def find(k):
@@ -171,7 +176,7 @@ def _snap_reroutes(nt, segs, st):
     return moved
 
 
-def _nudge(nt, segs, moves, s, st):
+def _nudge(nt, segs, moves, s, st, movable=None):
     """Move nodes onto the lines of straight links that are a little off: the destination node,
     else the source node, by at most NUDGE, each node at most MOVES times in all and once per
     round. Links are taken left to right; a node moved in this round shifts the ends of its
@@ -188,6 +193,8 @@ def _nudge(nt, segs, moves, s, st):
             continue
         for node, sign in ((tb, 1.0), (fa, -1.0)):
             if node.bl_idname in ('NodeFrame', REROUTE) or node.name in shift or moves.get(node.name, 0) >= MOVES:
+                continue
+            if movable is not None and node.name not in movable:
                 continue  # (a reroute source holds the line of its wire: only the destination moves)
             loc = list(node.location_absolute)
             new = to_px(loc[c] + sign * delta, s)
@@ -239,14 +246,16 @@ def _bend(nt, left, s, st):
         st["bends"] += 1
 
 
-def drop_straight(nt):
+def drop_straight(nt, movable=None):
     """Remove reroutes that sit in the middle of a straight run (rule NF034): an unlabelled
     reroute with one link in and one out, all three points on one horizontal or vertical line.
     Rounding to the pixel grid can leave one after straighten. Links into multi-input sockets
-    are left alone (their order would change). Returns the number removed."""
+    are left alone (their order would change). movable: only these reroutes (default all).
+    Returns the number removed."""
     gap = slot_gap()
     out = 0
-    for r in [n for n in nt.nodes if n.bl_idname == REROUTE and not n.label]:
+    for r in [n for n in nt.nodes if n.bl_idname == REROUTE and not n.label
+              and (movable is None or n.name in movable)]:
         ins, outs = r.inputs[0].links, r.outputs[0].links
         if len(ins) != 1 or len(outs) != 1 or outs[0].to_socket.is_multi_input:
             continue

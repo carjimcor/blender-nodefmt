@@ -279,6 +279,39 @@ class NODEFMT_OT_sort_all(SortModal, bpy.types.Operator):
         return api.all_trees()
 
 
+class NODEFMT_OT_sort_selection(bpy.types.Operator):
+    """Sort the selected nodes and reroutes, or the contents of a selected frame (part.py)."""
+    bl_idname = "node.nodefmt_sort_selection"
+    bl_label = "Sort Selection"
+    bl_description = ("Sort only the selected nodes and reroutes, or what is inside a selected frame; the rest "
+                      "stays where it is. Ctrl+Z undoes it")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        """Available in a supported node editor with something selected, when no sort runs."""
+        return NODEFMT_OT_sort_tree.poll(context) and any(n.select for n in context.space_data.edit_tree.nodes)
+
+    def execute(self, context):
+        """Sort the selected part of the edited tree; on a logic change it is restored."""
+        from . import part
+        nt = context.space_data.edit_tree
+        ed = Editor(context.area)
+        try:
+            st = part.sort_selection(nt, ed, config(context), context.window_manager.nodefmt_mode)
+        except part.EmptySelection as e:
+            self.report({'WARNING'}, f"Nothing to sort: {e}")
+            return {'CANCELLED'}
+        except api.LogicChanged as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        finally:
+            ed.close()
+        moved = " (moved to clear the nodes around it)" if any(st["moved"]) else ""
+        self.report({'INFO'}, f"Sorted {st['nodes']} nodes of {st['tree']}{moved}")
+        return {'FINISHED'}
+
+
 class NODEFMT_OT_check(bpy.types.Operator):
     """Check the tree shown in the editor: the rules it breaks, by code; changes nothing."""
     bl_idname = "node.nodefmt_check"
@@ -331,6 +364,7 @@ class NODEFMT_PT_panel(bpy.types.Panel):
             box.label(text=job.text)
             box.label(text="Esc cancels and puts the trees back", icon='CANCEL')
         col.operator(NODEFMT_OT_sort_tree.bl_idname, icon='NODETREE')
+        col.operator(NODEFMT_OT_sort_selection.bl_idname, icon='RESTRICT_SELECT_OFF')
         col.operator(NODEFMT_OT_sort_all.bl_idname, icon='FILE_BLEND')
         col.operator(NODEFMT_OT_check.bl_idname, icon='CHECKMARK')
         col.prop(context.window_manager, "nodefmt_mode", text="")
@@ -361,8 +395,8 @@ class NODEFMT_PT_panel(bpy.types.Panel):
                 box.label(text=f"... {len(_LAST['lines']) - 12} more (see the console)")
 
 
-CLASSES = (NODEFMT_AddonPreferences, NODEFMT_OT_sort_tree, NODEFMT_OT_sort_all, NODEFMT_OT_check,
-           NODEFMT_PT_panel)
+CLASSES = (NODEFMT_AddonPreferences, NODEFMT_OT_sort_tree, NODEFMT_OT_sort_selection, NODEFMT_OT_sort_all,
+           NODEFMT_OT_check, NODEFMT_PT_panel)
 
 
 def register():

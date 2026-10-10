@@ -99,23 +99,25 @@ def same_layout(a, b, tol=None):
     return True
 
 
-def read_tree(nt, editor):
+def read_tree(nt, editor, part=None, pins=None):
     """model.read with socket offsets that do not depend on where the nodes are. At a UI scale
     other than 1, Blender's node layout rounds float row heights, so a node's height and socket
     offsets change by a pixel or more with its location; the nodes are drawn at one place for
-    the measure (then put back), so every pass of a format sees the same tree."""
+    the measure (then put back), so every pass of a format sees the same tree. part and pins:
+    read only a part of the tree (see model.read); only its nodes are touched."""
     editor.show(nt)
     s = ortho.ui_scale()
-    blend.pixel_snap(nt, s)
+    blend.pixel_snap(nt, s, part)
     if abs(s - 1.0) < 1e-6:
         editor.redraw()
-        return model.read(nt)
-    where = {n.name: tuple(n.location_absolute) for n in nt.nodes if n.bl_idname != 'NodeFrame'}
+        return model.read(nt, part=part, pins=pins)
+    where = {n.name: tuple(n.location_absolute) for n in nt.nodes
+             if n.bl_idname != 'NodeFrame' and (part is None or n.name in part)}
     try:
         for name in where:
             nt.nodes[name].location_absolute = (0.0, 0.0)
         editor.redraw()
-        return model.read(nt, where)
+        return model.read(nt, where, part=part, pins=pins)
     finally:
         for name, p in where.items():
             nt.nodes[name].location_absolute = p

@@ -280,6 +280,7 @@ nodefmt/  (the extension)
   ortho.py      UI scale, pixel grid, multi-input slots; read back and straighten drawn wires
   model.py      read a tree as plain data; the Model the layout works on
   dup.py        copies of input-like nodes: plan (pure) and realize (Blender)
+  part.py       Sort Selection: a part of the tree with pins for its links, placement, routing
   layout.py     containers, nesting, absolute positions, routes, labels, geometry()
   engine.py     layout of one container: the driver (seeds, search, slide) and finish
   graph.py      items, edges, candidates and shared helpers of the engine

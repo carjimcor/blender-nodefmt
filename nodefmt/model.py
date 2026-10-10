@@ -58,18 +58,23 @@ def _same_default(a, b):
     return va == vb
 
 
-def read(nt, where=None):
+def read(nt, where=None, part=None, pins=None):
     """Plain data of a drawn tree (call draw.Editor.show(nt) first). `where` (name -> location)
     gives the locations to record when the nodes were moved for the drawing (see
-    api.read_tree); socket offsets are always taken from where the nodes are drawn now."""
+    api.read_tree); socket offsets are always taken from where the nodes are drawn now.
+
+    part (a set of node names) reads only those nodes and the links between them (a sort of
+    the selection, see part.py); pins {reroute name: 'first' | 'last'} are reroutes of the part
+    that stand for its links to the rest: they are kept and take the first or last column."""
     where = where or {}
+    pins = pins or {}
     from .sockets import socket_location
     from . import dup, ortho
     ui = ortho.ui_scale()
-    nodes = list(nt.nodes)
+    nodes = [n for n in nt.nodes if part is None or n.name in part]
     # reroutes we may remove and rebuild; a labelled one is kept but treated the same way, and
     # put back on the new route of its wire afterwards (a label names a wire, see layout.py)
-    removable = {n.name for n in nodes if n.bl_idname == REROUTE}
+    removable = {n.name for n in nodes if n.bl_idname == REROUTE and n.name not in pins}
     bad = [l for l in nt.links if l.is_hidden]
     todo = [n.name for l in bad for n in (l.from_node, l.to_node) if n.name in removable]
     for n in nodes:  # dangling reroutes stay (they are visible as such)
@@ -137,11 +142,14 @@ def read(nt, where=None):
 
     links = []
     old_routes = {}  # where each link ran before: its reroutes (stability, see engine.py)
+    inside = {n.name for n in nodes}
     for l in nt.links:
         if l.to_node.name in removable or l.is_hidden or l.to_node.bl_idname == FRAME:
             continue
+        if l.to_node.name not in inside:
+            continue
         for s, chain in back(l):
-            if any(c.is_hidden for c in chain):
+            if any(c.is_hidden for c in chain) or s.node.name not in inside:
                 continue
             sid = l.multi_input_sort_id if l.to_socket.is_multi_input else 0
             muted = any(c.is_muted for c in chain)
@@ -163,8 +171,13 @@ def read(nt, where=None):
         x, y = where.get(n.name, n.location_absolute)
         cx, cy = n.location_absolute  # where it is drawn now
         title = n.node_tree.name if getattr(n, "node_tree", None) else n.bl_label
-        d = {"type": n.bl_idname, "label": n.label, "title": title, "parent": n.parent.name if n.parent else None,
+        parent = n.parent
+        while parent is not None and parent.name not in inside:  # a frame outside the part
+            parent = parent.parent
+        d = {"type": n.bl_idname, "label": n.label, "title": title, "parent": parent.name if parent else None,
              "x": x, "y": -y, "hide": n.hide}
+        if n.name in pins:
+            d["pin"] = pins[n.name]
         if n.bl_idname == FRAME:
             d.update(w=n.dimensions.x / ui, h=n.dimensions.y / ui, label_size=n.label_size)
             data["nodes"][n.name] = d

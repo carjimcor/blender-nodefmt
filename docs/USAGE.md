@@ -22,6 +22,8 @@ Zones (Repeat, Simulation, For Each Element, Closure) and frames work in every e
 In a node editor, open the sidebar (N) and the nodefmt tab.
 
 - **Sort Current Tree**: sorts the tree shown in the editor.
+- **Sort Selection**: sorts only the selected nodes and reroutes, or what is inside a selected
+  frame; the rest of the tree stays where it is (see [below](#sort-selection)).
 - **Sort All Trees**: sorts every node tree in the file (Geometry Nodes groups, materials,
   worlds, lights and the compositor). A tree that cannot be sorted without changing its logic is
   left as it was and reported.
@@ -53,6 +55,32 @@ to move.
 
 Esc cancels the sort and puts every tree back as it was (no undo step is added). The editor
 does not take other input while a sort runs.
+
+## Sort Selection
+
+Sort Selection sorts a part of the tree and leaves the rest alone: select some nodes and
+reroutes, or a frame (everything inside it is sorted), and press the button.
+
+- The part is laid out like a whole tree, as one block. Links coming from the rest enter the
+  block on its left edge, links going to the rest leave it on its right edge.
+- The block keeps the top-left corner of the part. If the sorted part is bigger and would
+  overlap a node of the rest, it moves down or right (whichever is the smaller move) until it
+  is clear; nothing else moves.
+- The links between the part and the rest are drawn orthogonally on new reroutes: straight
+  when they are level, else with one vertical run in the gap between the two ends, else around
+  what is in the way. They do not pass behind nodes when a clear route exists.
+- Reroutes of the part are rebuilt; selected reroutes on wires that do not touch the part are
+  left alone. A frame whose nodes are all in the part moves with them.
+- The selection is kept: the same nodes, plus the new reroutes.
+- The logic check holds as for a whole tree, and the sort is one undo step.
+- Input-like nodes are not copied (NF010): a copy would add nodes outside the selection.
+
+| Before: the frame "Sort me" is selected | After Sort Selection |
+|---|---|
+| ![A tree with a messy frame selected](images/selection-before.png) | ![The frame sorted, the rest in place](images/selection-after.png) |
+
+The tree is `examples/selection.blend`. The sorted frame is wider than before, so it moved
+down to clear Mesh to Points; its links to the rest go around the nodes in the way.
 
 ## What a sort does
 

@@ -3,10 +3,14 @@
 ## Unreleased
 
 - Shorter README; the details moved to `docs/` (usage, rules, configuration, command line,
-  limitations, roadmap).
+  limitations).
 - One example per rule in `examples/NF0xx.blend`, built by `tools/make_examples.py`, with before
   and after screenshots in `docs/RULES.md` (`tools/capture_examples.py`, `tools/finish_images.py`).
 - Tests from the examples: `tests/run_tests.py`.
+- Sort Selection: sorts only the selected nodes and reroutes, or what is inside a selected
+  frame, and leaves the rest of the tree where it is. The part keeps its top-left corner (or
+  moves down or right to clear the nodes around it), its links to the rest are routed
+  orthogonally around what is in the way, and the selection is kept.
 - Sorting shows its progress in the status bar and the panel ("Tree 3/14 Wire: pass 1, layout
   4/9 (step 6/14)"), and Esc cancels it and puts the trees back. Still one undo step. The command
   line prints a progress line per tree. Operator tests: `tests/test_operators.py`.

@@ -41,6 +41,11 @@ closes itself. `--factory-startup` gives a fixed UI scale of 1.0. For every exam
 - for a style rule, a sort with the rule switched off does not show its behaviour, where that is
   observable in the example.
 
+`examples/selection.blend` tests Sort Selection in three ways (the frame, two nodes, two nodes
+with a third between them): the rest does not move, the part keeps its corner or moves just
+enough, nothing overlaps, its wires are orthogonal and behind no node, the logic and the
+selection are kept, and a second sort changes nothing.
+
 The run prints a table with one row per example and exits with 1 if any test fails.
 
 The add-on operators (progress, Esc, undo) have their own tests, which press Esc through

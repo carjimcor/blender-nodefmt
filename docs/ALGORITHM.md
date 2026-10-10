@@ -1,7 +1,7 @@
 # How nodefmt works
 
 This page describes the layout pipeline, the guarantees behind it and the algorithms it builds
-on. For installing and using the add-on, see the [README](../README.md). The core is pure Python:
+on. For installing and using the add-on, see [Usage](USAGE.md). The core is pure Python:
 only reading a tree and writing the result need Blender (`model`, `layout`, the engine modules,
 `routes` and `measure` run without it), so the layout can be tested on trees saved as plain
 data.
@@ -303,4 +303,11 @@ tools/
   dump_tree.py  a tree as JSON: nodefmt's model data and Blender's theme colours
   animate.py    the demo animation, rendered offline from the snapshots
   make_demo.sh  scramble, dump and animate in one go
+  make_examples.py     the rule examples (examples/NF0xx.blend)
+  capture_examples.py  screenshots of the examples before and after a sort
+  finish_images.py     crop and compress them into docs/rules/
+examples/       one small tree per rule that breaks it (NF0xx.blend)
+tests/
+  run_tests.py  tests from the examples (check, sort, logic, idempotency, rule off)
+docs/           usage, rules, configuration, command line, limitations, this page
 ```

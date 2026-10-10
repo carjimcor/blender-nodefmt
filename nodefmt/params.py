@@ -2,7 +2,7 @@
 """Tunable constants of the layout engine: spacing, budgets and cost weights (node units).
 
 Modules read them as params.NAME at run time, so a test (or an A/B session with the user) can
-change one number and run again. The README lists the cost weights with what each one does.
+change one number and run again. docs/ALGORITHM.md lists the cost weights with what each one does.
 """
 
 # ---------------------------------------------------------------- spacing

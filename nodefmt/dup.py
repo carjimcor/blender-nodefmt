@@ -87,13 +87,15 @@ def realize(nt, editor, plan):
                 to = nt.nodes[d[0]].inputs[d[2]]
                 frm = node.outputs[k]
                 old = [l for l in to.links if not l.is_hidden]
-                if old and old[0].from_socket.as_pointer() == frm.as_pointer():
-                    used.add(k)
+                if old and _source_socket(old[0]) == frm.as_pointer():
+                    used.add(k)  # fed by this member already (directly or through reroutes)
                     continue
                 mu = old[0].is_muted if old else False
+                was = old[0].from_node if old else None
                 l = nt.links.new(frm, to)
                 l.is_muted = mu
                 used.add(k)
+                _prune(nt, was)
             if node.bl_idname == 'NodeGroupInput':
                 for k, o in enumerate(node.outputs):  # a Group Input shows only what it feeds
                     if o.hide != (k not in used):
@@ -104,6 +106,28 @@ def realize(nt, editor, plan):
                 nt.nodes.remove(n)
     editor.show(nt)
     return made
+
+
+def _source_socket(link):
+    """as_pointer() of the real output socket feeding a link, through reroutes (None if none)."""
+    for _ in range(1000):
+        if link.from_node.bl_idname != 'NodeReroute':
+            return link.from_socket.as_pointer()
+        ins = link.from_node.inputs[0].links
+        if not ins:
+            return None
+        link = ins[0]
+    return None
+
+
+def _prune(nt, node):
+    """Remove reroute `node` and the reroutes above it while they lead nowhere: what is left of
+    a wire whose destination now gets its link from another member."""
+    while node is not None and node.bl_idname == 'NodeReroute' and not node.outputs[0].is_linked:
+        ins = node.inputs[0].links
+        up = ins[0].from_node if ins else None
+        nt.nodes.remove(node)
+        node = up
 
 
 def _copy_node(nt, editor, node):

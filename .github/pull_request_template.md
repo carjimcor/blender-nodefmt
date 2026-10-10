@@ -12,6 +12,7 @@
 
 ## Checks
 
+- [ ] `tests/run_tests.py` passes
 - [ ] `--check` passes on the trees I tested
 - [ ] The logic check passes (sorting never changes what a tree computes)
 - [ ] Blender version and Resolution Scale used:

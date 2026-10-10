@@ -9,9 +9,15 @@ sorted tree changes nothing.
 
 The animation shows the steps on a messy tree ([MP4](media/nodefmt-demo.mp4),
 [GIF](media/nodefmt-demo.gif)). The same tree in Blender, before and after:
-[media/before-after.png](media/before-after.png). The tree is the "Wire" group from
-[aoc-2015-blender-gn](https://github.com/carjimcor/aoc-2015-blender-gn), Advent of Code 2015
-solved with Geometry Nodes, the project nodefmt was made for.
+[media/before-after.png](media/before-after.png).
+
+## Why another layout tool
+
+Blender already has tools that tidy node trees. [Node Arrange](https://extensions.blender.org/add-ons/node-arrange/)
+lays out a whole tree automatically and is fast, Node Wrangler aligns selected nodes, and relax
+brushes move nodes interactively. None of them gave the result I wanted: straight wires that only
+turn at right angles, nothing behind nodes, and a style that can be tuned rule by rule. nodefmt is
+slower, but more configurable, and in my opinion its result is more satisfying.
 
 ## What it guarantees
 

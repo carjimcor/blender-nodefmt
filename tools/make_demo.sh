@@ -3,7 +3,7 @@
 #   tools/make_demo.sh file.blend "Tree name" [seed]
 # BLENDER: the Blender executable (default "blender"); PYTHON: a Python with Pillow, numpy and
 # PyAV (default "python"). The .blend is opened, never saved; scratch files go to a temp folder.
-# The README demo uses the "Wire" group of aoc-2015-blender-gn (day 7), seed 3.
+# The README demo uses a Geometry Nodes group named "Wire", seed 3.
 set -e
 cd "$(dirname "$0")/.."
 BLENDER=${BLENDER:-blender}

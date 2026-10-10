@@ -54,6 +54,7 @@ back.
 - [Configuration](docs/CONFIGURATION.md): `nodefmt.toml`.
 - [Command line](docs/CLI.md): `--check`, `--fix` and the git pre-commit hook.
 - [Limitations](docs/LIMITATIONS.md)
+- [A large real tree](docs/EXAMPLE.md): a 115-node tree from Blender Stack Exchange, before and after.
 - [How it works](docs/ALGORITHM.md): the layout pipeline and its references.
 
 ## Contributing

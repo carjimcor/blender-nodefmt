@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The progress shows the time since the sort started and the pass limit ("pass 2 (of at most
+  6)"), and the docs explain why a large tree can stay near 99% while later passes run.
+- docs/EXAMPLE.md: a large real tree from Blender Stack Exchange, before and after.
+
 ## 0.8.1
 
 - Fix: at a fractional UI scale, a wire into a low socket of a tall node (or out of one) could

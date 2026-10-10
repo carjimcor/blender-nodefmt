@@ -17,7 +17,7 @@ Options:
   --list-rules       print the rules and exit
 
 Each tree gets a progress line "[3/14] sorting NAME"; on a terminal, --fix also shows the steps
-of the sort on one line ("pass 1, layout 4/9 (step 6/14)").
+of the sort on one line ("pass 1 (of at most 6), layout 4/9 (step 6/14)").
 
 --check changes nothing and prints one line per violation with its rule code, as ruff does. It
 exits 1 if a tree is not formatted (NF900) or breaks a guarantee (NF001-NF005); a style rule

@@ -142,9 +142,9 @@ class Step(namedtuple('Step', 'npass phase k n step steps')):
     and step `step` of the `steps` of this pass."""
 
     def text(self):
-        """'pass 1, layout 4/9 (step 6/14)'."""
+        """'pass 1 (of at most 6), layout 4/9 (step 6/14)'."""
         what = f"{self.phase} {self.k}/{self.n}" if self.n > 1 else self.phase
-        return f"pass {self.npass}, {what} (step {self.step}/{self.steps})"
+        return f"pass {self.npass} (of at most {MAX_PASSES}), {what} (step {self.step}/{self.steps})"
 
 
 def format_once(nt, mode, editor, duplicates=True, swaps=True, cfg=None):
@@ -237,6 +237,9 @@ def _offsets_key(data):
     return tuple(sorted((k, d["h"]) for k, d in data["nodes"].items() if "modes" in d))
 
 
+MAX_PASSES = 6  # full layout passes of one tree; a pass that moves nothing ends the sort
+
+
 def _drain(gen):
     """Run a generator of Steps to the end; returns its return value."""
     while True:
@@ -274,7 +277,7 @@ def _format_steps(nt, mode, editor, duplicates, swaps, cfg):
         made = copies = swapped = 0
         # repeated until nothing moves: 'keep' starts from the current layout, and copies of input
         # nodes and swapped inputs change the graph that 'relayout' works on
-        for k in range(6):
+        for k in range(MAX_PASSES):
             sig = _signature(nt)
             last = None
             try:

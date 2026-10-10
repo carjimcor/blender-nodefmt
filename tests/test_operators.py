@@ -104,7 +104,7 @@ def run():
     test("sort current tree sorts", after[names[1]][0] != start[names[1]][0] and after[names[0]] == start[names[0]])
     test("logic unchanged", after[names[1]][1] == start[names[1]][1])
     texts = [t for t, _ in seen]
-    pattern = re.compile(r"Tree 1/1 .+: pass \d+, .+ \(step \d+/\d+\)$")
+    pattern = re.compile(r"Tree 1/1 .+: pass \d+ \(of at most \d+\), .+ \(step \d+/\d+\)$")
     test("progress shown", len(seen) >= 3 and all(pattern.match(t) for t in texts[1:]),
          f"{len(seen)} updates, e.g. {texts[len(texts) // 2]!r}")
     factors = [f for _, f in seen]

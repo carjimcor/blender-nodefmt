@@ -48,11 +48,14 @@ Each sort is one undo step: Ctrl+Z puts the tree back.
 ## Progress
 
 While a sort runs, the status bar and the top of the panel show how far it is: the tree, the
-pass and the step, for example "Tree 3/14 Wire: pass 1, layout 4/9 (step 6/14)", with a
-progress bar. A pass reads the tree, makes copies of input nodes, lays out each container (the
-tree itself, each zone and frame: "layout 4/9"), routes the wires, writes the result,
-straightens it and checks the logic. Most trees take two passes: the second one finds nothing
-to move.
+pass and the step, for example "Tree 3/14 Wire: pass 1 (of at most 6), layout 4/9 (step 6/14)",
+with a progress bar and the time since the sort started. A pass reads the tree, makes copies of
+input nodes, lays out each container (the tree itself, each zone and frame: "layout 4/9"),
+routes the wires, writes the result, straightens it and checks the logic. The tree is laid out
+again as long as a pass still moves something (copies and swapped inputs change the graph, and
+at a fractional UI scale a node's drawn size depends on where it lands), up to six passes. Most
+trees take two: the second one finds nothing to move. The bar assumes two passes, so on a large
+tree that needs more it stays near 99% while the later passes run.
 
 Esc cancels the sort and puts every tree back as it was (no undo step is added). The editor
 does not take other input while a sort runs.

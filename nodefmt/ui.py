@@ -91,6 +91,7 @@ class SortJob:
         self.snaps = []      # (tree, check.Snapshot) of every tree started, to cancel
         self.stats, self.failed = [], []
         self.factor = 0.0    # done, 0..1 (never goes back)
+        self.t0 = time.perf_counter()
         self.tree_factor = 0.0
         self.text = "Starting"
 
@@ -119,6 +120,11 @@ class SortJob:
             self.factor = max(self.factor, (self.i + self.tree_factor) / len(self.trees))
             self.text = f"Tree {self.i + 1}/{len(self.trees)} {self.names[self.i]}: {st.text()}"
         return True
+
+    def elapsed(self):
+        """Time since the sort started, as '42 s' or '3 min 05 s'."""
+        s = int(time.perf_counter() - self.t0)
+        return f"{s // 60} min {s % 60:02d} s" if s >= 60 else f"{s} s"
 
     def _next_tree(self):
         """The current tree is done (or failed): go on with the next one."""
@@ -223,7 +229,8 @@ class SortModal:
     def _show(self):
         """The progress in the status bar and the panel."""
         job = self.job
-        self.workspace.status_text_set(f"nodefmt: {job.text}  ({job.factor:.0%}, Esc to cancel)")
+        self.workspace.status_text_set(
+            f"nodefmt: {job.text}  ({job.factor:.0%}, {job.elapsed()}, Esc to cancel)")
         _redraw_editors()
 
     def _end(self, context):
@@ -488,7 +495,7 @@ class NODEFMT_PT_panel(bpy.types.Panel):
         job = _JOB["job"]
         if job is not None:
             box = col.box()
-            box.progress(factor=job.factor, type='BAR', text=f"Sorting: {job.factor:.0%}")
+            box.progress(factor=job.factor, type='BAR', text=f"Sorting: {job.factor:.0%}, {job.elapsed()}")
             box.label(text=job.text)
             box.label(text="Esc cancels and puts the trees back", icon='CANCEL')
         col.operator(NODEFMT_OT_sort_tree.bl_idname, icon='NODETREE')

@@ -24,14 +24,18 @@ def slot_of(key):
     return key if isinstance(key, tuple) and len(key) == 4 else None
 
 
+SNAP_TOL = 1e-3  # sizes read from Blender carry float noise (140.00002 or 139.99993 for 140)
+
+
 def snap_up(v):
-    """The smallest multiple of GRID that is >= v."""
-    return -((-v) // P.GRID) * P.GRID
+    """The smallest multiple of GRID that is >= v (within SNAP_TOL: a width of 140.00002 is
+    140, so the noise of a measure never moves a column by a whole grid step)."""
+    return -((-(v - SNAP_TOL)) // P.GRID) * P.GRID
 
 
 def snap_down(v):
-    """The largest multiple of GRID that is <= v."""
-    return (v // P.GRID) * P.GRID
+    """The largest multiple of GRID that is <= v (within SNAP_TOL)."""
+    return ((v + SNAP_TOL) // P.GRID) * P.GRID
 
 class Item:
     """A box in the layout: a node, a compound (frame/zone laid out already), a port or a dummy."""

@@ -152,7 +152,16 @@ def lint(d, rules=None, labels=None, groups=None):
                    and any(t.dst[q][0] in members for q in t.dst)]
             outs = {d.dst_node(t.dst[q]) for tag, t in d.trees.items() if tag[0] in members
                     for q in t.dst} - set(members)
-            if ins or not outs:
+            if ins:
+                continue
+            if not outs:  # nothing linked at all: under the tree, as high as it fits
+                if any(set(members) < set(o) for o in groups.values()):
+                    continue  # a frame in another frame moves with it
+                rise, at = _loose_rise(d, name, members)
+                if rise > P.FAR_RISE:
+                    out.append(_v('NF021', f"frame {name!r} has nothing linked and could sit {rise:.0f} units "
+                                           f"higher, in the free space under the tree", at,
+                                  (name,) + tuple(sorted(members))))
                 continue
             right = max(d.boxes[n][2] for n in members)
             gap = min(d.boxes[n][0] for n in outs if n in d.boxes) - right if any(n in d.boxes for n in outs) else 0
@@ -173,11 +182,79 @@ def lint(d, rules=None, labels=None, groups=None):
                     break
                 if len(t.children.get(q, ())) > 1:
                     break  # a tap: above it the wire leads elsewhere too
-                if (tag, q) not in labels:
+                if (tag, q) not in labels and ('NF041' not in rules or _readable(d, segs, q, text)):
                     out.append(_v('NF040', f"label {text!r} is not on the first reroute of its wire", p, (_src(tag),)))
                     break
                 q = t.parent[q]
+    # ------------------------------------------------ label clearance (NF041)
+    if 'NF041' in rules and labels:
+        out += _label_faults(d, segs, labels)
     return out
+
+
+def _readable(d, segs, p, text):
+    """True if a label at reroute p would be clear of nodes and wires (NF041): with NF041 a
+    label may skip the reroutes before it where its text would not be."""
+    from . import labels as L
+    b = L.box(p, L.text_width(text))
+    return not any(L.overlap(b, n) for n in d.boxes.values()) and not any(L.hits(b, s[1], s[2]) for s in segs)
+
+
+def _label_faults(d, segs, labels):
+    """NF041: the labels Blender shows (own and greyed copies, labels.shown) that overlap
+    another label, a node or a wire."""
+    from . import labels as L
+    shown = []
+    for tag in sorted(d.trees, key=repr):
+        own = {p: text for (tg, p), text in labels.items() if tg == tag}
+        if own:
+            for p, (text, inherited) in sorted(L.shown(d.trees[tag], own).items()):
+                shown.append((tag, p, text, inherited))
+    what = {'label': "another label", 'node': "a node", 'wire': "a wire"}
+    out = []
+    for k, kind in L.faults([(p, text, inh) for _, p, text, inh in shown], list(d.boxes.values()),
+                            [(s[1], s[2]) for s in segs]):
+        tag, p, text, inherited = shown[k]
+        copy = "its greyed copy " if inherited else ""
+        out.append(_v('NF041', f"label {text!r} of {_name(tag)}: {copy}overlaps {what[kind]}", p, (_src(tag),)))
+    return out
+
+
+def _loose_rise(d, name, members):
+    """How much higher frame `name` (nothing linked into or out of it) could sit under the tree,
+    in the free space below what is above it, within the tree's width; and a point to report."""
+    rect = None
+    for n, poly in d.outlines:
+        if n == name:
+            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+            rect = (min(xs), min(ys), max(xs), max(ys))
+    if rect is None:
+        return 0.0, (0.0, 0.0)
+    w, h = rect[2] - rect[0], rect[3] - rect[1]
+
+    def inside(r):
+        """True if box r lies within the frame."""
+        return rect[0] - 1 <= r[0] and r[2] <= rect[2] + 1 and rect[1] - 1 <= r[1] and r[3] <= rect[3] + 1
+    occ = [b for n, b in d.boxes.items() if n not in members]
+    occ += [(min(s[1][0], s[2][0]), min(s[1][1], s[2][1]), max(s[1][0], s[2][0]), max(s[1][1], s[2][1]))
+            for s in d.segments()]
+    for n, poly in d.outlines:
+        r = (min(p[0] for p in poly), min(p[1] for p in poly), max(p[0] for p in poly), max(p[1] for p in poly))
+        if n != name and not inside(r) and not (r[0] <= rect[0] and rect[2] <= r[2] and r[1] <= rect[1] and rect[3] <= r[3]):
+            occ.append(r)
+    occ = [r for r in occ if not inside(r)]
+    if not occ:
+        return 0.0, (0.0, 0.0)
+    x0, x1 = min(r[0] for r in occ + [rect]), max(r[2] for r in occ + [rect])
+    best = rect[1]
+    for x in sorted({x0} | {r[2] + P.COL_GAP for r in occ}):
+        if x + w > x1:
+            continue
+        below = [r[3] for r in occ if r[0] < x + w + P.COL_GAP and r[2] > x - P.COL_GAP]
+        y = (max(below) if below else min(r[1] for r in occ)) + P.COL_GAP
+        if not any(r[0] < x + w and x < r[2] and r[1] < y + h and y < r[3] for r in occ):
+            best = min(best, y)
+    return rect[1] - best, (rect[0], rect[1])
 
 
 def counts(vs):

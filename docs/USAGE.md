@@ -91,9 +91,11 @@ Besides that, with the default rules it:
 
 - copies input-like nodes (Group Input, Named Attribute, ...) next to distant consumers (NF010);
 - may swap the inputs of commutative nodes (Add, Multiply, AND, ...) to remove a crossing (NF011);
-- keeps frames and zones together, and puts a self-contained frame right before the node it
-  feeds (NF021);
-- keeps labelled reroutes on their wires, one label at the start of each wire (NF040).
+- keeps frames and zones together, puts a self-contained frame right before the node it feeds,
+  and a frame linked to nothing compactly under the tree (NF021);
+- keeps labelled reroutes on their wires, one label at the start of each wire (NF040), where the
+  label and the greyed copies Blender shows on the later reroutes overlap no label, node or wire
+  (NF041).
 
 Every sort is checked against a logic fingerprint of the tree (nodes, values, links, the order
 of multi-input links): if anything differs, the tree is restored and the sort reports an error.

@@ -4,6 +4,8 @@
 `read(nt)` turns a drawn tree into a JSON-able dict; `Model(data)` derives what the layout needs.
 Coordinates: y is DOWN (y = -blender_y). A socket is a gid (node name, 'i' | 'o', index).
 """
+import math
+
 FRAME = 'NodeFrame'
 SLOT = 5.0  # distance between the links of a multi-input socket at UI scale 1 (Blender's
 #              NODE_MULTI_INPUT_LINK_GAP, a quarter widget unit); data["slot"] has the drawn one
@@ -70,6 +72,7 @@ def read(nt, where=None, part=None, pins=None):
     pins = pins or {}
     from .sockets import socket_location
     from . import dup, ortho
+    from .labels import text_width
     ui = ortho.ui_scale()
     nodes = [n for n in nt.nodes if part is None or n.name in part]
     # reroutes we may remove and rebuild; a labelled one is kept but treated the same way, and
@@ -138,7 +141,7 @@ def read(nt, where=None, part=None, pins=None):
             srcs, dsts, depth = label_info(n)
             x, y = where.get(n.name, n.location_absolute)
             labels.append({"name": n.name, "label": n.label, "src": list(next(iter(srcs))), "x": x, "y": -y,
-                           "dsts": sorted(list(d) for d in dsts), "depth": depth})
+                           "dsts": sorted(list(d) for d in dsts), "depth": depth, "w": text_width(n.label)})
 
     links = []
     old_routes = {}  # where each link ran before: its reroutes (stability, see engine.py)
@@ -179,13 +182,13 @@ def read(nt, where=None, part=None, pins=None):
         if n.name in pins:
             d["pin"] = pins[n.name]
         if n.bl_idname == FRAME:
-            d.update(w=n.dimensions.x / ui, h=n.dimensions.y / ui, label_size=n.label_size)
+            d.update(w=_size(n.dimensions.x / ui), h=_size(n.dimensions.y / ui), label_size=n.label_size)
             data["nodes"][n.name] = d
             continue
         if n.bl_idname == REROUTE:
             d.update(w=0.0, h=0.0)
         else:
-            d.update(w=n.dimensions.x / ui, h=n.dimensions.y / ui)
+            d.update(w=_size(n.dimensions.x / ui), h=_size(n.dimensions.y / ui))
         po = getattr(n, "paired_output", None)
         d["paired"] = po.name if po is not None else None
         # Blender places sockets whole pixels away from the location rounded to its pixel grid
@@ -207,6 +210,57 @@ def read(nt, where=None, part=None, pins=None):
             d["comm"] = [p[0], p[1], _same_default(a, b)]
         data["nodes"][n.name] = d
     return data
+
+
+def _size(v):
+    """A node size in units without the float noise of the measure (it differs in the last
+    digits with where the node is drawn)."""
+    return round(v, 3)
+
+
+def with_modes(low, high):
+    """Plain data whose nodes carry both measures of model.read (api.read_tree): drawn below
+    y = 0 (low) and above it (high), as node["modes"] = {"low": (h, offsets), "high": ...} with
+    the socket offsets {key: [dx, dy]}. A socket Blender did not draw (in a closed panel) has
+    no position; it keeps its low offsets."""
+    out = dict(low, nodes={})
+    for name, d in low["nodes"].items():
+        d = dict(d)
+        e = high["nodes"].get(name)
+        if e is not None and "socks" in d and "socks" in e and d["type"] not in (FRAME, REROUTE) and not d.get("hide"):
+            d["modes"] = {"low": (d["h"], {k: list(s["off"]) for k, s in d["socks"].items()}),
+                          "high": (e["h"], {k: list(s["off"]) for k, s in e["socks"].items()})}
+        out["nodes"][name] = d
+    return out
+
+
+def at(data, where):
+    """Plain data with each node's height and socket offsets for where it is drawn: where =
+    {node: (x, y)} with Blender's y up (the node's top). See api.read_tree: Blender rounds the
+    float height of each row towards zero, from the top down, so a stretch of a node above
+    y = 0 has the 'high' heights and below it the 'low' ones. The sockets are taken top to
+    bottom; the stretch from one to the next takes the high height if its middle is above 0."""
+    sc = data.get("scale", 1.0)
+    out = dict(data, nodes={})
+    for name, d in data["nodes"].items():
+        m = d.get("modes")
+        if m is None or name not in where:
+            out["nodes"][name] = d
+            continue
+        top = math.floor(where[name][1] * sc + 0.5 + 1e-6)  # pixels, as Blender draws it
+        (hl, low), (hh, high) = m["low"], m["high"]
+        # the sockets Blender places (the ones in a closed panel keep their low offsets)
+        keys = [k for k in low if k in high and abs(high[k][1] - low[k][1]) <= abs(hh - hl) + 2.0 / sc]
+        marks = sorted([(high[k][1], low[k][1], k) for k in keys] + [(hh, hl, None)], key=lambda v: (v[0], v[1]))
+        got, prev_h, prev_l, prev = {}, 0.0, 0.0, 0.0
+        for vh, vl, k in marks:
+            step = (vh - prev_h) if top - (prev + (vh - prev_h) / 2) * sc >= 0 else (vl - prev_l)
+            prev, prev_h, prev_l = prev + step, vh, vl
+            got[k] = prev
+        socks = {k: dict(s, off=[s["off"][0], round(got[k], 4) if k in got else s["off"][1]])
+                 for k, s in d["socks"].items()}
+        out["nodes"][name] = dict(d, socks=socks, h=round(got[None], 3))
+    return out
 
 
 def route_key(s, d, sid):

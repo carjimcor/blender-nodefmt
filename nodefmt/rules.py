@@ -37,7 +37,8 @@ RULES = [
      "A zone's output may sit where its inputs are instead of level with the zone input."),
     ("NF021", "blocks-next-to-consumer", "style",
      "A frame or zone with nothing linked into it sits in the column right before the node it "
-     "feeds, above or below the main flow, instead of at the far left."),
+     "feeds, above or below the main flow, instead of at the far left; one with nothing linked at "
+     "all sits compactly under the tree."),
     ("NF022", "converging-shape", "style",
      "A tree that converges on one output may take a '>' shape with the output in the middle of "
      "its inputs."),
@@ -58,6 +59,9 @@ RULES = [
      "of a straight run: nothing looks like a junction."),
     ("NF040", "label-first-reroute", "style",
      "The label of a labelled reroute goes on the first reroute of its wire, near the source."),
+    ("NF041", "label-clearance", "style",
+     "A reroute label, and every greyed copy of it that Blender shows on the later reroutes of its "
+     "wire, overlaps no other label, no node and no wire."),
 ]
 # one-line tooltips for the add-on (the summaries above are the full text)
 SHORT = {
@@ -72,6 +76,7 @@ SHORT = {
     "NF033": "Avoid crossings that another route can remove",
     "NF034": "Different wires never share a point, so nothing looks like a junction",
     "NF040": "Put a reroute label on the first reroute of its wire",
+    "NF041": "Keep reroute labels, and their greyed copies, clear of other labels, nodes and wires",
 }
 CODES = [r[0] for r in RULES]
 NAMES = {r[0]: r[1] for r in RULES}

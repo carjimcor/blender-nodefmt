@@ -282,13 +282,10 @@ def straight_links(links):
     return straight, total
 
 
-CHAR_W = 9.0  # approximate width of one character of a reroute label, in node units
-
-
 def label_box(x, y, text):
-    """Box of a reroute label as Blender draws it: centred above the dot."""
-    w = CHAR_W * len(text) + 4.0
-    return (x - w / 2, y - 24.0, x + w / 2, y - 6.0)
+    """Box of a reroute label as Blender draws it: centred above the dot (labels.box)."""
+    from . import labels
+    return labels.box((x, y), labels.text_width(text))
 
 
 def label_overlaps(labels):

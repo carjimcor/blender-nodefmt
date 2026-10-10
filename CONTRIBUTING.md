@@ -31,8 +31,9 @@ blender --factory-startup --python tests/run_tests.py -- --only NF031 --verbose
 ```
 
 Blender opens its window for a few seconds (node sizes only exist once a tree is drawn) and
-closes itself. `--factory-startup` gives a fixed UI scale of 1.0 (NF034 is tested at 1.25, the
-scale its example is made for). For every example in `examples/` the tests check that:
+closes itself. `--factory-startup` gives a fixed UI scale of 1.0 (NF034 is tested at 1.25 and
+NF003-rows at 1.4, the scales their examples are made for). For every example in `examples/`
+(a second example of a rule is `NF0xx-<what>.blend`) the tests check that:
 
 - the check reports the example's rule on the tree as saved (NF005, NF020 and NF022 have no
   geometric check: there, that the tree is not formatted);
@@ -42,7 +43,9 @@ scale its example is made for). For every example in `examples/` the tests check
 - for a style rule, a sort with every style rule off keeps the violation (NF020, NF022: does not
   show the effect), so the difference between the two is the rule's own;
 - after a sort with the default rules the rule is no longer reported, the logic fingerprint is
-  unchanged, no reroute is left leading nowhere, and a second sort changes nothing.
+  unchanged, no reroute is left leading nowhere, and a second sort changes nothing;
+- for NF003-rows, no sort leaves a wire with a step too small to see (two reroutes closer than
+  10 units).
 
 `examples/selection.blend` tests Sort Selection in three ways (the frame, two nodes, two nodes
 with a third between them): the rest does not move, the part keeps its corner or moves just
@@ -61,7 +64,8 @@ blender --factory-startup --enable-event-simulate --python tests/test_operators.
 ## Tools
 
 - `tools/build.sh`: build and validate the extension zip in `dist/`.
-- `tools/make_examples.py`: rebuild `examples/NF0xx.blend` (run with Blender's window:
+- `tools/make_examples.py`: rebuild `examples/NF0xx.blend` and the second examples
+  `NF0xx-<what>.blend` (run with Blender's window:
   `blender --factory-startup --python tools/make_examples.py`).
 - `tools/capture_examples.py` and `tools/finish_images.py`: the before and after images of
   [docs/RULES.md](docs/RULES.md), at UI scale 1.0 (the second needs Pillow):

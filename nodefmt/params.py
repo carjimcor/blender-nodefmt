@@ -93,3 +93,7 @@ CLEAR_NODE = 10.0      # NF032: a wire this close to a node's edge (outside it) 
 CLEAR_OUTLINE = 8.0    # NF032: a wire this close to a frame border or zone outline is on it
 CLEAR_RUN = 40.0       # NF032: ... over more than this length (a wire crossing a border is fine)
 FAR_BLOCK = 400.0      # NF021 check: a frame with no inputs this far before its consumer is far
+FAR_RISE = 100.0       # NF021 check: a frame with nothing linked that could sit this much higher
+W_LABEL = 6.0          # NF041: per reroute label (or greyed copy of one) over another label, a node or a wire
+W_LABEL_BEND = 1.0     # NF041: extra per bend of a labelled wire (each bend shows the label twice more)
+LABEL_CLEAR = 6.0      # NF041: room kept between a label's text and the nodes beside its track

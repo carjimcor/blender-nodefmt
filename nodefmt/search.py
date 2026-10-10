@@ -94,7 +94,7 @@ class SearchMixin:
         # swap the links of a commutative pair
         for j in range(len(self.comm_items)):
             def flip(cur, j=j):
-                """Exchange the links of commutative item j."""
+                """Exchange the links of commutative pair j."""
                 state = list(cur.comm)
                 state[j] = self._flip(self.comm_items[j], state[j])
                 return None if state[j] == cur.comm[j] else cur._replace(comm=state)
@@ -262,9 +262,9 @@ class SearchMixin:
         self._evaluate(cur)
         return best, cur
 
-    def _flip(self, i, vks):
-        """The input keys of commutative item i with its pair exchanged."""
-        a, b = i.comm
+    def _flip(self, unit, vks):
+        """The input keys of a commutative pair (ordering._comm_units) exchanged."""
+        a, b = unit[1]
         return tuple(b if k == a else a if k == b else k for k in vks)
 
     # ------------------------------------------------------------------ slide

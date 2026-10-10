@@ -19,6 +19,10 @@ that scale), and closes itself. For each example:
            reroute is left leading nowhere
   logic    the logic fingerprint is the same before and after the sort
   again    a second sort changes nothing
+  extra    for some examples, a test of their own (EXTRA): after the sorts above, no wire steps
+           by less than RR_CLEAR (NF003-rows)
+
+An example file NF0xx-<what>.blend is a second example of rule NF0xx, tested the same way.
 
 VARIANTS run an example again after a change that real trees often have (a Group Input that
 shows every socket, Blender's default). examples/selection.blend tests Sort Selection: the rest
@@ -46,7 +50,7 @@ ap.add_argument("--examples", default=os.path.join(ROOT, "examples"))
 ap.add_argument("--verbose", action="store_true", help="print the violations found")
 ARGS = ap.parse_args(argv)
 
-COLUMNS = ("check", "only", "off", "sort", "fixed", "logic", "again")
+COLUMNS = ("check", "only", "off", "sort", "fixed", "logic", "again", "extra")
 NOT_GEOMETRIC = ("NF005", "NF020", "NF022")  # reported as NF900 (not formatted)
 SCALE_KEY = "nodefmt_ui_scale"  # custom property of an example made for another UI scale
 
@@ -108,6 +112,22 @@ def centred(nt):
     return min(ys) < y - 1.0 and y + 1.0 < max(ys)
 
 
+def tiny_steps(nt):
+    """Links between two reroutes closer than RR_CLEAR: a step too small to see, which looks like
+    a blob or a slanted stub (nothing a sort should leave)."""
+    from nodefmt import params
+    n = 0
+    for l in nt.links:
+        a, b = l.from_node, l.to_node
+        if a.bl_idname == b.bl_idname == 'NodeReroute':
+            (xa, ya), (xb, yb) = a.location_absolute, b.location_absolute
+            n += ((xa - xb) ** 2 + (ya - yb) ** 2) ** 0.5 < params.RR_CLEAR
+    return n
+
+
+# tests of one example (its file name): what, measure(tree) -> number that must be 0
+EXTRA = {"NF003-rows": ("tiny steps", tiny_steps)}
+
 # rules with no geometric check: what to measure instead (the value with the rule differs
 # from the value without it, and a sort with the rule off keeps the example's value)
 EFFECT = {
@@ -131,8 +151,11 @@ def run_one(path, ed, prepare=None):
     """The results of one example: {column: (ok or None, text)}. prepare(tree) changes the
     tree first (a variant)."""
     from nodefmt import api, check, rules
-    code = os.path.splitext(os.path.basename(path))[0]
-    out = {}
+    name = os.path.splitext(os.path.basename(path))[0]
+    code = name.split("-")[0]  # NF0xx-<what>: a second example of rule NF0xx
+    extra = EXTRA.get(name)
+    found_extra = []
+    out = {"extra": (None, "")}
     nt = append(path)[0]
     scale = nt.get(SCALE_KEY, 1.0)
     if bpy.context.preferences.view.ui_scale != scale:
@@ -157,6 +180,8 @@ def run_one(path, ed, prepare=None):
     left = codes(api.check_tree(one, 'relayout', ed, own, formatted=False))
     bad = sorted(left & ({code} | guarantees))
     loose = dead_ends(one) - dead
+    if extra:
+        found_extra.append(extra[1](one))
     if code in EFFECT:
         what, measure = EFFECT[code]
         before_v, one_v = measure(nt), measure(one)
@@ -201,6 +226,9 @@ def run_one(path, ed, prepare=None):
     api.format_tree(nt, 'relayout', ed, cfg=cfg)
     ed.show(nt)
     out["again"] = (api.same_layout(api._signature(nt), sig), "")
+    if extra:
+        found_extra.append(extra[1](nt))
+        out["extra"] = (not any(found_extra), f"{extra[0]}: {max(found_extra)}")
     bpy.data.node_groups.remove(nt)
     return out
 
@@ -283,7 +311,8 @@ def main():
     bpy.context.preferences.view.ui_scale = 1.0  # in memory only
     files = sorted(glob.glob(os.path.join(ARGS.examples, "NF*.blend")))
     if ARGS.only:
-        files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in ARGS.only]
+        files = [f for f in files if os.path.splitext(os.path.basename(f))[0] in ARGS.only
+                 or os.path.splitext(os.path.basename(f))[0].split("-")[0] in ARGS.only]
     if not files and "selection" not in ARGS.only:
         print("run_tests: no examples found", flush=True)
         return 1

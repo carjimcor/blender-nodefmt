@@ -23,6 +23,30 @@ class ColumnsMixin:
             self._place_sats(sats)
             self._assign_x(hang, sats)  # tracks for the links of the satellites as placed
 
+    def _label_room(self, k, tags, bends):
+        """NF041: room a gap needs for the labels of its labelled tracks (self.label_w), as
+        (from the column's right edge to the first track, from the first track to the next
+        column). Blender shows a labelled wire's label, centred, above each of its bends; where
+        that text would reach a node of the column before or after at that height, the gap
+        widens so the text clears it by LABEL_CLEAR."""
+        from . import labels as L
+        lw = getattr(self, 'label_w', None)
+        if not lw:
+            return 0.0, 0.0
+        near = [i for layer in getattr(self, 'layers', [])[k:k + 2] for i in layer if not i.is_point]
+        left = right = 0.0
+        for n, t in enumerate(tags):
+            w = lw.get(t)
+            if not w:
+                continue
+            ys = {y for y0, y1, _ in bends[t] for y in (y0, y1)}
+            if not any(i.y < y - L.ABOVE and y - L.ABOVE - L.HEIGHT < i.y + i.h for y in ys for i in near):
+                continue
+            half = w / 2 + L.PAD + P.LABEL_CLEAR
+            left = max(left, half - n * P.TRACK)
+            right = max(right, half + n * P.TRACK)
+        return left, right
+
     def _sat_groups(self):
         """Satellites (ranking.py, NF021) that head or end their column: {item: 'top' | 'bottom'}.
         One that ended up between other items is laid out as a plain item of its column."""
@@ -132,6 +156,10 @@ class ColumnsMixin:
             # centre the tracks in the gap
             free = (nxt - base) - P.TRACK * (T + 1)
             start = base + snap_down(free / 2) + P.TRACK
+            left, right = self._label_room(k, tags, bends[k])
+            if left or right:  # NF041: a labelled track keeps its labels clear of the nodes beside it
+                start = max(start, snap_up(col_x[k] + colw[k] + left))
+                nxt = max(nxt, snap_up(start + right))
             for n, t in enumerate(tags):
                 self.track_x[k][t] = start + P.TRACK * n
             col_x[k + 1] = nxt
@@ -199,16 +227,46 @@ class ColumnsMixin:
         return [tags[i] for i in order]
 
     def shelf(self, alone):
-        """Items with no link at all go in a row under the layout, so they do not stretch it."""
+        """Items with no link at all (a frame of notes, a block nothing uses) go under the
+        layout where they make it grow least (NF021: compactly, without a gap beside them):
+        each takes the spot right below what is already there, at a column's left edge or right
+        after an item and within the layout's width if it fits, that adds the least area to the
+        layout's box (then the highest, then the leftmost)."""
         if not alone:
             return
-        ys = [i.y + i.h for i in self.items]
-        y = snap_up(max(ys, default=0.0) + P.COL_GAP)
-        x = 0.0
-        for i in sorted(alone, key=lambda i: _name(i)):
-            i.x, i.y, i.rank = x, y, 0
-            x = snap_up(x + i.w + P.COL_GAP)
+        if not P.SATELLITES:  # NF021 off: in a row under the layout, from its left edge
+            ys = [i.y + i.h for i in self.items]
+            y = snap_up(max(ys, default=0.0) + P.COL_GAP)
+            x = 0.0
+            for i in sorted(alone, key=lambda i: _name(i)):
+                i.x, i.y, i.rank = x, y, 0
+                x = snap_up(x + i.w + P.COL_GAP)
+                self.items.append(i)
+            return
+        occ = [(i.x, i.y, i.x + i.w, i.y + i.h) for i in self.items if not i.is_point]
+        occ += [(min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])) for _, p, q in self._route()]
+        if not occ:
+            occ = [(0.0, 0.0, 0.0, 0.0)]
+        for i in sorted(alone, key=lambda i: (-i.w * i.h, _name(i))):
+            x0 = min(r[0] for r in occ)
+            y0 = min(r[1] for r in occ)
+            x1 = max(r[2] for r in occ)
+            y1 = max(r[3] for r in occ)
+            xs = {snap_up(x0)} | {snap_up(r[2] + P.COL_GAP) for r in occ} | {snap_up(c) for c in getattr(self, 'col_x', ())}
+            inside = [x for x in xs if x0 <= x and x + i.w <= x1]
+            xs = inside or [snap_up(x0)]
+            best = None
+            for x in sorted(xs):
+                below = [r[3] for r in occ if r[0] < x + i.w + P.COL_GAP and r[2] > x - P.COL_GAP]
+                y = snap_up((max(below) if below else y0) + P.COL_GAP)
+                area = (max(x1, x + i.w) - min(x0, x)) * (max(y1, y + i.h) - min(y0, y))
+                key = (round(area, 3), y, x)
+                if best is None or key < best[0]:
+                    best = (key, x, y)
+            _, i.x, i.y = best
+            i.rank = 0
             self.items.append(i)
+            occ.append((i.x, i.y, i.x + i.w, i.y + i.h))
 
 
 def _node_of(item):

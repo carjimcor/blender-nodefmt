@@ -78,14 +78,12 @@ class OrderingMixin:
             if not hasattr(e, 'vk0'):
                 e.vk0 = e.vk
             e.vk = e.vk0
-        comm = [i for i in self.items if getattr(i, 'comm', None)]
+        comm = self._comm_units()
         self.comm_items = comm
         # every seed starts from the commutative inputs in a canonical state (by source), so the
         # result does not depend on how they are linked now and formatting twice changes nothing
-        for i in comm:
-            a, b = i.comm
-            es = sorted((e for e in self.pred_edges[i] if e.vk0 in (a, b)), key=lambda e: repr(e.tag))
-            for e, k in zip(es, (a, b)):
+        for _, pair, es in comm:
+            for e, k in zip(sorted(es, key=lambda e: repr(e.tag)), pair):
                 e.vk = k
         seen = {}
 
@@ -265,29 +263,37 @@ class OrderingMixin:
                         for i, y in zip(layer, ys):
                             i.y = y
 
+    def _comm_units(self):
+        """The commutative pairs of the items, as units (item, (a, b), links into the pair): a
+        node has one pair (Add, Multiply, AND, Equal, ...); a frame or zone may have several,
+        each a pair of its ports that a swap inside it exchanges (layout.py)."""
+        units = []
+        for i in self.items:
+            c = getattr(i, 'comm', None)
+            for pair in (c if isinstance(c, list) else [c] if c else []):
+                es = [e for e in self.pred_edges[i] if e.vk0 in pair]
+                if es:
+                    units.append((i, tuple(pair), es))
+        return units
+
     def _comm_state(self, comm):
-        """Input keys of the links into each commutative item (its swap state)."""
-        return [tuple(e.vk for e in self.pred_edges[i]) for i in comm]
+        """Input keys of the links into each commutative pair (its swap state)."""
+        return [tuple(e.vk for e in es) for _, _, es in comm]
 
     def _set_comm_state(self, comm, state):
-        """Apply a swap state, and list the items whose inputs differ from the tree."""
-        for i, vks in zip(comm, state):
-            for e, vk in zip(self.pred_edges[i], vks):
+        """Apply a swap state, and list the pairs whose links differ from the tree."""
+        for (_, _, es), vks in zip(comm, state):
+            for e, vk in zip(es, vks):
                 e.vk = vk
         self.swapped = []
-        for i in comm:
-            a, b = i.comm
-            if any(e.vk != e.vk0 for e in self.pred_edges[i]):
+        for i, (a, b), es in comm:
+            if any(e.vk != e.vk0 for e in es):
                 self.swapped.append((i.id, a, b))
 
     def _swap_inputs(self, comm):
         """Exchange the links of a commutative pair (Add, Multiply, AND, Equal, ...) when that
         removes crossings in the gap before the node."""
-        for i in comm:
-            a, b = i.comm
-            es = [e for e in self.pred_edges[i] if e.vk in (a, b)]
-            if not es:
-                continue
+        for i, (a, b), es in comm:
             k = i.rank - 1
             before = self._gap_crossings(k)
             for e in es:

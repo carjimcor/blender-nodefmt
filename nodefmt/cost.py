@@ -196,13 +196,34 @@ class CostMixin:
                 if min(s[1][1], s[2][1]) + 1 < pt[1] < max(s[1][1], s[2][1]) - 1:
                     on_wire += 1
         return {"clean": clean, "bad": bad, "bundle": inbundle, "collinear": collinear,
-                "clash": clash, "on_wire": on_wire}
+                "clash": clash, "on_wire": on_wire, "label": self._label_faults(bends, segs)}
+
+    def _label_faults(self, bends, segs):
+        """NF041: labels that overlap another label, a node or a wire. Blender shows the label of
+        a labelled wire on every reroute after it, so every bend of a labelled wire (self.label_w:
+        source tag -> text width) counts as a label above the bend."""
+        from . import labels as L
+        lw = getattr(self, 'label_w', None)
+        if not lw:
+            return 0
+        shown = [(pt, L.box(pt, lw[t])) for pt, tags in sorted(bends.items()) for t in sorted(tags, key=repr)
+                 if t in lw]
+        if not shown:
+            return 0
+        nodes = [(i.x, i.y, i.x + i.w, i.y + i.h) for i in self.items if not i.is_point]
+        n = 0
+        for k, (pt, b) in enumerate(shown):
+            n += any(L.overlap(b, o) for j, (_, o) in enumerate(shown) if j != k)
+            n += any(L.overlap(b, o) for o in nodes)
+            n += any(L.hits(b, s[1], s[2]) and not L.near(pt, s[1]) and not L.near(pt, s[2]) for s in segs)
+        return n
 
     def cost(self):
         """One number for the quality of the current layout (lower is better). The parts are
         kept in self.cost_parts for inspection."""
         f = self.faults()
-        bends = vlen = src = jogs = 0.0
+        bends = vlen = src = jogs = labelled = 0.0
+        lw = getattr(self, 'label_w', None) or {}
         route = self._route()
         hlen = sum(abs(q[0] - p[0]) for _, p, q in route)
         border = self._on_border(route) if P.W_BORDER else 0
@@ -215,6 +236,8 @@ class CostMixin:
                     jogs += 1
                 if getattr(e.u, 'src', False):
                     src += d
+                if e.tag in lw:
+                    labelled += 1
         reals = [i for i in self.items if not i.is_point]
         off = sum(1 for i in reals if abs(i.y / P.GRID - round(i.y / P.GRID)) > 1e-3)
         ys = [i.y for i in self.items] + [i.y + i.h for i in reals]
@@ -228,7 +251,7 @@ class CostMixin:
                 + P.W_OVERLAP * f["collinear"] + P.W_CLASH * (f["clash"] + f["on_wire"])
                 + P.W_BEND * bends + P.W_JOG * jogs + P.W_VLEN * vlen + P.W_SRC * src
                 + P.W_GRID * off + P.W_H * h + P.W_W * w + P.W_HLEN * hlen
-                + P.W_BORDER * border)
+                + P.W_BORDER * border + P.W_LABEL * f["label"] + P.W_LABEL_BEND * labelled)
 
 
 def _multi(s):

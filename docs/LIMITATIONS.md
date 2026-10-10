@@ -8,6 +8,12 @@
 - **Speed.** Large trees take 1 to 20 seconds each; "Thorough search" about twice as long.
 - Some crossings are unavoidable (for example inside a bundle of wires that swap places); the
   layout puts them where they are clean.
+- Blender shows a wire's label, greyed, on every reroute after the labelled one. Where the wire
+  turns upwards it runs through that copy, and labels on the turns into a multi-input socket
+  (a slot apart) cannot all be clear of each other.
+- A commutative swap that a frame or zone cannot leave to the level around it (one input from
+  inside the block, or a port that feeds other nodes too) is decided inside the block, which
+  does not see where the outside wire comes from.
 - Inserting a node usually adds a column, so a small edit can reorder what is before it.
 - "Keep layout" mode is experimental.
 - Sort Selection lays the part out on its own: its links to the rest are routed afterwards and

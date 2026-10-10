@@ -274,8 +274,9 @@ def run():
     files = sorted(glob.glob(os.path.join(ARGS.examples, "NF*.blend")))
     try:
         for path in files:
-            code = os.path.splitext(os.path.basename(path))[0]
-            if ARGS.only and code not in ARGS.only:
+            name = os.path.splitext(os.path.basename(path))[0]
+            code = name.split("-")[0]  # NF0xx-<what>: a second example of rule NF0xx
+            if ARGS.only and name not in ARGS.only:
                 continue
             before, after = append(path), append(path)
             scale = before.get(SCALE_KEY, 1.0)
@@ -296,15 +297,15 @@ def run():
                 if code == "NF005":  # the logic fingerprint under the tree
                     l, b, r, t = bbox(nt)
                     STAMP[:] = [(l, b - 20 / zoom, f"Logic fingerprint: {fingerprint_digest(nt)}")]
-                box = yield from shoot(nt, os.path.join(ARGS.out, f"{code}-{when}.png"), zoom)
+                box = yield from shoot(nt, os.path.join(ARGS.out, f"{name}-{when}.png"), zoom)
                 if STAMP:
                     box[3] += 28
-                boxes[f"{code}-{when}"] = box
+                boxes[f"{name}-{when}"] = box
                 MARKS[:] = []
                 STAMP[:] = []
             bpy.data.node_groups.remove(before)
             bpy.data.node_groups.remove(after)
-            print(f"captured {code} at zoom {zoom:.2f}", flush=True)
+            print(f"captured {name} at zoom {zoom:.2f}", flush=True)
         if bpy.context.preferences.view.ui_scale != 1.0:
             bpy.context.preferences.view.ui_scale = 1.0
             yield 1.0

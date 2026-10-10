@@ -16,7 +16,7 @@ sorting nor reported by a check.
 | [NF010](#nf010-duplicate-input-nodes) | duplicate-input-nodes | style | Input-like nodes get a copy next to each distant group of consumers. |
 | [NF011](#nf011-commutative-swaps) | commutative-swaps | style | The two inputs of a commutative node may be swapped to remove a crossing. |
 | [NF020](#nf020-free-zone-outputs) | free-zone-outputs | style | A zone's output may sit where its inputs are instead of level with the zone input. |
-| [NF021](#nf021-blocks-next-to-consumer) | blocks-next-to-consumer | style | A frame or zone with nothing linked into it sits right before the node it feeds. |
+| [NF021](#nf021-blocks-next-to-consumer) | blocks-next-to-consumer | style | A frame or zone with nothing linked into it sits right before the node it feeds; one with nothing linked at all sits compactly under the tree. |
 | [NF022](#nf022-converging-shape) | converging-shape | style | A tree that converges on one output may take a ">" shape. |
 | [NF030](#nf030-staircase-bundles) | staircase-bundles | style | Wires leaving or entering one node are nested like stairs and do not cross. |
 | [NF031](#nf031-no-u-jogs) | no-u-jogs | style | No U-jogs, landings or tiny steps that a free height would remove. |
@@ -24,6 +24,7 @@ sorting nor reported by a check.
 | [NF033](#nf033-avoid-crossings) | avoid-crossings | style | A crossing that can be avoided is avoided. |
 | [NF034](#nf034-no-junction-look) | no-junction-look | style | Wires never share a point or run on one line. |
 | [NF040](#nf040-label-first-reroute) | label-first-reroute | style | A reroute label goes on the first reroute of its wire. |
+| [NF041](#nf041-label-clearance) | label-clearance | style | Reroute labels, and the greyed copies Blender shows, overlap no label, node or wire. |
 
 Check also reports **NF900 not-formatted** when a sort would move anything.
 
@@ -31,7 +32,8 @@ Check also reports **NF900 not-formatted** when a sort would move anything.
 
 Every rule has a small synthetic tree in `examples/NF0xx.blend` (one Geometry Nodes group,
 "NF0xx" plus the rule name; open the file, switch an editor to Geometry Node Editor and pick the
-group), and a before and after image made from it:
+group), and a before and after image made from it. Some rules have a second example,
+`examples/NF0xx-<what>.blend`, shown and tested the same way:
 
 - **Guarantees**: before, the example as built, which breaks the rule; after, the example sorted
   with no style rules at all.
@@ -97,6 +99,18 @@ Images: before, the example as built; after, sorted with no style rules.
 | Before | After |
 |---|---|
 | ![NF003 before: a reroute slightly off the line](rules/NF003-before.png) | ![NF003 after: a straight link](rules/NF003-after.png) |
+
+Second example (`NF003-rows`, at UI scale 1.4): Blender rounds the float height of each row of a
+node towards zero, so the rows of a node above y = 0 are a pixel taller than below it. The sort
+measures every node both ways and uses the offsets of where the node is drawn; before, it
+measured them below 0, and the Scale input of this tall Instance on Points, drawn above 0, was
+4 units lower than measured: the wire from Multiply got a step too small to see, two reroutes on
+one spot that look like a slanted stub. After the sort the wire is straight. The test also checks
+that no wire is left with such a step.
+
+| Before | After |
+|---|---|
+| ![NF003-rows before: the Points wire off its line](rules/NF003-rows-before.png) | ![NF003-rows after: straight wires into the tall node](rules/NF003-rows-after.png) |
 
 ### NF004 no-overlapping-reroutes
 
@@ -174,6 +188,29 @@ Images: before, sorted with every style rule off; after, sorted with only NF011.
 |---|---|
 | ![NF011 before: crossing wires into Add](rules/NF011-before.png) | ![NF011 after: swapped inputs, no crossing](rules/NF011-after.png) |
 
+A frame or zone is laid out before what is around it, so it cannot see where the wires that
+enter it come from. When swapping the inputs of a node inside it only exchanges two of its
+ports (the node is in its first column, or each input comes straight from a port that feeds
+nothing else), the swap is left to the level around the block, which sees both wires; it is
+laid out with the inputs as the block left them and with them free, and keeps the cheaper.
+
+Second example (`NF011-frame`): Zeta and Alpha come in the order of the Group Input's sockets
+and feed the Add in frame "Sum", Alpha the upper input; the wires cross at the frame's left
+side. With the rule the Add's inputs are swapped and nothing crosses.
+
+| Before | After |
+|---|---|
+| ![NF011-frame before: crossing wires into a frame](rules/NF011-frame-before.png) | ![NF011-frame after: no crossing](rules/NF011-frame-after.png) |
+
+Third example (`NF011-zone`): the same in a frame inside a Repeat zone, where the Add gets the
+doubled iteration from inside the zone and Alpha from outside it. A node whose two inputs both
+come from outside a zone is laid out outside the zone, and one with one input from outside is
+swapped by the zone itself, which sees both wires.
+
+| Before | After |
+|---|---|
+| ![NF011-zone before: crossing wires into a frame in a zone](rules/NF011-zone-before.png) | ![NF011-zone after: no crossing](rules/NF011-zone-after.png) |
+
 ### NF020 free-zone-outputs
 
 Style. A zone's output may sit where its inputs are instead of level with the zone input.
@@ -215,6 +252,22 @@ Images: before, sorted with every style rule off; after, sorted with only NF021.
 | Before | After |
 |---|---|
 | ![NF021 before: a frame far from its consumer](rules/NF021-before.png) | ![NF021 after: the frame next to its consumer](rules/NF021-after.png) |
+
+A frame or zone with nothing linked at all (notes, a test, a block nothing uses yet) sits under
+the tree where it makes the tree grow least: right below what is above it, within the tree's
+width if it fits, beside a satellite rather than under it. Check reports such a frame that could
+sit more than 100 units higher in the free space under the tree.
+
+Second example (`NF021-alone`): frame "Cube" feeds Instance on Points late in a long row, and
+frame "Test" is linked to nothing. Without the rule "Test" is put under the left end of the tree;
+with it, "Cube" sits under the end of the row and "Test" beside it, in the space under the start
+of the row.
+
+Off: blocks with nothing linked go in a row under the tree, from its left edge.
+
+| Before | After |
+|---|---|
+| ![NF021-alone before: a frame with nothing linked under the left end](rules/NF021-alone-before.png) | ![NF021-alone after: the frame beside the satellite](rules/NF021-alone-after.png) |
 
 ### NF022 converging-shape
 
@@ -359,3 +412,33 @@ Images: before, sorted with every style rule off; after, sorted with only NF040.
 | Before | After |
 |---|---|
 | ![NF040 before: a label on the second reroute](rules/NF040-before.png) | ![NF040 after: the label on the first reroute](rules/NF040-after.png) |
+
+### NF041 label-clearance
+
+Style. A reroute label overlaps no other label, no node and no wire, and neither do the greyed
+copies of it that Blender shows on the later reroutes of its wire (the reroute auto labels of
+Blender 5): a label is drawn once per reroute of its wire, centred above each dot.
+
+Why: a label covered by a node or another label, or labels stacked on top of each other near
+the sockets of a node, cannot be read.
+
+The sort measures each label's text as Blender draws it. A labelled wire turns where its labels
+clear the nodes beside it (the gap between the columns widens for them), its bends cost a little
+more, and overlaps of its labels cost like a crossing near a bend. The label goes on the first
+reroute where its text is clear, or on a new reroute on the run into it, where it does not
+overlap the greyed copies after it (with this rule, NF040 accepts that). A wire that turns
+upwards at a reroute runs through the greyed copy there; that is not counted, since Blender
+draws the copy on every reroute.
+
+Example: the Offset wire carries the label "Offset along the normal" and turns right before Set
+Position, in a narrow gap: the label and its greyed copy on the second turn cover the nodes on
+both sides. With the rule the gap widens and both are clear of the nodes and the other wire.
+
+Off: gaps do not widen for labels, overlaps of labels cost nothing, and a label goes on the first
+reroute whose text overlaps no other label.
+
+Images: before, sorted with every style rule off; after, sorted with only NF041.
+
+| Before | After |
+|---|---|
+| ![NF041 before: a label over the nodes beside it](rules/NF041-before.png) | ![NF041 after: the label clear of nodes and wires](rules/NF041-after.png) |

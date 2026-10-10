@@ -4,7 +4,8 @@
     blender --factory-startup --python tools/make_examples.py [-- --only NF031]
 
 Writes examples/NF0xx.blend, each holding one Geometry Nodes group named "NF0xx <rule name>"
-(with a fake user, no objects, no screens), and examples/selection.blend for Sort Selection.
+(with a fake user, no objects, no screens), a second example of a rule as NF0xx-<what>.blend
+(group "NF0xx <rule name> (<what>)"), and examples/selection.blend for Sort Selection.
 A style rule's example is saved sorted with every style rule off (see main()). An example meant
 for another UI scale stores it in the group's custom property "nodefmt_ui_scale" (NF034: 1.25).
 Runs with Blender's window: reroutes are placed from socket positions, which only exist once a
@@ -159,6 +160,36 @@ def nf002():
     return t
 
 
+def frame(t, label):
+    """A new frame with a label."""
+    fr = t.nt.nodes.new('NodeFrame')
+    fr.label = label
+    return fr
+
+
+def nf003_rows():
+    """A tall Instance on Points above y = 0, for UI scale 1.4: Multiply feeds its Scale, low
+    on the node, straight. At a fractional scale Blender draws the rows of a node above 0 a
+    pixel taller than below it; measured anywhere else, Scale was 4 units off where it is drawn,
+    and its wire got a tiny step. The Points wire is 1.5 units off its line (the rule broken)."""
+    t = Tree("NF003", inputs=(("Geometry", 'Geometry'), ("Size", 'Float')), name="NF003 orthogonal-segments (rows)")
+    t.nt[SCALE_KEY] = 1.4
+    gi = t.node('NodeGroupInput', 0, 600)
+    cu = t.node('GeometryNodeMeshCube', 200, 1000)
+    mul = t.node('ShaderNodeMath', 220, 420, operation='MULTIPLY')
+    ip = t.node('GeometryNodeInstanceOnPoints', 440, 600)
+    go = t.node('NodeGroupOutput', 660, 600)
+    t.level(gi, 0, ip, 0)
+    t.wire(gi, 0, ip, 0, [(300, 'src', 1.5)])
+    t.link(cu, 0, ip, "Instance")
+    t.link(gi, 1, mul, 0)
+    t.link(mul, 0, ip, "Scale")
+    t.level(mul, 0, ip, "Scale", move=mul)
+    t.link(ip, 0, go, 0)
+    t.level(ip, 0, go, 0)
+    return t
+
+
 def nf003():
     """Almost straight: the reroute is 1.5 units off the line of its wire."""
     t = Tree("NF003")
@@ -240,6 +271,61 @@ def nf011():
     return t
 
 
+def nf011_frame():
+    """Zeta and Alpha (in the order of the Group Input's sockets) feed the Add in frame "Sum",
+    Alpha the upper input: the frame is laid out first and cannot see where its wires come
+    from."""
+    t = Tree("NF011", inputs=(("Z", 'Float'), ("A", 'Float')), outputs=(("Sum", 'Float'),),
+             name="NF011 commutative-swaps (frame)")
+    gi = t.node('NodeGroupInput', 0, 0)
+    z = t.node('ShaderNodeMath', 220, 0, name="Zeta", operation='MULTIPLY')
+    a = t.node('ShaderNodeMath', 220, -200, name="Alpha", operation='MULTIPLY')
+    t.link(gi, 0, z, 0)
+    t.link(gi, 1, a, 0)
+    fr = frame(t, "Sum")
+    add = t.node('ShaderNodeMath', 500, -100, parent=fr, operation='ADD')
+    fin = t.node('ShaderNodeMath', 720, -100, parent=fr, operation='MULTIPLY')
+    val = t.node('ShaderNodeValue', 300, -300, name="Weight", parent=fr)
+    mul = t.node('ShaderNodeMath', 500, -300, parent=fr, operation='MULTIPLY')
+    go = t.node('NodeGroupOutput', 950, 0)
+    t.link(add, 0, fin, 0)
+    t.link(val, 0, mul, 0)
+    t.link(mul, 0, fin, 1)
+    t.link(z, 0, add, 1)
+    t.link(a, 0, add, 0)
+    t.link(fin, 0, go, 0)
+    return t
+
+
+def nf011_zone():
+    """In a Repeat zone, frame "Step" holds an Add of Omega (the iteration, doubled) and Alpha
+    (from outside the zone), Alpha the upper input."""
+    t = Tree("NF011", inputs=(("Geometry", 'Geometry'), ("A", 'Float')), outputs=(("Geometry", 'Geometry'),),
+             name="NF011 commutative-swaps (zone)")
+    gi = t.node('NodeGroupInput', 0, 0)
+    a = t.node('ShaderNodeMath', 220, -200, name="Alpha", operation='MULTIPLY')
+    rin = t.node('GeometryNodeRepeatInput', 450, 0)
+    rout = t.node('GeometryNodeRepeatOutput', 1500, 0)
+    rin.pair_with_output(rout)
+    om = t.node('ShaderNodeMath', 650, -50, name="Omega", operation='MULTIPLY')
+    fr = frame(t, "Step")
+    add = t.node('ShaderNodeMath', 850, -150, parent=fr, operation='ADD')
+    cx = t.node('ShaderNodeCombineXYZ', 1050, -150, parent=fr)
+    sp = t.node('GeometryNodeSetPosition', 1250, 0)
+    go = t.node('NodeGroupOutput', 1700, 0)
+    t.link(gi, 1, a, 0)
+    t.link(gi, 0, rin, "Geometry")
+    t.link(rin, "Geometry", sp, 0)
+    t.link(rin, "Iteration", om, 0)
+    t.link(om, 0, add, 1)
+    t.link(a, 0, add, 0)
+    t.link(add, 0, cx, 2)
+    t.link(cx, 0, sp, "Offset")
+    t.link(sp, 0, rout, "Geometry")
+    t.link(rout, "Geometry", go, 0)
+    return t
+
+
 def nf020():
     """The output of a Repeat zone is level with its input, so the wire into it bends."""
     t = Tree("NF020")
@@ -278,6 +364,34 @@ def nf021():
     sc = t.node('GeometryNodeScaleElements', 420, -260, parent=fr)
     chain(t, [cu, tr, sc])
     t.wire(sc, 0, ip, "Instance", [(620, 'src'), (620, 'dst')])
+    return t
+
+
+def nf021_alone():
+    """Frame "Cube" feeds Instance on Points late in a long row; frame "Test" is linked to
+    nothing."""
+    t = Tree("NF021", name="NF021 blocks-next-to-consumer (nothing linked)")
+    gi = t.node('NodeGroupInput', 0, 0)
+    sp = t.node('GeometryNodeSetPosition', 220, 0)
+    sd = t.node('GeometryNodeSubdivideMesh', 440, 0)
+    mp = t.node('GeometryNodeMeshToPoints', 660, 0)
+    ip = t.node('GeometryNodeInstanceOnPoints', 880, 0)
+    ri = t.node('GeometryNodeRealizeInstances', 1100, 0)
+    tf = t.node('GeometryNodeTransform', 1320, 0)
+    go = t.node('NodeGroupOutput', 1540, 0)
+    chain(t, [gi, sp, sd, mp, ip, ri, tf, go])
+    fr = frame(t, "Cube")
+    cu = t.node('GeometryNodeMeshCube', 0, -260, parent=fr)
+    tr = t.node('GeometryNodeTransform', 210, -260, parent=fr)
+    sc = t.node('GeometryNodeScaleElements', 420, -260, parent=fr)
+    chain(t, [cu, tr, sc])
+    t.wire(sc, 0, ip, "Instance", [(620, 'src'), (620, 'dst')])
+    fn = frame(t, "Test")
+    va = t.node('ShaderNodeValue', 0, -600, parent=fn)
+    m1 = t.node('ShaderNodeMath', 200, -600, parent=fn, operation='MULTIPLY')
+    m2 = t.node('ShaderNodeMath', 400, -600, parent=fn, operation='POWER')
+    t.link(va, 0, m1, 0)
+    t.link(m1, 0, m2, 0)
     return t
 
 
@@ -412,6 +526,18 @@ def nf040():
     return t
 
 
+def nf041():
+    """The Offset wire carries a long label and turns right before Set Position: the label, and
+    the greyed copy Blender shows on the next reroute, cover the nodes beside the gap."""
+    t = Tree("NF041", inputs=(("Geometry", 'Geometry'), ("Offset", 'Vector')))
+    gi = t.node('NodeGroupInput', 0, 0)
+    sp = t.node('GeometryNodeSetPosition', 240, 0)
+    go = t.node('NodeGroupOutput', 460, 0)
+    chain(t, [gi, sp, go])
+    t.wire(gi, 1, sp, "Offset", [(200, 'src', 0.0, "Offset along the normal"), (200, 'dst')])
+    return t
+
+
 def selection():
     """For Sort Selection: a messy frame "Sort me" in a sorted tree, linked to the rest on both
     sides (a Value node feeds it, Join Geometry takes two of its outputs). The frame is selected."""
@@ -442,10 +568,12 @@ def selection():
 
 EXTRAS = {"selection": selection}  # examples for other tests (not of a rule)
 
-EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF004": nf004, "NF005": nf005,
-            "NF010": nf010, "NF011": nf011, "NF020": nf020, "NF021": nf021, "NF022": nf022,
-            "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033, "NF034": nf034,
-            "NF040": nf040}
+# file name -> builder; a name "NF0xx-<what>" is a second example of rule NF0xx
+EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF003-rows": nf003_rows, "NF004": nf004,
+            "NF005": nf005, "NF010": nf010, "NF011": nf011, "NF011-frame": nf011_frame,
+            "NF011-zone": nf011_zone, "NF020": nf020, "NF021": nf021, "NF021-alone": nf021_alone,
+            "NF022": nf022, "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033,
+            "NF034": nf034, "NF040": nf040, "NF041": nf041}
 
 
 def main():
@@ -463,7 +591,7 @@ def main():
             bpy.context.preferences.view.ui_scale = 1.0  # in memory only: positions are made at scale 1
             t = make()
             t.finish(ed)
-            if code in rules.STYLE:
+            if code.split("-")[0] in rules.STYLE:
                 bpy.context.preferences.view.ui_scale = t.nt.get(SCALE_KEY, 1.0)
                 api.format_tree(t.nt, 'relayout', ed, cfg=rules.Config(rules.GUARANTEES))
                 for n in t.nt.nodes:

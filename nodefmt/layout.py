@@ -132,6 +132,14 @@ class Formatter:
         self.mode = mode
         self.rules = frozenset(rules if rules is not None else _rules.DEFAULT)
         self.swaps_on = swaps and 'NF011' in self.rules
+        # NF041: the text width of the label of each labelled wire (by source socket)
+        self.label_w = {}
+        if 'NF041' in self.rules:
+            from .labels import text_width
+            for lab in m.data.get("labels", []):
+                tag = tuple(lab["src"])
+                w = lab.get("w") or text_width(lab["label"])
+                self.label_w[tag] = max(w, self.label_w.get(tag, 0.0))
         self.loose_frames = set()
         self.swapped = []  # (node, gid a, gid b): links of a commutative pair exchanged
 
@@ -153,7 +161,10 @@ class Formatter:
             self.root, self.home = nest(self.m, conts)
             try:
                 self.res, self.node_items, self.comp_items = {}, {}, {}
-                self.ctx, self.applied, self.port_of = {}, {}, {}
+                self.ctx, self.applied = {}, {}
+                # commutative pairs at a container's border (see _border_pairs): the first column
+                # of each container, the pairs its parent may exchange, the port pairs exchanged
+                self.rank0, self.exposed, self.flipped, self.cont_of = {}, {}, {}, {}
                 self.swapped = []
                 self.links = list(self.m.links)
                 self._done, self._count = 0, len(conts) + 1
@@ -238,7 +249,7 @@ class Formatter:
         """Build the items and edges of container c (its children as compound items), run the
         engine, apply the input swaps it chose (undoing those of an earlier run of c)."""
         for v, a, b in self.applied.pop(id(c), []):
-            self._unswap(v, a, b)
+            self._exchange(v, a, b)  # undo: an exchange is its own inverse
         m = self.m
         items = []
         for name in sorted(c.direct):
@@ -259,7 +270,7 @@ class Formatter:
             it.geo_out = any(m.geo.get(g, False) for g in m.outs[name])
             it.src = not any(d[0] == name for _, d, _, _ in m.links)
             if name in m.comm and self.swaps_on:
-                it.comm = m.comm[name]
+                it.comm = it.comm_pair = m.comm[name]
             if pin and c.kind == 'zone':  # zone input/output: their items, to put them on one line
                 side = m.outs if pin == 'first' else m.ins
                 it.zmatch = {m.info[g[0]]["socks"][f"{g[1]}{g[2]}"]["id"]: g for g in side[name] if len(g) == 3}
@@ -267,7 +278,9 @@ class Formatter:
             self.node_items[name] = it
             items.append(it)
         for ch in c.children:
-            items.append(self.comp_items[id(ch)])
+            comp = self.comp_items[id(ch)]
+            comp.comm = list(comp.comm_pairs) if comp.comm_pairs and self.swaps_on else None
+            items.append(comp)
         inside = (lambda n: True) if c.kind == 'root' else (lambda n: n in c.all)
         # edges between children, and links crossing the container border
         edges, b_in, b_out = {}, [], []
@@ -280,7 +293,7 @@ class Formatter:
                 a, b = self.item_of(c, s[0]), self.item_of(c, d[0])
                 if a is b:
                     continue
-                bk = d if b.kind in ('node', 'label') else b.port_of[(s, d)]
+                bk = d if b.kind in ('node', 'label') else self._port_key(self.cont_of[b.id], s, d)
                 e = engine.Edge(a, s, b, bk, s, m.geo[s])
                 e.route = m.old_route(s, d0, sid)
                 edges[(a.id, s, b.id, bk)] = e
@@ -292,21 +305,19 @@ class Formatter:
         probe = engine._Layout(items, list(edges.values()), self.mode)
         probe.rank()
         R = probe.R
-        port_of, ports_in, ports_out = {}, {}, {}
+        self.rank0[id(c)] = {i.id for i in items if i.rank == 0}
+        ports_in, ports_out = {}, {}
         direct_in, direct_out = {}, {}
         all_edges = list(edges.values())
         for s, d in b_in:
             b = self.item_of(c, d[0])
-            bk = d if b.kind in ('node', 'label') else b.port_of[(s, d)]
+            bk = d if b.kind in ('node', 'label') else self._port_key(self.cont_of[b.id], s, d)
             if b.rank == 0:
                 key = (PORT_D, b.id, bk)
-                port_of[(s, d)] = key
                 direct_in[key] = (b, bk)
-                if b.kind == 'node':
-                    b.comm = None  # fed from outside: the parent level owns this link
+                b.comm = None  # fed from outside: the parent exchanges this pair (_border_pairs)
             else:
                 key = (PORT_IN, s)
-                port_of[(s, d)] = key
                 if key not in ports_in:
                     p = engine.Item(('pin', s, c.kind, c.key), 'pin_in', pin='first')
                     p.tag = s
@@ -340,34 +351,123 @@ class Formatter:
             pad = m.pads.get(c.key, (30, 40, 30, 30))
         elif c.kind == 'zone':
             pad = (0, 20, 0, 20)
-        res = engine.layout(items, all_edges, self.mode, pad, self._recorder(c))
-        self.ctx[id(c)] = (port_of, ports_in, direct_in, ports_out, direct_out)
+        linked = set(direct_in)
+        self.exposed[id(c)] = self._border_pairs(c, items, all_edges, direct_in)
+        res = engine.layout(items, all_edges, self.mode, pad, self._recorder(c), self.label_w)
+        # the last item: ports of unlinked inputs of a border pair (never the main input)
+        self.ctx[id(c)] = (ports_in, direct_in, ports_out, direct_out, set(direct_in) - linked)
         self._apply(c, res)
+
+    def _border_pairs(self, c, items, edges, direct_in):
+        """The commutative pairs of container c that its parent may exchange (rule NF011), as
+        {(port a, port b): (item, key a, key b, tags)}. Container c is laid out before its
+        parent and cannot see where the wires that enter it come from, so a swap that only
+        exchanges two of c's ports is left to the parent, which sees them:
+
+        - an item of the first column whose pair is fed from outside c: the wires reach its
+          sockets directly (PORT_DIRECT ports), and c leaves the pair to its parent (tags None);
+        - an item further right whose two links come each from a port on c's left edge that
+          feeds nothing else: exchanging the heights of the two ports, and the tags of the wires
+          from them inside c, gives the same layout with the pair swapped (tags: the sources).
+
+        The item can be a node, or a child block with border pairs of its own: a pair is passed
+        on up through nested frames and zones."""
+        out = {}
+        if c.kind == 'root' or not self.swaps_on:
+            return out
+        for b in items:
+            pairs = getattr(b, 'comm_pair', None) if b.kind == 'node' else getattr(b, 'comm_pairs', None)
+            if not pairs:
+                continue
+            for ka, kb in ([pairs] if b.kind == 'node' else pairs):
+                if b.rank == 0:
+                    if ka not in b.ins or kb not in b.ins:
+                        continue
+                    pa, pb = (PORT_D, b.id, ka), (PORT_D, b.id, kb)
+                    direct_in.setdefault(pa, (b, ka))  # an unlinked input (with the same value)
+                    direct_in.setdefault(pb, (b, kb))
+                    out[(pa, pb)] = (b.id, ka, kb, None)
+                    continue
+                into = {e.vk: e for e in edges if e.v is b and e.vk in (ka, kb)}
+                if len(into) != 2 or into[ka].u is into[kb].u:
+                    continue
+                if not all(e.u.kind == 'pin_in' and sum(1 for f in edges if f.u is e.u) == 1
+                           for e in into.values()):
+                    continue
+                ta, tb = into[ka].u.tag, into[kb].u.tag
+                out[((PORT_IN, ta), (PORT_IN, tb))] = (b.id, ka, kb, (ta, tb))
+        return out
+
+    def _port_key(self, c, s, d):
+        """The key of the port where the link from s to d enters container c (d inside c)."""
+        b = self.item_of(c, d[0])
+        if b.id not in self.rank0[id(c)]:
+            return (PORT_IN, s)
+        bk = d if b.kind in ('node', 'label') else self._port_key(self.cont_of[b.id], s, d)
+        return (PORT_D, b.id, bk)
 
     def _apply(self, c, res):
         """Make res the layout of container c: its input swaps applied to the links."""
-        port_of = self.ctx[id(c)][0]
         for v, a, b in res.swapped:
-            self._swap(v, a, b)
-            port_of = {(s, b if d == a else a if d == b else d): k for (s, d), k in port_of.items()}
+            self._exchange(v, a, b)
         self.applied[id(c)] = list(res.swapped)
-        self.port_of[id(c)] = port_of
         self.res[id(c)] = (c, res)
 
     def _use_alt(self, c, mode):
         """Switch zone container c to its layout for zone output `mode` (see layout())."""
         for v, a, b in self.applied.pop(id(c), []):
-            self._unswap(v, a, b)
+            self._exchange(v, a, b)
         self._apply(c, self.res[id(c)][1].realize(mode))
         self._compound(c)
+
+    def _exchange(self, v, a, b):
+        """Exchange the commutative pair (a, b) of item v: the links of a node, or a border pair
+        of a child block (_border_pairs): the pair inside it and, for two ports of its left edge,
+        their heights and the tags of their wires. An exchange is its own inverse."""
+        if not isinstance(v, tuple):
+            self._swap(v, a, b)
+            return
+        ch = self.cont_of[v]
+        item, ka, kb, tags = self.exposed[id(ch)][(a, b)]
+        self._exchange(item, ka, kb)
+        if tags is not None:
+            self.flipped.setdefault(id(ch), set()).symmetric_difference_update({tags})
+        comp = self.comp_items[id(ch)]  # its ports as they are now (the parent's result keeps it)
+        comp.ins.clear()
+        comp.ins.update(self._ports(ch)[0])
 
     def _compound(self, c):
         """Container c as one compound item of its parent: its box and the ports where links
         cross its border."""
         m = self.m
         res = self.res[id(c)][1]
-        _, ports_in, direct_in, ports_out, direct_out = self.ctx[id(c)]
-        port_of = self.port_of[id(c)]
+        ins, outs = self._ports(c)
+        nodes = [m.box[n] for n in c.all]
+        comp = engine.Item((c.kind, c.key), 'compound', res.w, res.h, ins, outs,
+                           min(b[0] for b in nodes), min(b[1] for b in nodes))
+        comp.comm_pairs = sorted(self.exposed.get(id(c), {}), key=repr) or None
+        self.cont_of[comp.id] = c
+        comp.geo_out = any(m.geo.get(s, False) for s in outs)
+        comp.res = res
+        comp.big = res.ranks >= 3
+        # main input: the zone input's main socket, else a geometry port, else the top port
+        main = None
+        if c.kind == 'zone':
+            mk = m.main.get(c.pair[0])
+            for key in ins:
+                if key[0] == PORT_D and key[2] == mk:
+                    main = key
+        linked = [k for k in ins if k not in self.ctx[id(c)][4]]
+        if main is None and linked:
+            main = min(linked, key=lambda k: (not self._port_geo(k), ins[k][1]))
+        comp.main_in = main
+        self.comp_items[id(c)] = comp
+
+    def _ports(self, c):
+        """Offsets of the ports of container c in its box: inputs {key: (dx, dy)} and outputs
+        {source: (dx, dy)}, with the port pairs its parent exchanged (_exchange)."""
+        res = self.res[id(c)][1]
+        ports_in, direct_in, ports_out, direct_out, _ = self.ctx[id(c)]
         ox, oy = res.origin
         ins, outs = {}, {}
         for key, p in ports_in.items():
@@ -380,34 +480,18 @@ class Formatter:
         for s, a in direct_out.items():
             dx, dy = a.outs[s]
             outs[s] = (a.x + dx - ox, a.y + dy - oy)
-        nodes = [m.box[n] for n in c.all]
-        comp = engine.Item((c.kind, c.key), 'compound', res.w, res.h, ins, outs,
-                           min(b[0] for b in nodes), min(b[1] for b in nodes))
-        comp.port_of = port_of
-        comp.geo_out = any(m.geo.get(s, False) for s in outs)
-        comp.res = res
-        comp.big = res.ranks >= 3
-        # main input: the zone input's main socket, else a geometry port, else the top port
-        main = None
-        if c.kind == 'zone':
-            mk = m.main.get(c.pair[0])
-            for key in ins:
-                if key[0] == PORT_D and key[2] == mk:
-                    main = key
-        if main is None and ins:
-            main = min(ins, key=lambda k: (not self._port_geo(k), ins[k][1]))
-        comp.main_in = main
-        self.comp_items[id(c)] = comp
-
-    def _unswap(self, v, a, b):
-        """Undo an exchange made by _swap (an exchange is its own inverse)."""
-        self._swap(v, a, b)
-        self.swapped.remove((v, a, b))
-        self.swapped.remove((v, a, b))
+        for ta, tb in self.flipped.get(id(c), ()):
+            pa, pb = (PORT_IN, ta), (PORT_IN, tb)
+            ins[pa], ins[pb] = ins[pb], ins[pa]
+        return ins, outs
 
     def _swap(self, v, a, b):
-        """The engine exchanged the links of inputs a and b of node v."""
-        self.swapped.append((v, a, b))
+        """Exchange the links of inputs a and b of node v. Its own inverse: self.swapped lists
+        the pairs exchanged an odd number of times."""
+        if (v, a, b) in self.swapped:
+            self.swapped.remove((v, a, b))
+        else:
+            self.swapped.append((v, a, b))
         new = []
         for s, d, mu, sid in self.links:
             if d == a:
@@ -455,7 +539,7 @@ class Formatter:
         boxes = [(x, y, x + m.box[n][2], y + m.box[n][3]) for n, (x, y) in self.pos.items()
                  if m.type(n) != 'NodeReroute']
         self.label_pts = routes.place_labels(self.trees, self.m.data.get("labels", []), boxes,
-                                             first='NF040' in self.rules)
+                                             first='NF040' in self.rules, clear='NF041' in self.rules)
 
     def drawing(self):
         """The routed tree as a wires.Drawing: reroute trees, node boxes, zone and frame outlines."""
@@ -494,8 +578,12 @@ class Formatter:
         return frames
 
     def _place(self, c, off):
-        """Absolute positions of container c laid out at offset `off`, and its route segments."""
+        """Absolute positions of container c laid out at offset `off`, and its route segments
+        (the tags of port pairs exchanged by the parent swapped, see _exchange)."""
         _, res = self.res[id(c)]
+        retag = {}
+        for ta, tb in self.flipped.get(id(c), ()):
+            retag[ta], retag[tb] = tb, ta
         for it in res.items:
             if it.kind in ('node', 'label'):
                 self.pos[it.id] = (it.x + off[0], it.y + off[1])
@@ -504,8 +592,8 @@ class Formatter:
                 cres = self.res[id(ch)][1]
                 self._place(ch, (it.x + off[0] - cres.origin[0], it.y + off[1] - cres.origin[1]))
         for tag, p, q, dst in res.segments:
-            self.segments.append((tag, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]),
-                                  self._dst(dst)))
+            self.segments.append((retag.get(tag, tag), (p[0] + off[0], p[1] + off[1]),
+                                  (q[0] + off[0], q[1] + off[1]), self._dst(dst)))
 
     def _dst(self, dst):
         """The real input socket a route segment ends at (None if the route continues)."""

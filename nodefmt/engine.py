@@ -39,7 +39,7 @@ GRID = P.GRID  # kept for callers (layout.py)
 __all__ = ['layout', 'snapshot_state', 'Item', 'Edge', 'CycleError', 'PORT_DIRECT', 'GRID', 'Result']
 
 
-def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None):
+def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, labels=None):
     """Lay out the items of one container. pad = (left, top, right, bottom) is reserved around
     the content (frames). Returns a Result with item positions, route segments and the box.
 
@@ -59,23 +59,51 @@ def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None):
     that suits what follows the zone (layout.py). P.SEED_ONLY runs one seed only (tests).
 
     snapshot, if given, is called as snapshot(phase, state) with plain data of the layout after
-    each phase ('order', 'placement', 'seed <n>', 'search', 'slide'); see snapshot_state()."""
+    each phase ('order', 'placement', 'seed <n>', 'search', 'slide'); see snapshot_state().
+    labels: {source tag: text width} of the labelled wires (NF041, cost.py and columns.py).
+
+    A child block with commutative pairs at its border (layout.py, NF011) is laid out with the
+    pairs as the block left them and with the pairs free; the cheaper of the two fresh layouts
+    decides (exchanging them can lead the search elsewhere, to a worse layout)."""
     t0 = time.perf_counter()
+    border = [i for i in items if i.kind == 'compound' and getattr(i, 'comm', None)] if mode == 'relayout' else []
+    if not border:
+        return _choose(items, edges, mode, pad, snapshot, t0, labels)
+    saved = {id(i): i.comm for i in border}
+
+    def fix(on):
+        """The border pairs as the blocks left them (on) or free."""
+        for i in border:
+            i.comm = None if on else saved[id(i)]
+    fix(True)
+    fixed = _choose(items, edges, mode, pad, None, t0, labels, stable=False)
+    fix(False)
+    free = _choose(items, edges, mode, pad, None, t0, labels, stable=False)
+    fix(fixed.cost <= free.cost + 1e-9)
+    try:
+        return _choose(items, edges, mode, pad, snapshot, t0, labels)
+    finally:
+        fix(False)
+
+
+def _choose(items, edges, mode, pad, snapshot, t0, labels, stable=True):
+    """layout() of the items as they are: with and without satellites (NF021)."""
     # NF021: blocks with no inputs may sit next to their consumer (satellites, ranking.py); the
     # container is laid out with and without them and the cheaper layout is kept
     sats = P.SATELLITES and mode == 'relayout' and any(
         i.kind == 'compound' and getattr(i, 'big', False) and i.pin is None
         and not any(e.v is i for e in edges) and any(e.u is i for e in edges) for i in items)
     if not sats:
-        return _layout(items, edges, mode, pad, snapshot, False, t0)
+        return _layout(items, edges, mode, pad, snapshot, False, t0, stable=stable, labels=labels)
     # the choice between the two is made on fresh layouts only (no stability start), so that
     # switching NF021 off and on again gives the same result
-    plain = _layout(items, edges, mode, pad, None, False, t0, stable=False)
-    res = _layout(items, edges, mode, pad, None, True, t0, stable=False)
-    return _layout(items, edges, mode, pad, snapshot, plain.cost >= res.cost - 1e-9, t0)
+    plain = _layout(items, edges, mode, pad, None, False, t0, stable=False, labels=labels)
+    res = _layout(items, edges, mode, pad, None, True, t0, stable=False, labels=labels)
+    return _layout(items, edges, mode, pad, snapshot, plain.cost >= res.cost - 1e-9, t0, stable=stable,
+                   labels=labels)
 
 
-def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True):
+def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=None):
     """layout() with or without satellites (NF021), with or without the stability start."""
     edges = [_copy_edge(e) for e in edges]
     linked = {e.u for e in edges} | {e.v for e in edges}
@@ -84,6 +112,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True):
         alone = []
     L = _Layout([i for i in items if i not in alone], edges, mode)
     L.use_sats = sats
+    L.label_w = dict(labels or {})
     L.rank()
     L.add_dummies()
     seeds = range(P.SEEDS if mode == 'relayout' else 1)
@@ -267,7 +296,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         for layer in layers:
             layer.sort(key=lambda i: (oy[i], _name_key(i)))
         layers = self._zone_first(layers)
-        comm = [tuple(e.vk0 for e in self.pred_edges[i]) for i in self.comm_items]
+        comm = [tuple(e.vk0 for e in es) for _, _, es in self.comm_items]
         zones = P.ZONE_OUT if self._zone_pair() is not None else ('level',)
         return [Cand(layers, comm, frozenset(), placer, 'current', z) for placer in P.PLACERS for z in zones]
 

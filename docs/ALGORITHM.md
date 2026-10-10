@@ -61,7 +61,11 @@ steps.
    with ports where links cross its border. A zone comes with two layouts, its output level
    with the zone input or free (step 8); the parent is laid out with each and keeps the one that
    makes the two cheapest together, so a lowered zone output is kept only when what follows the
-   zone fits it.
+   zone fits it. A commutative pair inside a block whose swap only exchanges two of its ports
+   (the node is in the block's first column, or each input comes straight from a port that
+   feeds nothing else) is left to the parent, which sees where the two wires come from: the
+   compound gets the pair of ports, and the parent is laid out with the pair as the block left
+   it and with it free, keeping the cheaper (NF011). Nested blocks pass such a pair on up.
 5. **Ranking** (`ranking.py`). Longest-path layering: every node gets a column after all its
    sources, as far right as its consumers allow; the Group Output and a zone's
    output take the last column, a zone's input the first. A big block (a frame or zone of three
@@ -75,7 +79,8 @@ steps.
 7. **Ordering** (`ordering.py`, `force.py`). The order inside each column is found by crossing
    reduction: an initial order from the last column back, then barycenter sweeps down and up
    (weighted towards main inputs), transposition of neighbours, and swaps of commutative inputs,
-   counting crossings between socket heights. A second order comes from a force-directed
+   counting crossings between socket heights (a block's pairs of ports too, step 4). A second
+   order comes from a force-directed
    relaxation: links are springs, items in a column repel each other, heights move until they
    settle, and each column is sorted by height.
 8. **Placement** (`placement.py`, `relax.py`). Three ways to find heights for a given order:
@@ -104,7 +109,10 @@ steps.
    vertical routing track per source socket in each gap. Tracks are ordered to avoid crossings:
    exactly (dynamic programming over subsets) for up to 8 tracks, else by moves of single
    tracks. Crossings inside a bundle and wires that run into another wire's corner cost more,
-   which nests a bundle like stairs.
+   which nests a bundle like stairs. Where a labelled wire turns next to a node, the gap widens
+   so its label, centred above the turn, clears the node (NF041). Items with no link at all go
+   under the layout where they make it grow least: right below what is above them, within its
+   width if they fit (NF021).
 10. **Cost and search** (`cost.py`, `search.py`, `engine.py`). Every candidate is laid out in
     full and priced by the layout cost (below). The cheapest candidate is improved by a local
     search; its moves, the ones that change a whole side first: a port of a zone above the zone
@@ -128,7 +136,14 @@ steps.
     (NF034), and single horizontal runs move to another free height when that removes a
     crossing, a U-jog, a landing or a run along a node edge or zone outline, never onto a node
     (NF031-NF034). Labels go back on the first reroute of their wire (a new reroute near the
-    source if the wire has none), never where their text would overlap another label or a node.
+    source if the wire has none), never where their text would overlap another label or a node;
+    with NF041, on the first reroute where the text is clear of labels, nodes and wires (also the
+    greyed copies Blender shows on the later reroutes, `labels.py`), else on a new reroute on the
+    run into it.
+    If the layout put a node where Blender draws its rows otherwise than measured (across y = 0,
+    see "Orthogonal wires"), the tree is laid out again with the offsets of where the nodes go,
+    until the offsets hold (at most twice more; layouts that go round in a circle settle on the
+    one made with the smallest offsets).
 12. **Write back** (`blend.py`). Node locations (on the pixel grid), new reroutes and links are
     written to Blender. New links are made before old reroutes are removed, so no input is left
     unlinked on the way. Links into a multi-input socket are made again in their original order.
@@ -170,14 +185,21 @@ location. At UI scale 1 a pixel is a node unit and everything lines up on whole 
 scale (Resolution Scale 1.25, 1.5, ..., or a display set to 150%) the socket offsets, in node
 units, are not the scale-1 ones divided evenly: a layout made at scale 1 is a few units off at
 1.5, and at
-fractional scales Blender's float row heights even make a node's height change by a pixel or
-two with its location. No layout is exact at two scales at once, so:
+fractional scales Blender rounds the float height of each row of a node towards zero, row after
+row from its top, so the rows of a node above y = 0 are a pixel taller than below it: a tall node
+is several units taller above 0. No layout is exact at two scales at once, so:
 
 1. The layout is made at the UI scale of the session, which is the scale the user sees in the
    add-on. The command line uses the preferences Blender starts with: run it without
    `--factory-startup` so it uses yours, or give the scale with `--ui-scale`.
-2. Node locations go on that scale's pixel grid (`ortho.to_px`), and socket offsets are read with
-   every node drawn at one place (`api.read_tree`), so each pass sees the same tree.
+2. Node locations go on that scale's pixel grid (`ortho.to_px`). Every node is measured twice,
+   drawn below y = 0 and above it (`api.read_tree`), and `model.at` gives its socket offsets for
+   where it is drawn (a node across 0 takes, for each stretch between two sockets, the heights
+   of the side its middle is on). The measures do not depend on where the nodes are, so each pass
+   sees the same tree; the layout uses the offsets of where each node is, and is made again when
+   it moves a node across 0 (step 11). Measured anywhere else, a link the layout made straight
+   into a low socket of a tall node could be off by more than straighten may nudge, and got a
+   step too small to see.
 3. After writing, `ortho.straighten` reads back what Blender drew and removes what rounding
    left, until nothing is off: each reroute takes the exact height of the socket its horizontal
    wire runs to (the source first) and reroutes joined by a wire share one height or x; a
@@ -232,6 +254,8 @@ The cost of a container's layout is a weighted sum (`params.py`, section "layout
 | `W_W` | 0.005 | each unit of width |
 | `W_HLEN` | 0.002 | each unit of horizontal wire (NF021: wires across the whole tree cost) |
 | `W_BORDER` | 2 | each horizontal run on the top or bottom line of a zone's outline (NF032) |
+| `W_LABEL` | 6 | each label (or greyed copy, above every turn of a labelled wire) over another label, a node or a wire (NF041) |
+| `W_LABEL_BEND` | 1 | extra for each labelled link that is not straight: its turns show the label twice more (NF041) |
 
 The other constants in `params.py` set spacing (gaps between nodes, columns and tracks), the
 search budgets (seeds, candidates, layouts per search), the placement methods, the zone output
@@ -294,6 +318,7 @@ nodefmt/  (the extension)
   cost.py       routes and layout cost
   search.py     local search and slide pass
   routes.py     reroute trees and label placement
+  labels.py     reroute labels as Blender draws them: text width, greyed copies, overlaps
   blend.py      write a layout to Blender
   check.py      logic fingerprint, snapshot and restore
   measure.py    layout metrics of plain geometry (tests)
@@ -306,10 +331,10 @@ tools/
   dump_tree.py  a tree as JSON: nodefmt's model data and Blender's theme colours
   animate.py    the demo animation, rendered offline from the snapshots
   make_demo.sh  scramble, dump and animate in one go
-  make_examples.py     the rule examples (examples/NF0xx.blend)
+  make_examples.py     the rule examples (examples/NF0xx.blend, NF0xx-<what>.blend)
   capture_examples.py  screenshots of the examples before and after a sort
   finish_images.py     crop and compress them into docs/rules/
-examples/       one small tree per rule that breaks it (NF0xx.blend)
+examples/       one small tree per rule that breaks it (NF0xx.blend; a second one: NF0xx-<what>.blend)
 tests/
   run_tests.py  tests from the examples (check, sort, logic, idempotency, rule off)
   test_operators.py  the add-on operators: progress, Esc, undo, Sort Selection, Check

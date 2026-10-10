@@ -130,11 +130,10 @@ def reroute_points(t):
 
 
 MARGIN = 40.0     # a label's own reroute sits this far along the wire from its start
-CHAR_W = 9.0      # approximate width of one label character (see measure.label_box)
 CLEAR = 10.0      # a new label reroute keeps this far from other reroutes and wires
 
 
-def place_labels(trees, labels, boxes=(), first=True):
+def place_labels(trees, labels, boxes=(), first=True, clear=True):
     """Put labelled reroutes back on the new routes.
 
     Every reroute, labelled ones included, is removed before the layout, so placement and
@@ -149,10 +148,13 @@ def place_labels(trees, labels, boxes=(), first=True):
     would only repeat the label); blend.apply removes them.
 
     A new reroute is never put where its text would overlap another label or a node, or where
-    its dot would touch another wire or reroute.
+    its dot would touch another wire or reroute. With clear (NF041), a label does not go on a
+    reroute where its text would overlap another label or a node or be crossed by a wire (its
+    own, for a wire that turns upwards there): it goes on a new reroute on the run before it.
 
     trees: {source: Tree}; labels: label records from model.read; boxes: node boxes
     (x0, y0, x1, y1) that label text must not cover. Returns {(source, point): (name, label)}."""
+    from . import labels as L
     out = {}
     texts = []  # boxes of the labels placed so far
     hsegs, vsegs = [], []
@@ -162,10 +164,19 @@ def place_labels(trees, labels, boxes=(), first=True):
                 (hsegs if abs(p[1] - c[1]) < 0.05 else vsegs).append((tag, p, c))
     points = {(tag, p) for tag, t in trees.items() for p in reroute_points(t)}
 
+    def clean(p, text):
+        """True if the text of a label at point p overlaps no label placed so far, no node and
+        no wire (the runs level with the dot are below the text)."""
+        b = _label_box(p, text)
+        return not (any(_overlap(b, o) for o in texts) or any(_overlap(b, o) for o in boxes)
+                    or any(L.hits(b, a, c) for _, a, c in hsegs + vsegs))
+
     def free(tag, p, text):
         """True if a new reroute labelled `text` on wire `tag` at point p troubles nothing."""
         b = _label_box(p, text)
         if any(_overlap(b, o) for o in texts) or any(_overlap(b, o) for o in boxes):
+            return False
+        if clear and any(L.hits(b, a, c) for _, a, c in hsegs + vsegs):
             return False
         for _, q in points:
             if abs(q[0] - p[0]) < CLEAR and abs(q[1] - p[1]) < CLEAR:
@@ -204,22 +215,42 @@ def place_labels(trees, labels, boxes=(), first=True):
             own = [p for p in _path(t, t.root, lca)[1:] if p in t.children and p not in t.dst]
         if own and not first:  # NF040 off: the reroute nearest to where the label was
             own = sorted(own, key=lambda q: (abs(q[0] - lab["x"]) + abs(q[1] - lab["y"]), q))
-        if own:  # the first one whose text overlaps no other label
-            p = next((q for q in own if not any(_overlap(_label_box(q, text), o) for o in texts)), own[0])
-        else:  # no reroute on the way: a new one near the start of the first horizontal run
-            p = None
-            for a, b in zip(path, path[1:]):
+
+        def new(runs):
+            """A new reroute near the start of the first horizontal run of `runs` where it
+            troubles nothing (and is put on the tree), else None."""
+            for a, b in runs:
                 if abs(a[1] - b[1]) > 0.05 or abs(a[0] - b[0]) < 2.0:
                     continue
                 sign = 1.0 if b[0] > a[0] else -1.0
-                for d in [MARGIN + 20.0 * k for k in range(int(abs(b[0] - a[0]) // 20))] + [abs(b[0] - a[0]) / 2]:
+                span = abs(b[0] - a[0])
+                ds = [MARGIN + 20.0 * k for k in range(int(span // 20))] + [span / 2]
+                if clear:  # any free spot along the run, the nearest to MARGIN first
+                    ds += sorted((CLEAR * k for k in range(1, int(span // CLEAR))), key=lambda d: (abs(d - MARGIN), d))
+                # the greyed copies Blender will show on the reroutes after it
+                copies = [_label_box(c, text) for c in _below(t, b)] if clear else []
+                for d in ds:
                     q = (round(a[0] + sign * d, 1), a[1])
-                    if 0 < d < abs(b[0] - a[0]) and free(src, q, text) and _insert(t, a, b, q):
-                        p = q
+                    if CLEAR <= d <= span - CLEAR and free(src, q, text)                             and not any(_overlap(_label_box(q, text), o) for o in copies) and _insert(t, a, b, q):
                         points.add((src, q))
-                        break
+                        return q
+            return None
+
+        p = None
+        if own and clear:  # NF041: the first reroute where the text is clear, or a new reroute
+            for q in own:  # on the run into it, before it
+                if clean(q, text):
+                    p = q
+                elif q in t.parent:
+                    p = new([(t.parent[q], q)])
                 if p is not None:
                     break
+        if p is None and own:  # the first one whose text overlaps no other label (and, better, no node)
+            ok = [q for q in own if not any(_overlap(_label_box(q, text), o) for o in texts)]
+            p = next((q for q in ok if not any(_overlap(_label_box(q, text), b) for b in boxes)),
+                     ok[0] if ok else own[0])
+        elif p is None:  # no reroute on the way: a new one near the start of the first horizontal run
+            p = new(list(zip(path, path[1:])))
             if p is None:
                 continue
         out[(src, p)] = (lab["name"], lab["label"])
@@ -227,10 +258,21 @@ def place_labels(trees, labels, boxes=(), first=True):
     return out
 
 
+def _below(t, p):
+    """Point p and the reroute points after it in tree t (where a label put before p shows)."""
+    out, todo = [], [p]
+    while todo:
+        q = todo.pop()
+        if q != t.root and q not in t.dst and q in t.children:
+            out.append(q)
+        todo += list(t.children.get(q, ()))
+    return out
+
+
 def _label_box(p, text):
-    """Box of a reroute label: centred above the dot (as measure.label_box)."""
-    w = CHAR_W * len(text) + 4.0
-    return (p[0] - w / 2, p[1] - 24.0, p[0] + w / 2, p[1] - 6.0)
+    """Box of a reroute label: centred above the dot, as Blender draws it (labels.box)."""
+    from . import labels
+    return labels.box(p, labels.text_width(text))
 
 
 def _overlap(a, b):

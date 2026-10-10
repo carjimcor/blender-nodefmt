@@ -29,6 +29,9 @@ not sorted (NF900) or breaks a guarantee (NF001-NF005); with `--strict`, on any 
 style rule that a sorted tree still breaks (the formatter could not do better, for example a
 crossing inside a bundle) is reported but fails the check only with `--strict`.
 
+Each tree gets a progress line, `[3/14] sorting Wire` (or `checking`); on a terminal `--fix`
+also shows the steps of the sort on one line that is overwritten as it goes on.
+
 `--fix` sorts and saves the file, and exits 2 if a tree could not be sorted without changing
 its logic (that tree is left as it was).
 

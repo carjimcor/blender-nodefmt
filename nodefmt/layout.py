@@ -136,8 +136,16 @@ class Formatter:
         self.swapped = []  # (node, gid a, gid b): links of a commutative pair exchanged
 
     def run(self):
-        """Lay out the tree. A frame that would form a cycle as one block is laid out as loose
-        nodes."""
+        """Lay out the tree (run_steps() in one go). Returns self."""
+        for _ in self.run_steps():
+            pass
+        return self
+
+    def run_steps(self):
+        """Lay out the tree, as a generator: yields ('layout', k, n) after each of the n
+        containers (zones, frames, the tree itself; again with the same k when a zone's output
+        mode is tried), then ('routing', 1, 1) once the routes are placed. A frame that would
+        form a cycle as one block is laid out as loose nodes (the count starts again)."""
         if self.snapshots is not None:
             self.snapshots.append({"phase": "direct", **self._direct()})
         while True:
@@ -148,7 +156,8 @@ class Formatter:
                 self.ctx, self.applied, self.port_of = {}, {}, {}
                 self.swapped = []
                 self.links = list(self.m.links)
-                self.layout(self.root)
+                self._done, self._count = 0, len(conts) + 1
+                yield from self.layout(self.root)
                 break
             except engine.CycleError as e:
                 # a frame whose block would form a cycle is laid out as loose nodes
@@ -157,9 +166,9 @@ class Formatter:
                     raise
                 self.loose_frames.add(bad[0][1])
         self.place(self.root)
+        yield ('routing', 1, 1)
         if self.snapshots is not None:
             self.snapshots.append({"phase": "final", **self.geometry()})
-        return self
 
     def _recorder(self, c):
         """The snapshot callback for container c (None when not recording)."""
@@ -198,10 +207,12 @@ class Formatter:
         cross its border, run the engine, and make it one compound item of its parent. A child
         zone may offer other heights for its output (engine: zone output modes); c tries each and
         keeps the one that makes c and the child cheapest together, so a lowered zone output is
-        only kept when what follows the zone fits better too."""
+        only kept when what follows the zone fits better too. A generator (see run_steps)."""
         for ch in c.children:
-            self.layout(ch)
+            yield from self.layout(ch)
         self._run(c)
+        self._done += 1
+        yield ('layout', self._done, self._count)
         for ch in sorted(c.children, key=lambda ch: (ch.kind, str(ch.key))):
             alts = getattr(self.res[id(ch)][1], 'alts', [])
             if len(alts) < 2:
@@ -213,6 +224,7 @@ class Formatter:
                     continue
                 self._use_alt(ch, mode)
                 self._run(c)
+                yield ('layout', self._done, self._count)
                 total = self.res[id(c)][1].cost + cost
                 if total < best[0] - 1e-9:
                     best = (total, mode)

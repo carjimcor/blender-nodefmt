@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Format or check node trees. Used by the add-on buttons and by the command line."""
 import time
+from collections import namedtuple
 
 import bpy
 
@@ -121,19 +122,44 @@ def read_tree(nt, editor):
         editor.redraw()
 
 
+class Step(namedtuple('Step', 'npass phase k n step steps')):
+    """Progress of a sort (format_steps): pass `npass`, `phase` (reading, copies, layout,
+    routing, writing, straightening, logic check), k of n for the layout (one per container),
+    and step `step` of the `steps` of this pass."""
+
+    def text(self):
+        """'pass 1, layout 4/9 (step 6/14)'."""
+        what = f"{self.phase} {self.k}/{self.n}" if self.n > 1 else self.phase
+        return f"pass {self.npass}, {what} (step {self.step}/{self.steps})"
+
+
 def format_once(nt, mode, editor, duplicates=True, swaps=True, cfg=None):
     """One pass: copies of input nodes, layout, write back, then the drawn wires made exactly
     orthogonal (ortho.straighten). Returns (reroutes, copies, formatter, straighten stats)."""
+    return _drain(format_once_steps(nt, mode, editor, duplicates, swaps, cfg))
+
+
+def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, npass=1):
+    """format_once as a generator of Steps; returns what format_once returns."""
+    from .layout import containers
     cfg = cfg or rules.Config()
     data = read_tree(nt, editor)
+    n = len(containers(model.Model(data))) + 1
+    steps = n + 5  # reading, copies, n layouts, routing, writing, straightening (+ logic check)
+    step = Step(npass, "reading", 1, 1, 1, steps + 1)
+    yield step
     copies = 0
     if duplicates and cfg.on('NF010'):
         plan = dup.plan(data, mode)
         if dup.changes(plan, data):
             copies = dup.realize(nt, editor, plan)
             data = read_tree(nt, editor)
-    f = Formatter(model.Model(data), mode, swaps, rules=cfg.rules).run()
+    yield step._replace(phase="copies", step=2)
+    f = Formatter(model.Model(data), mode, swaps, rules=cfg.rules)
+    for phase, k, m in f.run_steps():
+        yield step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == 'layout' else n + 3)
     made = blend.apply(nt, f)
+    yield step._replace(phase="writing", step=n + 4)
     anchor = tuple(nt.nodes[f.anchor].location_absolute)
     editor.show(nt)
     st = ortho.straighten(nt, editor)
@@ -145,25 +171,42 @@ def format_once(nt, mode, editor, duplicates=True, swaps=True, cfg=None):
     a = nt.nodes[f.anchor].location_absolute
     dx, dy = a[0] - anchor[0], a[1] - anchor[1]
     if abs(dx) > 1e-6 or abs(dy) > 1e-6:
-        for n in nt.nodes:
-            if n.bl_idname != 'NodeFrame':
-                x, y = n.location_absolute
-                n.location_absolute = (x - dx, y - dy)
+        for nd in nt.nodes:
+            if nd.bl_idname != 'NodeFrame':
+                x, y = nd.location_absolute
+                nd.location_absolute = (x - dx, y - dy)
         editor.redraw()
+    yield step._replace(phase="straightening", step=n + 5)
     return made, copies, f, st
+
+
+def _drain(gen):
+    """Run a generator of Steps to the end; returns its return value."""
+    while True:
+        try:
+            next(gen)
+        except StopIteration as e:
+            return e.value
 
 
 def format_tree(nt, mode='relayout', editor=None, duplicates=True, swaps=True, cfg=None):
     """Format one tree in place, with the rules and options of cfg (rules.Config; default: all
     rules, one deterministic pass). On any logic difference the tree is restored and
     LogicChanged raised. Returns a dict of stats."""
+    return _drain(format_steps(nt, mode, editor, duplicates, swaps, cfg))
+
+
+def format_steps(nt, mode='relayout', editor=None, duplicates=True, swaps=True, cfg=None):
+    """format_tree as a generator: yields a Step after each step, so a caller can show
+    progress (and stop: closing the generator leaves the tree half sorted; restore it from a
+    check.Snapshot taken before). Returns the stats of format_tree."""
     cfg = cfg or rules.Config()
     with rules.applied(cfg):
-        return _format_tree(nt, mode, editor, duplicates, swaps, cfg)
+        return (yield from _format_steps(nt, mode, editor, duplicates, swaps, cfg))
 
 
-def _format_tree(nt, mode, editor, duplicates, swaps, cfg):
-    """format_tree with the layout parameters of cfg set."""
+def _format_steps(nt, mode, editor, duplicates, swaps, cfg):
+    """format_steps with the layout parameters of cfg set."""
     own = editor is None
     editor = editor or Editor()
     t0 = time.perf_counter()
@@ -176,8 +219,16 @@ def _format_tree(nt, mode, editor, duplicates, swaps, cfg):
         # nodes and swapped inputs change the graph that 'relayout' works on
         for k in range(6):
             sig = _signature(nt)
+            last = None
             try:
-                made, c, f, ost = format_once(nt, mode, editor, duplicates, swaps, cfg)
+                gen = format_once_steps(nt, mode, editor, duplicates, swaps, cfg, k + 1)
+                while True:
+                    try:
+                        last = next(gen)
+                    except StopIteration as e:
+                        made, c, f, ost = e.value
+                        break
+                    yield last
                 copies += c
                 swapped += len(f.swapped)
             except Exception as e:
@@ -191,6 +242,7 @@ def _format_tree(nt, mode, editor, duplicates, swaps, cfg):
                 again = check.diff(before, check.fingerprint(nt))
                 raise LogicChanged(f"{tree_name(nt)}: format changed the logic, reverted "
                                    f"({'restore OK' if not again else 'RESTORE FAILED'}): {d[:3]}")
+            yield last._replace(phase="logic check", k=1, n=1, step=last.steps)
             editor.show(nt)
             if k and same_layout(_signature(nt), sig):
                 break

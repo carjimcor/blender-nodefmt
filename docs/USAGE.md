@@ -42,6 +42,18 @@ In a node editor, open the sidebar (N) and the nodefmt tab.
 
 Each sort is one undo step: Ctrl+Z puts the tree back.
 
+## Progress
+
+While a sort runs, the status bar and the top of the panel show how far it is: the tree, the
+pass and the step, for example "Tree 3/14 Wire: pass 1, layout 4/9 (step 6/14)", with a
+progress bar. A pass reads the tree, makes copies of input nodes, lays out each container (the
+tree itself, each zone and frame: "layout 4/9"), routes the wires, writes the result,
+straightens it and checks the logic. Most trees take two passes: the second one finds nothing
+to move.
+
+Esc cancels the sort and puts every tree back as it was (no undo step is added). The editor
+does not take other input while a sort runs.
+
 ## What a sort does
 
 A sort lays the tree out left to right in columns, orders each column to remove crossings,

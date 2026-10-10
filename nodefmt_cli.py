@@ -16,6 +16,9 @@ Options:
   --strict           --check: fail on any violation (default: only on NF900 and the guarantees)
   --list-rules       print the rules and exit
 
+Each tree gets a progress line "[3/14] sorting NAME"; on a terminal, --fix also shows the steps
+of the sort on one line ("pass 1, layout 4/9 (step 6/14)").
+
 --check changes nothing and prints one line per violation with its rule code, as ruff does. It
 exits 1 if a tree is not formatted (NF900) or breaks a guarantee (NF001-NF005); a style rule
 that a formatted tree still breaks (the formatter could not do better, for example a crossing
@@ -74,6 +77,27 @@ def config():
     return cfg
 
 
+def sort(api, nt, cfg, ed, prefix):
+    """Sort one tree (api.format_steps). On a terminal the steps are shown on one line that is
+    overwritten as the sort goes on."""
+    tty = sys.stdout.isatty()
+    gen = api.format_steps(nt, ARGS.mode, ed, cfg=cfg)
+    width = 0
+    try:
+        while True:
+            try:
+                st = next(gen)
+            except StopIteration as e:
+                return e.value
+            if tty:
+                line = prefix + st.text()
+                print("\r" + line.ljust(width), end="", flush=True)
+                width = len(line)
+    finally:
+        if tty and width:
+            print("\r" + " " * width + "\r", end="", flush=True)
+
+
 def main():
     """Check or format the trees; returns the exit code."""
     from nodefmt import api, lint, rules
@@ -102,10 +126,12 @@ def main():
     found, bad_trees = [], 0
     name = os.path.basename(bpy.data.filepath) or "untitled"
     try:
-        for nt in trees:
+        for k, nt in enumerate(trees, 1):
+            what = "sorting" if ARGS.fix else "checking"
+            print(f"[{k}/{len(trees)}] {what} {api.tree_name(nt)}", flush=True)
             if ARGS.fix:
                 try:
-                    st = api.format_tree(nt, ARGS.mode, ed, cfg=cfg)
+                    st = sort(api, nt, cfg, ed, f"[{k}/{len(trees)}] {api.tree_name(nt)}: ")
                     print(f"formatted {api.tree_name(nt)} ({st['seconds']} s)", flush=True)
                 except api.LogicChanged as e:
                     print(f"SKIPPED {e}", flush=True)

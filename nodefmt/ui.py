@@ -6,10 +6,11 @@ is one and "Use nodefmt.toml" is on, else from the toggles (preferences, also sh
 panel). The layout is made for the UI scale Blender runs at. Every format is one undo step.
 """
 import os
+import time
 
 import bpy
 
-from . import api, lint, rules
+from . import api, check, lint, rules
 from .draw import Editor
 
 MODES = [('relayout', "Relayout", "Build a new layout from scratch: columns, order and wires"),
@@ -70,61 +71,212 @@ class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
             col.prop(self, "rule_" + code)
 
 
-class NODEFMT_OT_sort_tree(bpy.types.Operator):
+class SortJob:
+    """Sorts a list of trees one step at a time (api.format_steps), so a modal operator can
+    show progress between steps; cancel() puts every tree back as it was."""
+
+    def __init__(self, trees, area, mode, cfg):
+        """The trees to sort, the node editor area that draws them, the mode and the rules."""
+        self.trees = list(trees)
+        self.names = [api.tree_name(nt) for nt in self.trees]
+        self.mode, self.cfg = mode, cfg
+        self.ed = Editor(area)
+        self.i = 0
+        self.gen = None
+        self.snaps = []      # (tree, check.Snapshot) of every tree started, to cancel
+        self.stats, self.failed = [], []
+        self.factor = 0.0    # done, 0..1 (never goes back)
+        self.tree_factor = 0.0
+        self.text = "Starting"
+
+    def step(self):
+        """Run one step; False when every tree is done."""
+        if self.gen is None:
+            if self.i >= len(self.trees):
+                return False
+            nt = self.trees[self.i]
+            self.ed.show(nt)
+            self.snaps.append((nt, check.Snapshot(nt)))
+            self.gen = api.format_steps(nt, self.mode, self.ed, cfg=self.cfg)
+            self.tree_factor = 0.0
+        try:
+            st = next(self.gen)
+        except StopIteration as e:
+            self.stats.append(e.value)
+            self._next_tree()
+        except api.LogicChanged as e:
+            self.failed.append(str(e))
+            self._next_tree()
+        else:
+            # two passes is the usual: the second finds nothing to move
+            f = (st.npass - 1 + st.step / st.steps) / max(2, st.npass)
+            self.tree_factor = min(0.99, max(self.tree_factor, f))
+            self.factor = max(self.factor, (self.i + self.tree_factor) / len(self.trees))
+            self.text = f"Tree {self.i + 1}/{len(self.trees)} {self.names[self.i]}: {st.text()}"
+        return True
+
+    def _next_tree(self):
+        """The current tree is done (or failed): go on with the next one."""
+        self.gen = None
+        self.i += 1
+        self.factor = self.i / len(self.trees)
+
+    def run(self):
+        """Run every step at once."""
+        while self.step():
+            pass
+
+    def cancel(self):
+        """Stop and put every tree started back as it was, the last one first."""
+        if self.gen is not None:
+            self.gen.close()
+            self.gen = None
+        for nt, snap in reversed(self.snaps):
+            snap.restore(nt, self.ed)
+
+    def close(self):
+        """Put the editor back as it was."""
+        self.ed.close()
+
+
+_JOB = {"job": None}  # the sort in progress, shown in the panel
+
+
+def _redraw_editors():
+    """Redraw every node editor (the panel shows the progress)."""
+    for win in bpy.context.window_manager.windows:
+        for area in win.screen.areas:
+            if area.type == 'NODE_EDITOR':
+                area.tag_redraw()
+
+
+class SortModal:
+    """A sort that runs in steps with progress (modal, Esc cancels), or at once (execute, for
+    scripts). One undo step either way."""
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def trees(self, context):
+        """The trees to sort."""
+        raise NotImplementedError
+
+    def _job(self, context):
+        """A SortJob for this operator's trees."""
+        return SortJob(self.trees(context), context.area, context.window_manager.nodefmt_mode, config(context))
+
+    def execute(self, context):
+        """Sort without returning to Blender in between (no progress shown)."""
+        job = self._job(context)
+        try:
+            job.run()
+        finally:
+            job.close()
+        return self._finish(job)
+
+    def invoke(self, context, event):
+        """Start the sort; a timer drives it."""
+        if _JOB["job"] is not None:
+            self.report({'WARNING'}, "A sort is already running")
+            return {'CANCELLED'}
+        self.job = _JOB["job"] = self._job(context)
+        self.workspace = context.workspace
+        wm = context.window_manager
+        self.timer = wm.event_timer_add(0.01, window=context.window)
+        wm.modal_handler_add(self)
+        self._show()
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        """Run steps for up to 50 ms per timer tick; Esc cancels. Other events are held back,
+        so nothing changes the trees while they are being sorted."""
+        job = self.job
+        if event.type == 'ESC' and event.value == 'PRESS':
+            try:
+                job.cancel()
+            finally:
+                self._end(context)
+            self.report({'WARNING'}, "Sort cancelled: the trees are as they were")
+            return {'CANCELLED'}
+        if event.type != 'TIMER':
+            return {'RUNNING_MODAL'}
+        t0 = time.perf_counter()
+        try:
+            while True:
+                if not job.step():
+                    self._end(context)
+                    return self._finish(job)
+                if time.perf_counter() - t0 > 0.05:
+                    break
+        except Exception:
+            try:
+                job.cancel()
+            finally:
+                self._end(context)
+            raise
+        self._show()
+        return {'RUNNING_MODAL'}
+
+    def _show(self):
+        """The progress in the status bar and the panel."""
+        job = self.job
+        self.workspace.status_text_set(f"nodefmt: {job.text}  ({job.factor:.0%}, Esc to cancel)")
+        _redraw_editors()
+
+    def _end(self, context):
+        """Remove the timer, clear the status bar, put the editor back."""
+        context.window_manager.event_timer_remove(self.timer)
+        self.workspace.status_text_set(None)
+        _JOB["job"] = None
+        self.job.close()
+        _redraw_editors()
+
+    def _finish(self, job):
+        """Report the result (one tree: its stats, else a count)."""
+        for f in job.failed:
+            self.report({'WARNING'} if len(job.trees) > 1 else {'ERROR'}, f)
+        if len(job.trees) == 1:
+            if not job.stats:
+                return {'CANCELLED'}
+            st = job.stats[0]
+            self.report({'INFO'}, f"Sorted {st['tree']} ({st['reroutes']} reroutes, {st['seconds']} s, "
+                                  f"UI scale {st['ui_scale']:g})")
+        else:
+            self.report({'INFO'}, f"Sorted {len(job.stats)} trees, {len(job.failed)} left unchanged")
+        return {'FINISHED'}
+
+
+class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
     """Sort (format) the tree shown in the node editor."""
     bl_idname = "node.nodefmt_sort_tree"
     bl_label = "Sort Current Tree"
-    bl_description = "Sort the node tree in this editor. Ctrl+Z undoes it"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Sort the node tree in this editor. Esc cancels, Ctrl+Z undoes it"
 
     @classmethod
     def poll(cls, context):
-        """Available in a node editor showing a tree of a supported type."""
+        """Available in a node editor showing a tree of a supported type, when no sort runs."""
         sp = context.space_data
-        return sp and sp.type == 'NODE_EDITOR' and sp.edit_tree and api.formattable(sp.edit_tree)
+        return (_JOB["job"] is None and sp and sp.type == 'NODE_EDITOR' and sp.edit_tree
+                and api.formattable(sp.edit_tree))
 
-    def execute(self, context):
-        """Sort the edited tree; on a logic change it is restored and an error reported."""
-        nt = context.space_data.edit_tree
-        mode = context.window_manager.nodefmt_mode
-        ed = Editor(context.area)
-        try:
-            st = api.format_tree(nt, mode, ed, cfg=config(context))
-        except api.LogicChanged as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-        finally:
-            ed.close()
-        self.report({'INFO'}, f"Sorted {api.tree_name(nt)} ({st['reroutes']} reroutes, {st['seconds']} s, "
-                              f"UI scale {st['ui_scale']:g})")
-        return {'FINISHED'}
+    def trees(self, context):
+        """The edited tree."""
+        return [context.space_data.edit_tree]
 
 
-class NODEFMT_OT_sort_all(bpy.types.Operator):
+class NODEFMT_OT_sort_all(SortModal, bpy.types.Operator):
     """Sort (format) every node tree of the file (Geometry Nodes, shader, compositor)."""
     bl_idname = "node.nodefmt_sort_all"
     bl_label = "Sort All Trees"
-    bl_description = "Sort every node tree in the file: Geometry Nodes, materials, worlds and compositor. Ctrl+Z undoes it"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = ("Sort every node tree in the file: Geometry Nodes, materials, worlds and compositor. "
+                      "Esc cancels, Ctrl+Z undoes it")
 
-    def execute(self, context):
-        """Sort all trees; trees that would change logic are left as they were."""
-        ed = Editor(context.area)
-        cfg = config(context)
-        done, failed = 0, []
-        try:
-            for nt in api.all_trees():
-                try:
-                    api.format_tree(nt, context.window_manager.nodefmt_mode, ed, cfg=cfg)
-                    done += 1
-                except api.LogicChanged as e:
-                    failed.append(str(e))
-        finally:
-            ed.close()
-        for f in failed:
-            self.report({'WARNING'}, f)
-        self.report({'INFO'}, f"Sorted {done} trees, {len(failed)} left unchanged")
-        return {'FINISHED'}
+    @classmethod
+    def poll(cls, context):
+        """Available when no sort runs."""
+        return _JOB["job"] is None
+
+    def trees(self, context):
+        """Every tree of the file that can be sorted."""
+        return api.all_trees()
 
 
 class NODEFMT_OT_check(bpy.types.Operator):
@@ -172,6 +324,12 @@ class NODEFMT_PT_panel(bpy.types.Panel):
     def draw(self, context):
         """Buttons, mode, the rule toggles and the last check."""
         col = self.layout.column()
+        job = _JOB["job"]
+        if job is not None:
+            box = col.box()
+            box.progress(factor=job.factor, type='BAR', text=f"Sorting: {job.factor:.0%}")
+            box.label(text=job.text)
+            box.label(text="Esc cancels and puts the trees back", icon='CANCEL')
         col.operator(NODEFMT_OT_sort_tree.bl_idname, icon='NODETREE')
         col.operator(NODEFMT_OT_sort_all.bl_idname, icon='FILE_BLEND')
         col.operator(NODEFMT_OT_check.bl_idname, icon='CHECKMARK')

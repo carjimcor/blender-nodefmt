@@ -6,7 +6,9 @@ only reading a tree and writing the result need Blender (`model`, `layout`, the 
 `routes` and `measure` run without it), so the layout can be tested on trees saved as plain
 data.
 
-In the add-on, "Sort Current Tree" and "Sort All Trees" run the format described here.
+In the add-on, "Sort Current Tree" and "Sort All Trees" run the format described here, one step
+at a time (`api.format_steps`, `Formatter.run_steps`), so the panel can show progress between
+steps.
 
 ## The layout in short
 
@@ -309,5 +311,6 @@ tools/
 examples/       one small tree per rule that breaks it (NF0xx.blend)
 tests/
   run_tests.py  tests from the examples (check, sort, logic, idempotency, rule off)
+  test_operators.py  the add-on operators: progress, Esc, undo
 docs/           usage, rules, configuration, command line, limitations, this page
 ```

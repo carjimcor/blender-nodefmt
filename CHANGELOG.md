@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.1
+
+- Fix: at a fractional UI scale, a wire into a low socket of a tall node (or out of one) could
+  end in a step too small to see, two reroutes on one spot that look like a slanted stub.
+  Blender rounds each row of a node towards zero, so a node above y = 0 is taller than below it;
+  every node is now measured both ways and laid out with the offsets of where it is drawn
+  (NF003; example `NF003-rows`). Measured sizes no longer carry float noise that could move a
+  column by a grid step from one pass to the next.
+- Fix: the two inputs of a commutative node in a frame or zone were not swapped when both wires
+  came from outside the block, since the block is laid out before what is around it. Such a swap
+  is now made by the level around the block, which sees where the wires come from (NF011;
+  examples `NF011-frame`, `NF011-zone`).
+- New rule NF041 label-clearance: a reroute label, and the greyed copies Blender shows on the
+  later reroutes of its wire, overlap no other label, node or wire. Gaps widen where a labelled
+  wire turns next to a node, and a label goes on the first reroute where its text is clear (or
+  a new one before it). Check measures label text as Blender draws it.
+- NF021: a frame or zone with nothing linked at all sits under the tree where it makes the tree
+  grow least, beside the blocks above it instead of under all of them; Check reports one that
+  could sit higher (example `NF021-alone`).
+- A second example of a rule is `examples/NF0xx-<what>.blend`, tested and shown like the others.
+
 ## 0.8.0
 
 - Sort Selection: sorts only the selected nodes and reroutes, or what is inside a selected

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Capture Tree: saves a PNG of the whole tree shown in the editor (or of the selection) at a
+  chosen zoom, larger than the screen if needed. The editor is maximised and moved across the
+  tree, one screenshot per step; the screenshots are checked against each other and joined
+  inside Blender with numpy, then the editor is put back as it was. Options: zoom, margin, hide
+  overlays, file, copy to the clipboard, open in an Image Editor. Progress in the status bar,
+  Esc cancels, no undo step, the tree never changes. Command line: `--capture TREE --out FILE`.
 - The progress shows the time since the sort started and the pass limit ("pass 2 (of at most
   6)"), and the docs explain why a large tree can stay near 99% while later passes run.
 - docs/EXAMPLE.md: a large real tree from Blender Stack Exchange, before and after.

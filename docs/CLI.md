@@ -7,6 +7,7 @@ Blender draws a tree. The window opens for a few seconds.
 blender file.blend --python nodefmt_cli.py -- --check [--select CODES] [--ignore CODES] [--strict]
 blender file.blend --python nodefmt_cli.py -- --fix   [--tree NAME] [--ui-scale 1.4] [--thorough]
 blender file.blend --python nodefmt_cli.py -- --list-rules
+blender file.blend --python nodefmt_cli.py -- --capture TREE [--out FILE.png] [--zoom 1.0]
 ```
 
 | Option | What it does |
@@ -14,6 +15,10 @@ blender file.blend --python nodefmt_cli.py -- --list-rules
 | `--check` | Reports violations, changes nothing. |
 | `--fix` | Sorts and saves the file, then reports what is left. |
 | `--list-rules` | Prints the rules and exits. |
+| `--capture TREE` | Saves an image of tree `TREE` (names as for `--tree`) and exits; changes nothing. |
+| `--out PATH` | `--capture`: the PNG file, or a folder (default: a `captures` folder next to the .blend file). |
+| `--zoom Z` | `--capture`: screen pixels per node unit (default 1.0). |
+| `--margin PX` | `--capture`: empty pixels around the tree (default 40). |
 | `--select CODES` | Rules to apply and check: comma-separated codes, prefixes or names (default ALL). |
 | `--ignore CODES` | Rules to switch off (added to the config file's `ignore`). |
 | `--thorough` | Search with several seeds (slower; the default is one deterministic pass). |
@@ -39,6 +44,11 @@ Wires are exactly orthogonal at the UI scale the tree is sorted at. Run without
 `--factory-startup` so Blender uses your preferences (your Resolution Scale), or give the scale
 with `--ui-scale` or `ui-scale` in `nodefmt.toml` (set for that run only; preferences are never
 saved).
+
+`--capture` works as Capture Tree in the add-on (see [Usage](USAGE.md#capture)) and exits 3 if
+the tree is not found or the image would be too large. A Geometry Nodes tree is shown through
+the object that uses it, so it looks as in the editor; `--ui-scale` sets the scale it is drawn
+at. The file is never saved.
 
 ## Pre-commit hook
 

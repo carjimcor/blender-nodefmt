@@ -37,6 +37,8 @@ In a node editor, open the sidebar (N) and the nodefmt tab.
 - **Wires exact at UI scale**: the Resolution Scale the wires are made exact for (see
   [Limitations](LIMITATIONS.md)).
 - **Check**: the result of the last check (see [Check](#check)).
+- **Capture**: Capture Tree saves an image of the tree and its options (see
+  [Capture](#capture)).
 - **Rules** (closed at first): one checkbox per style rule (see [Rules](RULES.md)), "Thorough
   search" (several seeds, slower, rarely better) and "Use nodefmt.toml". The same options are in
   Preferences > Add-ons > nodefmt. While "Use nodefmt.toml" is on and a `nodefmt.toml` is found
@@ -134,3 +136,54 @@ or copy. The image shows `examples/NF032.blend` after Check, with NF032 clicked.
 
 The same check runs from the [command line](CLI.md) with `--check`; each violation is also
 printed to the system console, one line each.
+
+## Capture
+
+Capture Tree saves an image of the whole tree shown in the editor (inside a group, the group
+shown), at a zoom you choose, even when the tree is much larger than the screen. It works in
+the Geometry Nodes, Shader and Compositor editors and never changes the tree.
+
+![A tree saved with Capture Tree](images/capture.png)
+
+The image above was made with Capture Tree, at zoom 1, from `examples/selection.blend` after
+Sort Current Tree.
+
+Options, in the Capture section of the panel:
+
+- **Zoom**: screen pixels per node unit. At 1, node text is as large as Blender draws it at UI
+  scale 1. Blender's largest zoom is about 2.3 times the UI scale; a higher value is reported
+  and the largest is used.
+- **Whole Tree** or **Selection**: the selected nodes only, or a selected frame with everything
+  in it.
+- **Margin**: empty pixels around the tree.
+- **Hide Overlays** (on by default): hides what is not part of the tree: the context path at the
+  top left, gizmos and the marks of Check. Wire colours, timings and node previews stay.
+- **File**: the PNG file, or a folder for `<tree name>.png`. Empty: a `captures` folder next to
+  the .blend file, or the temporary folder if the file is not saved. The panel shows the
+  default as a hint. An existing file is replaced.
+- **Copy to Clipboard**: also copies the image, to paste it into another program.
+- **Open in Image Editor**: shows the image in an Image Editor of the window, or in a new window
+  if there is none.
+
+How it works: the editor is maximised, its header, toolbar and sidebar are hidden and the view
+is zoomed. The view is then moved across the tree in steps of whole pixels, with one screenshot
+per step. Neighbouring screenshots overlap, so each one is checked against the ones before it.
+The screenshots are joined inside Blender (no extra Python packages), cropped to the tree plus
+the margin, and saved as a PNG. Nodes are drawn unselected in the image.
+
+While it runs, the status bar shows the step ("tile 3/12") and Esc cancels; nothing is saved.
+Afterwards the editor is as it was: maximised or not, its regions and overlays, zoom and pan,
+and the selection. The capture adds no undo step. The panel reports the file, its size in
+pixels and megabytes, the number of screenshots and the time. As a guide, a tree of 100 nodes
+takes about a second at zoom 1 (8 screenshots) and four seconds at zoom 2 (28 screenshots) on
+a 1920 x 1080 screen.
+
+The image is at most 200 megapixels: a larger capture is refused before it starts, and
+asks for a lower zoom.
+
+The clipboard uses Blender's own image copy (the Image Editor's Copy). It was tested on
+Windows. Blender also supports copying images on macOS and on Linux, depending on the Blender
+version and the display system; it was not tested there. If Blender cannot copy, the capture
+reports it, and the file is saved all the same.
+
+The same capture runs from the [command line](CLI.md) with `--capture`.

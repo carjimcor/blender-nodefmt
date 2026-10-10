@@ -54,8 +54,10 @@ selection are kept, and a second sort changes nothing.
 
 The run prints a table with one row per example and exits with 1 if any test fails.
 
-The add-on operators (progress, Esc, undo, Sort Selection, Check) have their own tests, which
-press Esc through Blender's event simulation:
+The add-on operators (progress, Esc, undo, Sort Selection, Check, Capture Tree) have their own
+tests, which press Esc through Blender's event simulation. Capture Tree is tested at UI scales
+1.0 and 1.4: the image has a plausible size, its tiles line up, the tree and the editor are as
+they were, no undo step is added, and Esc cancels:
 
 ```
 blender --factory-startup --enable-event-simulate --python tests/test_operators.py

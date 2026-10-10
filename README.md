@@ -43,16 +43,18 @@ In a Geometry Nodes, Shader or Compositor editor, open the sidebar (N) and the n
 - **Sort All Trees**: every node tree in the file.
 - **Check Current Tree**: the rules the tree breaks, without changing it; click a rule to see
   where.
+- **Capture Tree** (Capture section): saves a PNG of the whole tree at a chosen zoom, larger than
+  the screen if needed, and can copy it to the clipboard.
 
 A sort shows its progress and Esc cancels it. Each sort is one undo step: Ctrl+Z puts the tree
 back.
 
 ## Documentation
 
-- [Usage](docs/USAGE.md): the panel, buttons, modes, rule toggles and Check.
+- [Usage](docs/USAGE.md): the panel, buttons, modes, rule toggles, Check and Capture.
 - [Rules](docs/RULES.md): every rule with its code, an example and how to switch it off.
 - [Configuration](docs/CONFIGURATION.md): `nodefmt.toml`.
-- [Command line](docs/CLI.md): `--check`, `--fix` and the git pre-commit hook.
+- [Command line](docs/CLI.md): `--check`, `--fix`, `--capture` and the git pre-commit hook.
 - [Limitations](docs/LIMITATIONS.md)
 - [Roadmap](docs/ROADMAP.md): what is planned next.
 - [A large real tree](docs/EXAMPLE.md): a 115-node tree from Blender Stack Exchange, before and after.

@@ -3,6 +3,7 @@
 
   blender file.blend --python nodefmt_cli.py -- --check [options]
   blender file.blend --python nodefmt_cli.py -- --fix   [options]
+  blender file.blend --python nodefmt_cli.py -- --capture TREE [--out FILE.png] [--zoom 1.0]
 
 Options:
   --select CODES     rules to apply and check (comma-separated codes, prefixes or names; default ALL)
@@ -15,6 +16,11 @@ Options:
   --statistics       print the number of violations per rule
   --strict           --check: fail on any violation (default: only on NF900 and the guarantees)
   --list-rules       print the rules and exit
+  --capture TREE     save an image of tree TREE (see --tree for names) and exit; changes nothing
+  --out PATH         --capture: the PNG file, or a folder (default: a 'captures' folder next to
+                     the .blend file)
+  --zoom Z           --capture: screen pixels per node unit (default 1.0)
+  --margin PX        --capture: empty pixels around the tree (default 40)
 
 Each tree gets a progress line "[3/14] sorting NAME"; on a terminal, --fix also shows the steps
 of the sort on one line ("pass 1 (of at most 6), layout 4/9 (step 6/14)").
@@ -47,6 +53,10 @@ g = ap.add_mutually_exclusive_group(required=True)
 g.add_argument("--check", action="store_true")
 g.add_argument("--fix", action="store_true")
 g.add_argument("--list-rules", action="store_true")
+g.add_argument("--capture", metavar="TREE", default=None)
+ap.add_argument("--out", default="")
+ap.add_argument("--zoom", type=float, default=1.0)
+ap.add_argument("--margin", type=int, default=40)
 ap.add_argument("--mode", choices=["relayout", "keep"], default="relayout")
 ap.add_argument("--tree", action="append", default=[])
 ap.add_argument("--ui-scale", type=float, default=None)
@@ -98,10 +108,41 @@ def sort(api, nt, cfg, ed, prefix):
             print("\r" + " " * width + "\r", end="", flush=True)
 
 
+def capture_main():
+    """Save an image of one tree (--capture); returns the exit code."""
+    from nodefmt import api, capture
+    from nodefmt.draw import Editor
+    prefs = bpy.context.preferences
+    old_scale = prefs.view.ui_scale
+    if ARGS.ui_scale:
+        prefs.view.ui_scale = ARGS.ui_scale
+    ed = None
+    try:
+        nt = api.find_tree(ARGS.capture)
+        ed = Editor()  # a node editor of the window, or its largest area turned into one
+        ed.show(nt)
+        out = os.path.abspath(ARGS.out) if ARGS.out else ""
+        job = capture.CaptureJob(ed.win, ed.area, capture.Options(zoom=ARGS.zoom, margin=ARGS.margin, path=out))
+        job.run()
+    except (KeyError, capture.CaptureError) as e:
+        print(f"nodefmt: cannot capture {ARGS.capture}: {e.args[0]}", flush=True)
+        return 3
+    finally:
+        if ed is not None:
+            ed.close()
+        prefs.view.ui_scale = old_scale
+    for w in job.warnings:
+        print(f"warning: {w}", flush=True)
+    print(f"nodefmt: {job.report()}", flush=True)
+    return 0
+
+
 def main():
-    """Check or format the trees; returns the exit code."""
+    """Check or format the trees, or capture one; returns the exit code."""
     from nodefmt import api, lint, rules
     from nodefmt.draw import Editor
+    if ARGS.capture:
+        return capture_main()
     if ARGS.list_rules:
         for code, name, kind, summary in rules.RULES:
             print(f"{code} {name} ({kind}): {summary}")

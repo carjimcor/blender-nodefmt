@@ -16,7 +16,7 @@ style rules can be switched off in nodefmt.toml, on the command line or in the a
 
 Two ways to use it:
 - Add-on (extension): Node Editor > Sidebar > nodefmt: "Sort Current Tree", "Sort All Trees",
-  "Check", and the rule toggles.
+  "Check", "Capture Tree" (an image of the whole tree, capture.py) and the rule toggles.
 - Command line (git pre-commit hook): blender file.blend --python nodefmt_cli.py -- --check | --fix
 """
 

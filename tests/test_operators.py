@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests of the add-on operators: sorting with progress, Esc, undo, Sort Selection, Check.
+"""Tests of the add-on operators: sorting with progress, Esc, undo, Sort Selection, Check,
+Capture Tree.
 
     blender --factory-startup --enable-event-simulate --python tests/test_operators.py
 
@@ -162,6 +163,9 @@ def run():
     with override():
         r = bpy.ops.node.nodefmt_sort_all('EXEC_DEFAULT', True)
     test("sort all from a script", r == {'FINISHED'} and state(names) != start, str(r))
+
+    # Capture Tree: at two UI scales, the selection, no undo step, Esc
+    yield from capture_tests(ui)
     ui.unregister()
 
 
@@ -216,6 +220,143 @@ def check_tests(ui):
         bpy.ops.node.nodefmt_check()
     test("no problems after a sort", ui._LAST["violations"] == [],
          ", ".join(v.code for v in ui._LAST["violations"]))
+
+
+def editor_state():
+    """What a capture changes in the editor and must put back: the view (where view point
+    (0, 0) is, region pixels per view unit), the region size, regions, overlays, maximised."""
+    win, area, region = editor()
+    v = region.view2d
+    x0, y0 = v.view_to_region(0, 0, clip=False)
+    x1, y1 = v.view_to_region(100000, 100000, clip=False)
+    sp = area.spaces.active
+    flags = (region.width, region.height, sp.show_region_header, sp.show_region_toolbar, sp.show_region_ui,
+             sp.overlay.show_context_path, win.screen.name, win.screen.show_fullscreen,
+             bpy.context.window_manager.nodefmt_overlay, len(bpy.context.window_manager.windows))
+    return (x0, y0, (x1 - x0) / 100000, (y1 - y0) / 100000), flags
+
+
+def same_editor(a, b):
+    """True if two editor_state() results match: the view within 2 pixels and 0.01% zoom."""
+    (ax, ay, azx, azy), fa = a
+    (bx, by, bzx, bzy), fb = b
+    return (fa == fb and abs(ax - bx) <= 2 and abs(ay - by) <= 2 and abs(azx / bzx - 1) < 1e-4
+            and abs(azy / bzy - 1) < 1e-4)
+
+
+def wait_capture(ui, esc_at=None):
+    """Wait for the running capture to end; press Esc once tile `esc_at` is being taken."""
+    for _ in range(3000):
+        job = ui._CAPTURE["job"]
+        if job is None:
+            return
+        if esc_at is not None and f"tile {esc_at}/" in job.text:
+            editor()[0].event_simulate(type='ESC', value='PRESS')
+            esc_at = None
+        yield 0.02
+
+
+def tree_state(nt):
+    """Positions, logic, selection and locations of a tree (what a capture must not change)."""
+    from nodefmt import api, check
+    return (api._signature(nt), check.fingerprint(nt), {n.name: n.select for n in nt.nodes},
+            {n.name: tuple(n.location) for n in nt.nodes})
+
+
+def capture_tests(ui):
+    """Capture Tree on an example with a zone, at UI scales 1.0 and 1.4: an image of a plausible
+    size made of tiles that line up, the tree, its selection and the editor as they were, no undo
+    step; Esc cancels, writes nothing and puts the editor back."""
+    import shutil
+    import tempfile
+    from nodefmt import capture
+    tmp = tempfile.mkdtemp(prefix="nodefmt-test-")
+    s = bpy.context.window_manager.nodefmt_capture
+    s.margin, s.scope, s.clipboard, s.open_image = 40, 'TREE', False, False
+    name = append("NF032")
+    for scale in (1.0, 1.4):
+        bpy.context.preferences.view.ui_scale = scale  # in memory only
+        show(name)
+        yield 0.5
+        nt = bpy.data.node_groups[name]
+        for n in nt.nodes:
+            n.select = n.name == "Group Input"
+        bpy.context.window_manager.nodefmt_overlay = True
+        tree, ed = tree_state(nt), editor_state()
+        s.zoom = 2.0
+        s.filepath = os.path.join(tmp, f"capture-{scale:g}.png")
+        with override():
+            r = bpy.ops.node.nodefmt_capture_tree('INVOKE_DEFAULT')
+        job = ui._CAPTURE["job"]
+        yield from wait_capture(ui)
+        ok = r == {'RUNNING_MODAL'} and os.path.exists(s.filepath)
+        w, h = capture.png_size(s.filepath) if ok else (0, 0)
+        ui_s = bpy.context.preferences.system.ui_scale
+        xs = [x for n in nt.nodes for x in (n.location_absolute.x, n.location_absolute.x + n.dimensions.x / ui_s)]
+        ys = [y for n in nt.nodes for y in (n.location_absolute.y, n.location_absolute.y - n.dimensions.y / ui_s)]
+        ew, eh = (max(xs) - min(xs)) * 2.0 + 80, (max(ys) - min(ys)) * 2.0 + 80  # nodes, zoom, margins
+        extra = 2 * (capture.ZONE_EDGE + capture.BADGES) * 2.0 + 4  # zone outlines and badges
+        test(f"capture at UI scale {scale:g}",
+             ok and job.tiles > 1 and ew <= w <= ew + extra and eh <= h <= eh + extra,
+             f"{w} x {h} px, expected about {ew:.0f} x {eh:.0f}, {job.tiles} tiles")
+        test(f"capture tiles line up at UI scale {scale:g}",
+             job.matches and all(m is None or m <= capture.MATCH for _, _, m in job.matches),
+             str([(dx, dy, None if m is None else round(m, 4)) for dx, dy, m in job.matches]))
+        test(f"capture keeps the tree and its selection at UI scale {scale:g}", tree_state(nt) == tree)
+        test(f"capture puts the editor back at UI scale {scale:g}", same_editor(editor_state(), ed),
+             f"{ed} -> {editor_state()}")
+    bpy.context.preferences.view.ui_scale = 1.0
+    show(name)
+    yield 0.5
+    nt = bpy.data.node_groups[name]
+
+    # only the selection: one node, with the margins
+    for n in nt.nodes:
+        n.select = n.name == "Group Input"
+    s.scope, s.zoom, s.filepath = 'SELECTION', 1.0, os.path.join(tmp, "selection.png")
+    ed = editor_state()
+    with override():
+        r = bpy.ops.node.nodefmt_capture_tree('EXEC_DEFAULT')  # at once, not maximised
+    w, h = capture.png_size(s.filepath) if r == {'FINISHED'} else (0, 0)
+    want = nt.nodes["Group Input"].dimensions.x + 80 + 2 * capture.ZONE_EDGE
+    test("capture the selection", r == {'FINISHED'} and abs(w - want) <= 4, f"{w} x {h} px, width {want:.0f} expected")
+    yield 0.3
+    test("capture from a script puts the editor back", same_editor(editor_state(), ed), f"{ed} -> {editor_state()}")
+    s.scope = 'TREE'
+
+    # no undo step: Ctrl+Z after a capture undoes what came before it
+    node = nt.nodes["Group Input"]
+    old = tuple(node.location)
+    with override():
+        bpy.ops.ed.undo_push(message="before move")
+    node.location.x += 100
+    with override():
+        bpy.ops.ed.undo_push(message="moved")
+    s.filepath = os.path.join(tmp, "undo.png")
+    with override():
+        bpy.ops.node.nodefmt_capture_tree('INVOKE_DEFAULT')
+    yield from wait_capture(ui)
+    with override():
+        bpy.ops.ed.undo()
+    yield 0.3
+    nt = bpy.data.node_groups[name]
+    test("capture adds no undo step", tuple(nt.nodes["Group Input"].location) == old)
+
+    # Esc while the tiles are taken: nothing written, the editor and the tree as they were
+    show(name)
+    yield 0.3
+    nt = bpy.data.node_groups[name]
+    tree, ed = tree_state(nt), editor_state()
+    s.zoom, s.filepath = 4.0, os.path.join(tmp, "esc.png")
+    with override():
+        bpy.ops.node.nodefmt_capture_tree('INVOKE_DEFAULT')
+    job = ui._CAPTURE["job"]
+    yield from wait_capture(ui, esc_at=2)
+    test("Esc cancels the capture", ui._CAPTURE["job"] is None and not os.path.exists(s.filepath)
+         and not job.done and job.tiles > 2, f"{job.tiles} tiles, last {job.text!r}")
+    test("Esc puts the editor and the tree back", same_editor(editor_state(), ed) and tree_state(nt) == tree,
+         f"{ed} -> {editor_state()}")
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 GEN = run()

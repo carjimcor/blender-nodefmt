@@ -14,4 +14,5 @@ license = ["SPDX:GPL-3.0-or-later"]
 website = "https://github.com/carjimcor/blender-nodefmt"
 
 [permissions]
-files = "Read rule settings from a nodefmt.toml next to the .blend file"
+files = "Read rules from nodefmt.toml and save tree captures as PNG"
+clipboard = "Copy tree captures to the clipboard"

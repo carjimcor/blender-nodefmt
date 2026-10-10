@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Add-on: buttons in the Node Editor sidebar (nodefmt tab), the result of Check (a list by
-rule and marks in the editor) and rule toggles in the preferences.
+rule and marks in the editor), Capture Tree (capture.py) and rule toggles in the preferences.
 
 The rules come from a nodefmt.toml next to the .blend file (or in a folder above it) when there
 is one and "Use nodefmt.toml" is on, else from the toggles (preferences, also shown in the
@@ -9,10 +9,11 @@ panel). The layout is made for the UI scale Blender runs at. Every format is one
 import math
 import os
 import time
+import traceback
 
 import bpy
 
-from . import api, check, lint, rules
+from . import api, capture, check, lint, rules
 from .draw import Editor
 
 MODES = [('relayout', "Relayout", "Build a new layout from scratch: columns, order and wires"),
@@ -151,6 +152,7 @@ class SortJob:
 
 
 _JOB = {"job": None}  # the sort in progress, shown in the panel
+_CAPTURE = {"job": None, "state": None}  # the capture in progress and how it ended
 
 
 def _redraw_editors():
@@ -266,7 +268,8 @@ class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
     def poll(cls, context):
         """Available in a node editor showing a tree of a supported type, when no sort runs."""
         sp = context.space_data
-        return (_JOB["job"] is None and sp and sp.type == 'NODE_EDITOR' and sp.edit_tree
+        return (_JOB["job"] is None and _CAPTURE["job"] is None and sp and sp.type == 'NODE_EDITOR'
+                and sp.edit_tree
                 and api.formattable(sp.edit_tree))
 
     def trees(self, context):
@@ -283,8 +286,8 @@ class NODEFMT_OT_sort_all(SortModal, bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        """Available when no sort runs."""
-        return _JOB["job"] is None
+        """Available when no sort or capture runs."""
+        return _JOB["job"] is None and _CAPTURE["job"] is None
 
     def trees(self, context):
         """Every tree of the file that can be sorted."""
@@ -322,6 +325,159 @@ class NODEFMT_OT_sort_selection(bpy.types.Operator):
         moved = " (moved to clear the nodes around it)" if any(st["moved"]) else ""
         self.report({'INFO'}, f"Sorted {st['nodes']} nodes of {st['tree']}{moved}")
         return {'FINISHED'}
+
+
+SCOPES = [('TREE', "Whole Tree", "Capture every node of the tree"),
+          ('SELECTION', "Selection", "Capture the selected nodes, or a selected frame and everything in it")]
+
+
+class NODEFMT_CaptureSettings(bpy.types.PropertyGroup):
+    """The options of Capture Tree (WindowManager.nodefmt_capture)."""
+    zoom: bpy.props.FloatProperty(
+        name="Zoom", default=1.0, min=0.1, max=4.0, soft_max=3.0, precision=2, step=10,
+        description="Screen pixels per node unit (1: node text as Blender draws it at UI scale 1)")
+    scope: bpy.props.EnumProperty(name="Capture", items=SCOPES, default='TREE')
+    margin: bpy.props.IntProperty(
+        name="Margin", default=40, min=0, max=2000, subtype='PIXEL',
+        description="Empty space around the tree, in pixels")
+    hide_overlays: bpy.props.BoolProperty(
+        name="Hide Overlays", default=True,
+        description="Hide what is not part of the tree: the context path, gizmos and the marks of Check")
+    filepath: bpy.props.StringProperty(
+        name="File", subtype='FILE_PATH', default="",
+        description="The PNG file, or a folder for '<tree name>.png'. Empty: a 'captures' folder next to "
+                    "the .blend file (the temporary folder if the file is not saved)")
+    clipboard: bpy.props.BoolProperty(
+        name="Copy to Clipboard", default=False, description="Also copy the image to the clipboard")
+    open_image: bpy.props.BoolProperty(
+        name="Open in Image Editor", default=False,
+        description="Show the image in an Image Editor of this window, or in a new window")
+
+
+class NODEFMT_OT_capture_tree(bpy.types.Operator):
+    """Save an image of the whole tree shown in the node editor, at a chosen zoom (capture.py).
+
+    The steps run in an application timer, not in the operator's event handler: the capture
+    maximises the editor and puts it back, and Blender must not change the screen while it is
+    going through event handlers. The modal operator holds back other input, takes Esc and
+    reports the result."""
+    bl_idname = "node.nodefmt_capture_tree"
+    bl_label = "Capture Tree"
+    bl_description = ("Save an image of the tree in this editor at the zoom set below, larger than the "
+                      "screen if needed. The tree does not change. Esc cancels")
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        """Available in a node editor showing a tree, when no sort or capture runs."""
+        sp = context.space_data
+        return (_JOB["job"] is None and _CAPTURE["job"] is None and sp is not None
+                and sp.type == 'NODE_EDITOR' and sp.edit_tree is not None and context.area is not None)
+
+    def _job(self, context):
+        """A CaptureJob for the editor, with the panel's options."""
+        opt = capture.Options.from_settings(context.window_manager.nodefmt_capture)
+        return capture.CaptureJob(context.window, context.area, opt)
+
+    def execute(self, context):
+        """Capture at once, in the editor as it is, not maximised (for scripts, which may run
+        inside an event handler; no progress shown)."""
+        try:
+            job = self._job(context)
+            job.opt.maximise = False
+            job.run()
+        except capture.CaptureError as e:
+            self.report({'ERROR'}, f"Capture Tree: {e}")
+            return {'CANCELLED'}
+        return self._finish(job)
+
+    def invoke(self, context, event):
+        """Start the capture: a timer runs its steps, the modal handler waits for the end."""
+        try:
+            self.job = self._job(context)
+        except capture.CaptureError as e:
+            self.report({'ERROR'}, f"Capture Tree: {e}")
+            return {'CANCELLED'}
+        _CAPTURE.update(job=self.job, state=None, error=None, stop=False, workspace=context.workspace)
+        wm = context.window_manager
+        self.timer = wm.event_timer_add(0.05, window=context.window)
+        wm.modal_handler_add(self)
+        _capture_status()
+        bpy.app.timers.register(_capture_tick, first_interval=0.01)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        """Esc asks the timer to stop; the end is reported once the timer is done. Other events
+        are held back, so nothing changes the editor while it is being captured."""
+        if event.type == 'ESC' and event.value == 'PRESS':
+            _CAPTURE["stop"] = True
+            return {'RUNNING_MODAL'}
+        if event.type != 'TIMER' or _CAPTURE["state"] is None:
+            return {'RUNNING_MODAL'}
+        state, error = _CAPTURE["state"], _CAPTURE["error"]
+        context.window_manager.event_timer_remove(self.timer)
+        _CAPTURE.update(job=None, state=None, error=None, stop=False, workspace=None)
+        _redraw_editors()
+        if state == 'done':
+            return self._finish(self.job)
+        if state == 'cancelled':
+            self.report({'WARNING'}, "Capture cancelled: the editor is as it was")
+        else:
+            self.report({'ERROR'}, f"Capture Tree: {error}")
+        return {'CANCELLED'}
+
+    def _finish(self, job):
+        """Report the file, its size and any warning."""
+        for w in job.warnings:
+            self.report({'WARNING'}, f"Capture Tree: {w}")
+        self.report({'INFO'}, job.report())
+        return {'FINISHED'}
+
+
+def _capture_status(clear=False):
+    """The progress of the capture in the status bar, or clear it."""
+    ws, job = _CAPTURE.get("workspace"), _CAPTURE.get("job")
+    if ws is None or job is None:
+        return
+    text = None if clear else f"nodefmt: Capture {job.text}  ({job.factor:.0%}, {job.elapsed()}, Esc to cancel)"
+    try:
+        ws.status_text_set(text)
+    except ReferenceError:
+        pass
+
+
+def _capture_tick():
+    """Run steps of the capture for up to 50 ms (an application timer); on the end, Esc or an
+    error, put the editor back and leave the result for the operator."""
+    job = _CAPTURE.get("job")
+    if job is None or _CAPTURE.get("state") is not None:
+        return None
+    t0 = time.perf_counter()
+    try:
+        if _CAPTURE.get("stop"):
+            job.cancel()
+            _CAPTURE["state"] = 'cancelled'
+        else:
+            while True:
+                if not job.step():
+                    job.close()
+                    _CAPTURE["state"] = 'done'
+                    break
+                if time.perf_counter() - t0 > 0.05:
+                    break
+    except Exception as e:
+        if not isinstance(e, capture.CaptureError):
+            traceback.print_exc()
+        try:
+            job.cancel()
+        except Exception:
+            traceback.print_exc()
+        _CAPTURE.update(state='error', error=e)
+    if _CAPTURE["state"] is not None:
+        _capture_status(clear=True)
+        return None
+    _capture_status()
+    return 0.0
 
 
 def _tree_key(nt):
@@ -574,6 +730,31 @@ def _wrap(text, width):
     return lines + ([cur] if cur else [])
 
 
+class NODEFMT_PT_capture(bpy.types.Panel):
+    """Capture Tree and its options (a sub-panel of nodefmt)."""
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "nodefmt"
+    bl_label = "Capture"
+    bl_parent_id = "NODEFMT_PT_panel"
+
+    def draw(self, context):
+        """The button, the zoom, what to capture, the margin, the file and the extras."""
+        s = context.window_manager.nodefmt_capture
+        col = self.layout.column()
+        col.operator(NODEFMT_OT_capture_tree.bl_idname, icon='IMAGE_DATA')
+        col.prop(s, "zoom")
+        col.row().prop(s, "scope", expand=True)
+        col.prop(s, "margin")
+        col.prop(s, "hide_overlays")
+        nt = getattr(context.space_data, "edit_tree", None)
+        folder = "//captures" if bpy.data.filepath else "<temp>"
+        hint = f"{folder}/{capture.file_name(nt)}.png" if nt is not None else ""
+        col.prop(s, "filepath", text="", placeholder=hint)
+        col.prop(s, "clipboard")
+        col.prop(s, "open_image")
+
+
 class NODEFMT_PT_rules(bpy.types.Panel):
     """The rule toggles and options (a sub-panel of nodefmt, closed at first)."""
     bl_space_type = 'NODE_EDITOR'
@@ -601,14 +782,15 @@ class NODEFMT_PT_rules(bpy.types.Panel):
             sub.prop(p, "rule_" + code)
 
 
-CLASSES = (NODEFMT_AddonPreferences, NODEFMT_OT_sort_tree, NODEFMT_OT_sort_selection, NODEFMT_OT_sort_all,
-           NODEFMT_OT_check, NODEFMT_OT_show_violation, NODEFMT_PT_panel, NODEFMT_PT_check, NODEFMT_PT_rules)
+CLASSES = (NODEFMT_AddonPreferences, NODEFMT_CaptureSettings, NODEFMT_OT_sort_tree, NODEFMT_OT_sort_selection,
+           NODEFMT_OT_sort_all, NODEFMT_OT_check, NODEFMT_OT_show_violation, NODEFMT_OT_capture_tree,
+           NODEFMT_PT_panel, NODEFMT_PT_check, NODEFMT_PT_capture, NODEFMT_PT_rules)
 _HANDLE = []  # the overlay's draw handler
 
 
 def register():
-    """Register the preferences, operators, panels, the window manager properties and the
-    overlay."""
+    """Register the preferences, operators, panels, the window manager properties (mode, overlay,
+    capture options) and the overlay."""
     wm = bpy.types.WindowManager
     wm.nodefmt_mode = bpy.props.EnumProperty(name="Mode", items=MODES, default='relayout')
     wm.nodefmt_overlay = bpy.props.BoolProperty(
@@ -616,6 +798,7 @@ def register():
         description="Mark each place of the last check in the node editor with its rule code")
     for c in CLASSES:
         bpy.utils.register_class(c)
+    wm.nodefmt_capture = bpy.props.PointerProperty(type=NODEFMT_CaptureSettings)
     _HANDLE.append(bpy.types.SpaceNodeEditor.draw_handler_add(_draw_overlay, (), 'WINDOW', 'POST_PIXEL'))
 
 
@@ -623,6 +806,14 @@ def unregister():
     """Unregister everything register() added."""
     while _HANDLE:
         bpy.types.SpaceNodeEditor.draw_handler_remove(_HANDLE.pop(), 'WINDOW')
+    if bpy.app.timers.is_registered(_capture_tick):  # a capture still running: stop it
+        bpy.app.timers.unregister(_capture_tick)
+        try:
+            _CAPTURE["job"].cancel()
+        except Exception:
+            traceback.print_exc()
+    _CAPTURE.update(job=None, state=None)
+    del bpy.types.WindowManager.nodefmt_capture
     for c in reversed(CLASSES):
         bpy.utils.unregister_class(c)
     del bpy.types.WindowManager.nodefmt_overlay

@@ -13,12 +13,25 @@ from . import params as P
 from . import routes, wires
 from .rules import NAMES
 
-Violation = namedtuple('Violation', 'code name msg x y')
+# nodes: the names of the nodes involved (the Check panel selects them, with the reroutes at x, y)
+Violation = namedtuple('Violation', 'code name msg x y nodes', defaults=((),))
 
 
-def _v(code, msg, at=(0.0, 0.0)):
-    """A Violation of rule `code` at point `at` (y down; reported with Blender's y up)."""
-    return Violation(code, NAMES.get(code, "not-formatted"), msg, round(at[0], 1), round(-at[1], 1))
+def _v(code, msg, at=(0.0, 0.0), nodes=()):
+    """A Violation of rule `code` at point `at` (y down; reported with Blender's y up), with the
+    names of the nodes involved (None and duplicates dropped)."""
+    names = tuple(dict.fromkeys(n for n in nodes if n is not None))
+    return Violation(code, NAMES.get(code, "not-formatted"), msg, round(at[0], 1), round(-at[1], 1), names)
+
+
+def _src(tag):
+    """The node of a source socket tag."""
+    return tag[0] if isinstance(tag, tuple) and tag else None
+
+
+def _ends(s):
+    """The source node of segment s and the nodes at its socket ends."""
+    return (_src(s[0]), s[5], s[6])
 
 
 def _name(tag):
@@ -39,12 +52,12 @@ def lint(d, rules=None, labels=None, groups=None):
         dx, dy = abs(s[1][0] - s[2][0]), abs(s[1][1] - s[2][1])
         mid = ((s[1][0] + s[2][0]) / 2, (s[1][1] + s[2][1]) / 2)
         if dx > 2.0 and dy > 2.0:
-            out.append(_v('NF001', f"wire of {_name(s[0])} is drawn as a curve ({dx:.0f} x {dy:.0f})", mid))
+            out.append(_v('NF001', f"wire of {_name(s[0])} is drawn as a curve ({dx:.0f} x {dy:.0f})", mid, _ends(s)))
         elif dx > 0.5 and dy > 0.5:
-            out.append(_v('NF003', f"segment of {_name(s[0])} is off by {min(dx, dy):.1f} units", mid))
+            out.append(_v('NF003', f"segment of {_name(s[0])} is off by {min(dx, dy):.1f} units", mid, _ends(s)))
         for name, box in d.boxes.items():
             if name not in (s[5], s[6]) and wires.behind(s, box):
-                out.append(_v('NF002', f"wire of {_name(s[0])} passes behind node {name!r}", mid))
+                out.append(_v('NF002', f"wire of {_name(s[0])} passes behind node {name!r}", mid, _ends(s) + (name,)))
                 break
     for i in range(len(rr)):
         for j in range(i + 1, len(rr)):
@@ -54,11 +67,12 @@ def lint(d, rules=None, labels=None, groups=None):
                 continue  # the corners of the links into one multi-input socket are a slot apart
             if wires._near(p, q, P.RR_CLEAR) and ((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2) ** 0.5 < P.RR_CLEAR:
                 if rr[i][0] != rr[j][0]:
-                    out.append(_v('NF004', f"reroutes of {_name(rr[i][0])} and {_name(rr[j][0])} overlap", p))
+                    out.append(_v('NF004', f"reroutes of {_name(rr[i][0])} and {_name(rr[j][0])} overlap", p,
+                                  (_src(rr[i][0]), _src(rr[j][0]))))
                 elif 'NF031' in rules:  # one wire: a step too small to see, two reroutes on one spot
                     step = max(abs(p[0] - q[0]), abs(p[1] - q[1]))
                     out.append(_v('NF031', f"wire of {_name(rr[i][0])} steps by {step:.1f} units (two reroutes "
-                                           f"on one spot)", p))
+                                           f"on one spot)", p, (_src(rr[i][0]),)))
     # ------------------------------------------------ crossings: bundles (NF030)
     below = {tag: _below(d.trees[tag]) for tag in d.trees}
 
@@ -79,13 +93,13 @@ def lint(d, rules=None, labels=None, groups=None):
         for h, v, x in crosses:
             if h[0][0] == v[0][0] or (dests(h) & dests(v)):
                 out.append(_v('NF030', f"wires of {_name(h[0])} and {_name(v[0])} cross inside a bundle "
-                                       f"(same source or destination node)", x))
+                                       f"(same source or destination node)", x, _ends(h) + _ends(v)))
     # ------------------------------------------------ jogs (NF031)
     if 'NF031' in rules:
         for tag in sorted(d.trees, key=repr):
             for kind, run, (y0, y2) in _jogs(d, tag):
                 out.append(_v('NF031', f"wire of {_name(tag)}: {kind} at height {-run[0][1]:.0f} could "
-                                       f"take the level {-y0:.0f} or {-y2:.0f}", run[0]))
+                                       f"take the level {-y0:.0f} or {-y2:.0f}", run[0], (_src(tag),)))
     # ------------------------------------------------ clearance (NF032)
     if 'NF032' in rules:
         for s in segs:
@@ -94,28 +108,31 @@ def lint(d, rules=None, labels=None, groups=None):
                 if name in (s[5], s[6]):
                     continue
                 if not wires.behind(s, box) and wires.near_box(s, box) > P.CLEAR_NODE:
-                    out.append(_v('NF032', f"wire of {_name(s[0])} runs along the edge of node {name!r}", mid))
+                    out.append(_v('NF032', f"wire of {_name(s[0])} runs along the edge of node {name!r}", mid,
+                                  _ends(s) + (name,)))
             for name, poly in d.outlines:
                 if wires.near_outline(s, poly) > P.CLEAR_RUN:
-                    out.append(_v('NF032', f"wire of {_name(s[0])} runs along the border of {name!r}", mid))
+                    out.append(_v('NF032', f"wire of {_name(s[0])} runs along the border of {name!r}", mid, _ends(s)))
     # ------------------------------------------------ avoidable crossings (NF033)
     if 'NF033' in rules:
         for tag in sorted(d.trees, key=repr):
             n, at = _avoidable(d, tag)
             for _ in range(n):
                 out.append(_v('NF033', f"a crossing of {_name(tag)} goes away if one of its runs moves to "
-                                       f"another free height", at))
+                                       f"another free height", at, (_src(tag),)))
     # ------------------------------------------------ junction look (NF034)
     if 'NF034' in rules:
         for k, a in enumerate(segs):
             for b in segs[k + 1:]:
                 if a[0] != b[0] and wires.collinear(a, b) and not _multi_pair(d, a, b):
-                    out.append(_v('NF034', f"wires of {_name(a[0])} and {_name(b[0])} run on one line", a[1]))
+                    out.append(_v('NF034', f"wires of {_name(a[0])} and {_name(b[0])} run on one line", a[1],
+                                  _ends(a) + _ends(b)))
         for tag, p in rr:
             mp = wires.multi_at(d, tag, p)
             for s in segs:
                 if s[0] != tag and wires.on_segment(p, s, P.ON_WIRE) and (mp is None or wires.multi_of(d, s) != mp):
-                    out.append(_v('NF034', f"a reroute of {_name(tag)} sits on the wire of {_name(s[0])}", p))
+                    out.append(_v('NF034', f"a reroute of {_name(tag)} sits on the wire of {_name(s[0])}", p,
+                                  (_src(tag),) + _ends(s)))
                     break
         for tag in sorted(d.trees, key=repr):
             t = d.trees[tag]
@@ -124,7 +141,8 @@ def lint(d, rules=None, labels=None, groups=None):
                     continue
                 a, cs = t.parent.get(p), t.children.get(p, ())
                 if a is not None and len(cs) == 1 and wires._same_dir(a, p, next(iter(cs))):
-                    out.append(_v('NF034', f"a reroute of {_name(tag)} sits in the middle of a straight run", p))
+                    out.append(_v('NF034', f"a reroute of {_name(tag)} sits in the middle of a straight run", p,
+                                  (_src(tag),)))
     # ------------------------------------------------ blocks far from their consumer (NF021)
     if 'NF021' in rules and groups:
         for name, members in sorted(groups.items()):
@@ -140,7 +158,8 @@ def lint(d, rules=None, labels=None, groups=None):
             gap = min(d.boxes[n][0] for n in outs if n in d.boxes) - right if any(n in d.boxes for n in outs) else 0
             if gap > P.FAR_BLOCK:
                 out.append(_v('NF021', f"frame {name!r} has no inputs and ends {gap:.0f} units before the node it "
-                                       f"feeds", (right, min(d.boxes[n][1] for n in members))))
+                                       f"feeds", (right, min(d.boxes[n][1] for n in members)),
+                              (name,) + tuple(sorted(members))))
     # ------------------------------------------------ labels (NF040)
     if 'NF040' in rules and labels:
         for (tag, p), text in sorted(labels.items(), key=lambda kv: (repr(kv[0][0]), kv[0][1])):
@@ -150,12 +169,12 @@ def lint(d, rules=None, labels=None, groups=None):
             q = t.parent[p]
             while q != t.root and q in t.parent:
                 if labels.get((tag, q)) == text:
-                    out.append(_v('NF040', f"label {text!r} repeats a label upstream on its wire", p))
+                    out.append(_v('NF040', f"label {text!r} repeats a label upstream on its wire", p, (_src(tag),)))
                     break
                 if len(t.children.get(q, ())) > 1:
                     break  # a tap: above it the wire leads elsewhere too
                 if (tag, q) not in labels:
-                    out.append(_v('NF040', f"label {text!r} is not on the first reroute of its wire", p))
+                    out.append(_v('NF040', f"label {text!r} is not on the first reroute of its wire", p, (_src(tag),)))
                     break
                 q = t.parent[q]
     return out

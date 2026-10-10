@@ -48,8 +48,8 @@ selection are kept, and a second sort changes nothing.
 
 The run prints a table with one row per example and exits with 1 if any test fails.
 
-The add-on operators (progress, Esc, undo) have their own tests, which press Esc through
-Blender's event simulation:
+The add-on operators (progress, Esc, undo, Sort Selection, Check) have their own tests, which
+press Esc through Blender's event simulation:
 
 ```
 blender --factory-startup --enable-event-simulate --python tests/test_operators.py

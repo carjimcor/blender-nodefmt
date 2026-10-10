@@ -35,7 +35,8 @@ In a Geometry Nodes, Shader or Compositor editor, open the sidebar (N) and the n
 - **Sort Current Tree**: the tree shown in the editor.
 - **Sort Selection**: only the selected nodes, or what is inside a selected frame.
 - **Sort All Trees**: every node tree in the file.
-- **Check Current Tree**: the rules the tree breaks, without changing it.
+- **Check Current Tree**: the rules the tree breaks, without changing it; click a rule to see
+  where.
 
 A sort shows its progress and Esc cancels it. Each sort is one undo step: Ctrl+Z puts the tree
 back.

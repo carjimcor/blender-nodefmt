@@ -27,20 +27,21 @@ In a node editor, open the sidebar (N) and the nodefmt tab.
 - **Sort All Trees**: sorts every node tree in the file (Geometry Nodes groups, materials,
   worlds, lights and the compositor). A tree that cannot be sorted without changing its logic is
   left as it was and reported.
-- **Check Current Tree**: reports which rules the tree breaks, with their codes, without
-  changing it. Use it on a tree you edited by hand; the result appears in the panel and, line by
-  line, in the system console.
+- **Check Current Tree**: finds the rules the tree breaks, without changing it. The result
+  appears in the Check section below the buttons and as marks in the editor (see
+  [Check](#check)).
 - **Mode**:
   - *Relayout* (default): builds a new layout from scratch: columns, order and wires.
   - *Keep layout (experimental)*: keeps your columns and order and only straightens wires and
     fixes reroutes.
-- **UI scale**: the panel shows the Resolution Scale the wires are made exact for (see
+- **Wires exact at UI scale**: the Resolution Scale the wires are made exact for (see
   [Limitations](LIMITATIONS.md)).
-- **Rules**: one checkbox per style rule (see [Rules](RULES.md)), "Thorough search" (several
-  seeds, slower, rarely better) and "Use nodefmt.toml". The same options are in Preferences >
-  Add-ons > nodefmt. While "Use nodefmt.toml" is on and a `nodefmt.toml` is found next to the
-  .blend file or above it, the file wins over the checkboxes and the panel shows its name (see
-  [Configuration](CONFIGURATION.md)).
+- **Check**: the result of the last check (see [Check](#check)).
+- **Rules** (closed at first): one checkbox per style rule (see [Rules](RULES.md)), "Thorough
+  search" (several seeds, slower, rarely better) and "Use nodefmt.toml". The same options are in
+  Preferences > Add-ons > nodefmt. While "Use nodefmt.toml" is on and a `nodefmt.toml` is found
+  next to the .blend file or above it, the file wins over the checkboxes and the panel shows its
+  name (see [Configuration](CONFIGURATION.md)).
 
 Each sort is one undo step: Ctrl+Z puts the tree back.
 
@@ -101,8 +102,30 @@ of multi-input links): if anything differs, the tree is restored and the sort re
 
 Check runs every enabled rule on the tree as Blender draws it, and tries a sort on a copy of
 the layout (undone right away): if the sort would move anything, the tree is reported as not
-formatted (NF900). A tree that was sorted with the same rules and UI scale reports nothing, or
-only style violations that the formatter could not avoid (for example a crossing inside a
-bundle of wires that swap places).
+formatted (NF900). It changes nothing.
 
-The same check runs from the [command line](CLI.md) with `--check`.
+![The Check section of the panel and the marks in the editor](images/check-panel.png)
+
+The Check section of the panel shows the result:
+
+- **No problems: the tree is sorted** when nothing is broken.
+- Otherwise a line on top says whether the tree is sorted ("Sorted; these style rules could not
+  be met") or not ("Not sorted: Sort Current Tree fixes it"), then one row per rule broken: an
+  icon (a warning for the guarantees and NF900, an info sign for style rules), the code, the
+  name and how many places break it.
+- **Click a rule** to select the nodes and reroutes of its next place and frame them in the
+  editor (View Selected); click again for the next place, and so on around. The place shown is
+  described under its row ("1/3: wire of ... runs along the edge of node ...").
+- **Marks in the editor**: each place gets a ring with its rule code (red for the guarantees and
+  NF900, orange for style rules; the place shown last has a bigger ring). The overlay toggle in the
+  header of the Check section turns them on and off.
+- The result belongs to the tree it was made for: once that tree changes, or the editor shows
+  another tree, the panel asks you to check again and the marks are hidden.
+
+A tree sorted with the same rules and UI scale reports nothing, or only style violations that
+the formatter could not avoid (for example a crossing inside a bundle of wires that swap
+places). NF900 and NF010 have no single place: they select and mark the nodes a sort would move
+or copy. The image shows `examples/NF032.blend` after Check, with NF032 clicked.
+
+The same check runs from the [command line](CLI.md) with `--check`; each violation is also
+printed to the system console, one line each.

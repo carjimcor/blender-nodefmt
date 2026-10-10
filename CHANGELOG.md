@@ -11,6 +11,11 @@
   frame, and leaves the rest of the tree where it is. The part keeps its top-left corner (or
   moves down or right to clear the nodes around it), its links to the rest are routed
   orthogonally around what is in the way, and the selection is kept.
+- Check is visual: the panel lists the rules broken, with an icon, the code, the name and the
+  number of places; clicking a rule selects and frames its next place. Marks in the editor show
+  each place with its rule code (a toggle in the Check header), and "No problems: the tree is
+  sorted" when there is nothing. A result that no longer matches the tree is not shown. The
+  rule toggles moved to a Rules section, closed at first. Command line output is unchanged.
 - Sorting shows its progress in the status bar and the panel ("Tree 3/14 Wire: pass 1, layout
   4/9 (step 6/14)"), and Esc cancels it and puts the trees back. Still one undo step. The command
   line prints a progress line per tree. Operator tests: `tests/test_operators.py`.

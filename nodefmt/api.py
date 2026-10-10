@@ -266,22 +266,42 @@ def _format_steps(nt, mode, editor, duplicates, swaps, cfg):
 def is_formatted(nt, mode='relayout', editor=None, cfg=None):
     """True if every drawn wire segment is horizontal or vertical (at the UI scale of the session)
     and formatting would not move anything. The tree is left unchanged."""
+    return unformatted(nt, mode, editor, cfg) is None
+
+
+def unformatted(nt, mode='relayout', editor=None, cfg=None):
+    """None if the tree is formatted (see is_formatted), else the names of the nodes a format
+    would move (or, if none moves, of the nodes whose wires would change). The tree is left
+    unchanged."""
     own = editor is None
     editor = editor or Editor()
     try:
         editor.show(nt)
-        if ortho.count(nt):
-            return False
+        bad = ortho.faults(nt)
+        if bad:
+            return sorted({n for l, _, _ in bad for n in (l.from_node.name, l.to_node.name)})
         snap = check.Snapshot(nt)
         sig = _signature(nt)
+        where = {n.name: tuple(n.location_absolute) for n in nt.nodes
+                 if n.bl_idname not in ('NodeFrame', 'NodeReroute')}
         try:
             format_tree(nt, mode, editor, cfg=cfg)
             editor.show(nt)
             new = _signature(nt)
+            tol = 1.0 / ortho.ui_scale() + 0.05
+            moved = sorted(k for k, p in where.items() if nt.nodes.get(k) is None
+                           or max(abs(a - b) for a, b in zip(nt.nodes[k].location_absolute, p)) > tol)
+            if not moved:
+                ends = {}
+                for l in nt.links:
+                    if l.from_node.bl_idname == 'NodeReroute' or l.to_node.bl_idname == 'NodeReroute':
+                        ends.setdefault(l.from_node.name, 0)
+                        ends.setdefault(l.to_node.name, 0)
+                moved = sorted(k for k in ends if k in where)
         finally:
             snap.restore(nt, editor)
             editor.redraw()
-        return same_layout(new, sig)
+        return None if same_layout(new, sig) else moved
     finally:
         if own:
             editor.close()
@@ -299,9 +319,10 @@ def all_trees():
 
 
 def check_tree(nt, mode='relayout', editor=None, cfg=None, formatted=True):
-    """The rules tree nt breaks, as lint.Violations (code, name, message, x, y with y up), for
-    the enabled rules of cfg. formatted=True also tries a format (on a snapshot, undone) and
-    adds NF900 not-formatted if it would move anything. The tree is left unchanged."""
+    """The rules tree nt breaks, as lint.Violations (code, name, message, x, y with y up, the
+    nodes involved), for the enabled rules of cfg. formatted=True also tries a format (on a
+    snapshot, undone) and adds NF900 not-formatted if it would move anything (the nodes it would
+    move). The tree is left unchanged."""
     from . import metrics
     cfg = cfg or rules.Config()
     own = editor is None
@@ -316,12 +337,18 @@ def check_tree(nt, mode='relayout', editor=None, cfg=None, formatted=True):
             with rules.applied(cfg):
                 plan = dup.plan(data, mode)
             if dup.changes(plan, data):
+                names = sorted({n for c in plan["classes"] for n in [c["rep"]] + list(c["remove"])
+                                + [g["node"] for g in c["groups"] if g["node"]]})
                 out.append(lint.Violation('NF010', rules.NAMES['NF010'],
-                                          "input nodes would get copies next to their distant consumers", 0.0, 0.0))
+                                          "input nodes would get copies next to their distant consumers", 0.0, 0.0,
+                                          tuple(names)))
         if cfg.on('NF011'):
             out += _comm_crossings(d, model.Model(data))
-        if formatted and not is_formatted(nt, mode, editor, cfg):
-            out.append(lint.Violation('NF900', 'not-formatted', "formatting would change the layout", 0.0, 0.0))
+        if formatted:
+            moved = unformatted(nt, mode, editor, cfg)
+            if moved is not None:
+                out.append(lint.Violation('NF900', 'not-formatted', "formatting would change the layout",
+                                          0.0, 0.0, tuple(moved)))
         return out
     finally:
         if own:
@@ -348,5 +375,5 @@ def _comm_crossings(d, m):
         if hit is not None:
             out.append(lint.Violation('NF011', rules.NAMES['NF011'],
                                       f"the wires into the inputs of {node!r} cross; swapping them would not",
-                                      round(hit[0], 1), round(-hit[1], 1)))
+                                      round(hit[0], 1), round(-hit[1], 1), (node,)))
     return out

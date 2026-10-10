@@ -8,7 +8,8 @@ saved. For each examples/NF0xx.blend it writes OUT_DIR/NF0xx-before.png (the tre
 each place that breaks the rule ringed in red with its code) and OUT_DIR/NF0xx-after.png (a
 copy sorted with the default rules), both at one zoom, and OUT_DIR/boxes.json with the part of
 each screenshot that holds the tree. examples/selection.blend gives selection-before.png and
-selection-after.png (Sort Selection). tools/finish_images.py crops and compresses them.
+selection-after.png (Sort Selection), and check-panel.png the Check panel on an example.
+tools/finish_images.py crops and compresses them.
 """
 import argparse
 import glob
@@ -142,6 +143,75 @@ def shoot(nt, path, zoom, selected=()):
             math.ceil(x1 + ox + PAD), math.ceil(H - (y1 + oy) + PAD)]
 
 
+PANEL = ("NF032", "NF032")  # the example of the Check panel image, and the rule clicked in it
+
+
+def shoot_panel(path):
+    """Screenshot the sidebar with the result of Check on an example (one rule clicked) and the
+    marks in the editor: check-panel.png. The add-on is registered from this folder and the
+    other tabs of the sidebar are removed (in memory only), so the nodefmt tab shows."""
+    from nodefmt import ui
+    from nodefmt.draw import Editor
+    ui.register()
+    for c in list(bpy.types.Panel.__subclasses__()):
+        if getattr(c, "bl_space_type", "") == 'NODE_EDITOR' and getattr(c, "bl_region_type", "") == 'UI' \
+                and getattr(c, "bl_category", "") != "nodefmt" and not getattr(c, "bl_parent_id", ""):
+            try:
+                bpy.utils.unregister_class(c)
+            except RuntimeError:
+                pass
+    win, area, region = area_region()
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.screen.screen_full_area(use_hide_panels=True)  # back from the full screen ...
+    yield 1.0
+    win, area, region = area_region()
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.screen.screen_full_area(use_hide_panels=False)  # ... to a maximized editor with its sidebar
+    yield 1.0
+    nt = append(path)
+    nt.use_fake_user = True
+    ed = Editor(area_region()[1])
+    ed.show(nt)
+    win, area, region = area_region()
+    sp = area.spaces.active
+    sp.show_region_ui = True
+    sp.show_region_header = False
+    sp.show_region_toolbar = False
+    sp.overlay.show_context_path = False
+    yield 1.0
+    win, area, region = area_region()
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.node.nodefmt_check()
+        bpy.ops.node.nodefmt_show_violation(code=PANEL[1])
+    chosen = {n.name for n in nt.nodes if n.select}
+    side = next(r for r in area.regions if r.type == 'UI')
+    l, b, r, t = bbox(nt)
+    zoom = 0.8
+    overlap = region.width >= area.width - 2  # the sidebar is drawn over the editor
+    # the tree's top right corner 60 pixels from the top and 40 from the sidebar
+    right = region.width - (side.width if overlap else 0) - 40
+    cx = r - (right - region.width / 2) / zoom
+    cy = t - (region.height - 60 - region.height / 2) / zoom
+    yield from fit(nt, cx, cy, zoom)
+    for n in nt.nodes:
+        n.select = n.name in chosen
+    yield 0.5
+    out = os.path.join(ARGS.out, "check-panel.png")
+    win, area, region = area_region()
+    with bpy.context.temp_override(window=win, area=area, region=region):
+        bpy.ops.screen.screenshot_area(filepath=out)
+    yield 0.3
+    v = region.view2d
+    ui_s = bpy.context.preferences.system.ui_scale
+    x0, y0 = v.view_to_region(l * ui_s, t * ui_s, clip=False)
+    x1, y1 = v.view_to_region(r * ui_s, b * ui_s, clip=False)
+    ox, oy, H = region.x - area.x, region.y - area.y, area.height
+    bottom = max(H - (y1 + oy) + PAD, 460)
+    box = [math.floor(x0 + ox - PAD), 0, area.width, math.ceil(bottom)]
+    ed.close()
+    return box
+
+
 def run():
     """Capture every example (a generator: the timer waits between steps)."""
     from nodefmt import api
@@ -210,6 +280,10 @@ def run():
             boxes["selection-after"] = yield from shoot(after, os.path.join(ARGS.out, "selection-after.png"),
                                                         zoom, kept)
             print(f"captured selection at zoom {zoom:.2f}", flush=True)
+        panel = os.path.join(ARGS.examples, PANEL[0] + ".blend")
+        if os.path.exists(panel) and (not ARGS.only or "panel" in ARGS.only):
+            boxes["check-panel"] = yield from shoot_panel(panel)
+            print("captured the Check panel", flush=True)
     finally:
         bpy.types.SpaceNodeEditor.draw_handler_remove(handle, 'WINDOW')
     with open(os.path.join(ARGS.out, "boxes.json"), "w", encoding="utf-8") as fh:

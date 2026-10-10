@@ -181,7 +181,8 @@ def _pins(nt, part):
         for (fn, fi), ks in sorted(groups.items()):
             p = nt.nodes.new(REROUTE)
             src = nt.nodes[fn].outputs[fi]
-            p.location_absolute = nt.nodes[ks[0][2]].location_absolute if side == 'first' else nt.nodes[fn].location_absolute
+            near = nt.nodes[ks[0][2]] if side == 'first' else nt.nodes[fn]
+            p.location_absolute = near.location_absolute
             nt.links.new(src, p.inputs[0])
             pins[p.name] = side
             for k in ks:

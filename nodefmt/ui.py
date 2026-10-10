@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Add-on: buttons in the Node Editor sidebar (nodefmt tab) and rule toggles in the preferences.
+"""Add-on: buttons in the Node Editor sidebar (nodefmt tab), the result of Check (a list by
+rule and marks in the editor) and rule toggles in the preferences.
 
 The rules come from a nodefmt.toml next to the .blend file (or in a folder above it) when there
 is one and "Use nodefmt.toml" is on, else from the toggles (preferences, also shown in the
 panel). The layout is made for the UI scale Blender runs at. Every format is one undo step.
 """
+import math
 import os
 import time
 
@@ -15,7 +17,10 @@ from .draw import Editor
 
 MODES = [('relayout', "Relayout", "Build a new layout from scratch: columns, order and wires"),
          ('keep', "Keep layout (experimental)", "Keep your columns and order; only straighten wires and fix reroutes")]
-_LAST = {"lines": [], "tree": "", "done": False}  # the last check, shown in the panel
+# the last check, shown in the panel and the overlay: the tree (name, pointer, a key of where
+# its nodes are), the violations, where each one is, the occurrence shown last of each rule
+_LAST = {"done": False, "tree": "", "ptr": 0, "key": None, "violations": [], "points": [], "index": {},
+         "shown": None}
 
 
 def _prefs(context):
@@ -312,11 +317,46 @@ class NODEFMT_OT_sort_selection(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _tree_key(nt):
+    """A cheap fingerprint of where everything is, to tell when a tree changed after a check."""
+    return (len(nt.nodes), len(nt.links),
+            round(sum(n.location_absolute.x + n.location_absolute.y for n in nt.nodes), 1))
+
+
+def _point(nt, v):
+    """Where violation v is (node units, y up): its point, else the middle of its nodes."""
+    if (v.x, v.y) != (0.0, 0.0) or not v.nodes:
+        return v.x, v.y
+    ui = bpy.context.preferences.system.ui_scale
+    pts = []
+    for k in v.nodes:
+        n = nt.nodes.get(k)
+        if n is not None:
+            x, y = n.location_absolute
+            pts.append((x + n.dimensions.x / ui / 2, y - n.dimensions.y / ui / 2))
+    if not pts:
+        return v.x, v.y
+    return sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+
+
+def checked(context):
+    """The result of the last check if it is about the tree in this editor and the tree did not
+    change since, else None."""
+    sp = context.space_data
+    nt = getattr(sp, "edit_tree", None)
+    if not _LAST["done"] or nt is None or nt.as_pointer() != _LAST["ptr"]:
+        return None
+    if _tree_key(nt) != _LAST["key"]:
+        return None
+    return _LAST
+
+
 class NODEFMT_OT_check(bpy.types.Operator):
     """Check the tree shown in the editor: the rules it breaks, by code; changes nothing."""
     bl_idname = "node.nodefmt_check"
     bl_label = "Check Current Tree"
-    bl_description = "Report the rules this tree breaks, without changing it. Results appear below"
+    bl_description = ("Find the rules this tree breaks, without changing it. The panel lists them by rule; "
+                      "click one to select and frame its places")
 
     @classmethod
     def poll(cls, context):
@@ -324,22 +364,110 @@ class NODEFMT_OT_check(bpy.types.Operator):
         return NODEFMT_OT_sort_tree.poll(context)
 
     def execute(self, context):
-        """Check the edited tree and keep the result for the panel."""
+        """Check the edited tree and keep the result for the panel and the overlay."""
         nt = context.space_data.edit_tree
         ed = Editor(context.area)
         try:
             vs = api.check_tree(nt, context.window_manager.nodefmt_mode, ed, config(context))
         finally:
             ed.close()
-        _LAST["tree"] = api.tree_name(nt)
-        _LAST["lines"] = lint.report(vs)
-        _LAST["done"] = True
-        for line in _LAST["lines"]:
+        _LAST.update(done=True, tree=api.tree_name(nt), ptr=nt.as_pointer(), key=_tree_key(nt),
+                     violations=vs, points=[_point(nt, v) for v in vs], index={}, shown=None)
+        for line in lint.report(vs):
             print(line)
         counts = ", ".join(f"{c} x{n}" for c, n in lint.counts(vs).items())
         self.report({'WARNING'} if vs else {'INFO'},
-                    f"{api.tree_name(nt)}: {len(vs)} violations ({counts})" if vs else f"{api.tree_name(nt)}: no violations")
+                    f"{api.tree_name(nt)}: {len(vs)} violations ({counts})" if vs
+                    else f"{api.tree_name(nt)}: no problems, the tree is sorted")
+        _redraw_editors()
         return {'FINISHED'}
+
+
+class NODEFMT_OT_show_violation(bpy.types.Operator):
+    """Select the nodes and reroutes of the next place that breaks a rule, and frame them."""
+    bl_idname = "node.nodefmt_show_violation"
+    bl_label = "Show Violation"
+    bl_description = ("Select the next place that breaks this rule and frame it in the editor "
+                      "(click again for the next one)")
+
+    code: bpy.props.StringProperty()
+
+    @classmethod
+    def poll(cls, context):
+        """Available while the last check is about the tree in this editor."""
+        return checked(context) is not None
+
+    def execute(self, context):
+        """Select the next occurrence of the rule and View Selected."""
+        nt = context.space_data.edit_tree
+        found = [k for k, v in enumerate(_LAST["violations"]) if v.code == self.code]
+        if not found:
+            return {'CANCELLED'}
+        k = (_LAST["index"].get(self.code, -1) + 1) % len(found)
+        _LAST["index"][self.code] = k
+        _LAST["shown"] = found[k]
+        v = _LAST["violations"][found[k]]
+        x, y = _LAST["points"][found[k]]
+        names = {n for n in v.nodes if n in nt.nodes}
+        for n in nt.nodes:  # the reroutes at the place
+            if n.bl_idname == 'NodeReroute' and abs(n.location_absolute.x - x) + abs(n.location_absolute.y - y) < 16:
+                names.add(n.name)
+        for n in nt.nodes:
+            n.select = n.name in names
+        temp = None
+        if not names:  # nothing to select: frame the place itself
+            temp = nt.nodes.new('NodeReroute')
+            temp.location_absolute = (x, y)
+            temp.select = True
+        region = next((r for r in context.area.regions if r.type == 'WINDOW'), None)
+        if region is not None:
+            with context.temp_override(region=region):
+                bpy.ops.node.view_selected()
+        if temp is not None:
+            nt.nodes.remove(temp)
+        self.report({'INFO'}, f"{v.code} {k + 1}/{len(found)}: {v.msg}")
+        _redraw_editors()
+        return {'FINISHED'}
+
+
+def _draw_overlay():
+    """Mark each place of the last check in the node editor with a ring and its rule code (the
+    one shown last a bigger ring)."""
+    import blf
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+    context = bpy.context
+    if not getattr(context.window_manager, "nodefmt_overlay", False):
+        return
+    res = checked(context)
+    if res is None or not res["violations"]:
+        return
+    region = context.region
+    v2d = region.view2d
+    ui = context.preferences.system.ui_scale
+    shader = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR')
+    shader.uniform_float("viewportSize", (region.width, region.height))
+    gpu.state.blend_set('ALPHA')
+    blf.size(0, 12 * ui)
+    seen = []
+    for k, (v, (x, y)) in enumerate(zip(res["violations"], res["points"])):
+        bad = v.code in rules.GUARANTEES or v.code == 'NF900'
+        color = (1.0, 0.3, 0.25, 0.95) if bad else (1.0, 0.7, 0.2, 0.95)
+        cx, cy = v2d.view_to_region(x * ui, y * ui, clip=False)
+        if not (-50 < cx < region.width + 50 and -50 < cy < region.height + 50):
+            continue
+        r = (16.0 if k == res["shown"] else 11.0) * ui
+        pts = [(cx + r * math.cos(t * math.pi / 16), cy + r * math.sin(t * math.pi / 16)) for t in range(33)]
+        shader.uniform_float("lineWidth", 3.0 if k == res["shown"] else 2.0)
+        shader.uniform_float("color", color)
+        batch_for_shader(shader, 'LINE_STRIP', {"pos": pts}).draw(shader)
+        if any(abs(cx - a) < 50 * ui and abs(cy - b) < 14 * ui for a, b in seen):
+            continue  # one code for marks close together
+        seen.append((cx, cy))
+        blf.color(0, *color)
+        blf.position(0, cx + r + 3, cy - 4 * ui, 0)
+        blf.draw(0, v.code)
+    gpu.state.blend_set('NONE')
 
 
 class NODEFMT_PT_panel(bpy.types.Panel):
@@ -355,7 +483,7 @@ class NODEFMT_PT_panel(bpy.types.Panel):
         return context.space_data.tree_type in api.TREE_TYPES
 
     def draw(self, context):
-        """Buttons, mode, the rule toggles and the last check."""
+        """The progress of a running sort, the buttons, the mode and the UI scale."""
         col = self.layout.column()
         job = _JOB["job"]
         if job is not None:
@@ -366,48 +494,129 @@ class NODEFMT_PT_panel(bpy.types.Panel):
         col.operator(NODEFMT_OT_sort_tree.bl_idname, icon='NODETREE')
         col.operator(NODEFMT_OT_sort_selection.bl_idname, icon='RESTRICT_SELECT_OFF')
         col.operator(NODEFMT_OT_sort_all.bl_idname, icon='FILE_BLEND')
-        col.operator(NODEFMT_OT_check.bl_idname, icon='CHECKMARK')
+        col.operator(NODEFMT_OT_check.bl_idname, icon='VIEWZOOM')
         col.prop(context.window_manager, "nodefmt_mode", text="")
-        row = col.row()
-        row.label(text=f"UI scale {context.preferences.system.ui_scale:g}")
-        row.label(text="(wires are exact at this scale)")
+        col.label(text=f"Wires exact at UI scale {context.preferences.system.ui_scale:g}")
         cfg = config(context)
         if cfg.source:
             col.label(text=f"Rules: {os.path.basename(cfg.source)}", icon='FILE_TEXT')
+
+
+class NODEFMT_PT_check(bpy.types.Panel):
+    """The result of the last check, grouped by rule (a sub-panel of nodefmt)."""
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "nodefmt"
+    bl_label = "Check"
+    bl_parent_id = "NODEFMT_PT_panel"
+
+    def draw_header(self, context):
+        """The overlay toggle."""
+        self.layout.prop(context.window_manager, "nodefmt_overlay", text="", icon='OVERLAY')
+
+    def draw(self, context):
+        """One row per rule broken: icon, code and name (click: select and frame the next place),
+        and how many places; or 'No problems'."""
+        col = self.layout.column()
+        if not _LAST["done"]:
+            col.label(text="Press Check Current Tree")
+            return
+        res = checked(context)
+        if res is None:
+            col.label(text=f"Last check: {_LAST['tree']}")
+            col.label(text="The tree changed, or this is another tree:", icon='INFO')
+            col.label(text="check again")
+            return
+        vs = res["violations"]
+        if not vs:
+            col.label(text="No problems: the tree is sorted", icon='CHECKMARK')
+            return
+        counts = lint.counts(vs)
+        if 'NF900' not in counts and not any(c in rules.GUARANTEES for c in counts):
+            col.label(text="Sorted; these style rules could not be met:", icon='CHECKMARK')
+        elif 'NF900' in counts:
+            col.label(text="Not sorted: Sort Current Tree fixes it", icon='ERROR')
+        shown = res["violations"][res["shown"]] if res["shown"] is not None else None
+        for code, n in counts.items():
+            bad = code in rules.GUARANTEES or code == 'NF900'
+            row = col.split(factor=0.86, align=True)
+            name = rules.NAMES.get(code, "not-formatted")
+            op = row.operator(NODEFMT_OT_show_violation.bl_idname, text=f"{code} {name}",
+                              icon='ERROR' if bad else 'INFO', depress=shown is not None and shown.code == code)
+            op.code = code
+            row.label(text=str(n))
+            if shown is not None and shown.code == code:
+                k = res["index"].get(code, 0)
+                sub = col.column()
+                sub.scale_y = 0.8
+                for line in _wrap(f"{k + 1}/{n}: {shown.msg}", 44):
+                    sub.label(text=line)
+        col.separator()
+        col.label(text="Click a rule to select its next place", icon='RESTRICT_SELECT_OFF')
+
+
+def _wrap(text, width):
+    """Text split into lines of at most `width` characters, at spaces."""
+    lines, cur = [], ""
+    for word in text.split():
+        if cur and len(cur) + 1 + len(word) > width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = f"{cur} {word}" if cur else word
+    return lines + ([cur] if cur else [])
+
+
+class NODEFMT_PT_rules(bpy.types.Panel):
+    """The rule toggles and options (a sub-panel of nodefmt, closed at first)."""
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "nodefmt"
+    bl_label = "Rules"
+    bl_parent_id = "NODEFMT_PT_panel"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        """Shown when the add-on preferences exist (the add-on is installed)."""
+        return _prefs(context) is not None
+
+    def draw(self, context):
+        """Use nodefmt.toml, Thorough search, one checkbox per style rule."""
         p = _prefs(context)
-        if p is not None:
-            box = col.box()
-            box.label(text="Rules")
-            box.prop(p, "use_config_file")
-            box.prop(p, "thorough")
-            sub = box.column(align=True)
-            sub.enabled = not cfg.source
-            for code in rules.STYLE:
-                sub.prop(p, "rule_" + code)
-        if _LAST["done"]:
-            box = col.box()
-            box.label(text=f"Last check: {_LAST['tree']}")
-            if not _LAST["lines"]:
-                box.label(text="No problems: the tree is sorted", icon='CHECKMARK')
-            for line in _LAST["lines"][:12]:
-                box.label(text=line)
-            if len(_LAST["lines"]) > 12:
-                box.label(text=f"... {len(_LAST['lines']) - 12} more (see the console)")
+        cfg = config(context)
+        col = self.layout.column()
+        col.prop(p, "use_config_file")
+        col.prop(p, "thorough")
+        sub = col.column(align=True)
+        sub.enabled = not cfg.source
+        for code in rules.STYLE:
+            sub.prop(p, "rule_" + code)
 
 
 CLASSES = (NODEFMT_AddonPreferences, NODEFMT_OT_sort_tree, NODEFMT_OT_sort_selection, NODEFMT_OT_sort_all,
-           NODEFMT_OT_check, NODEFMT_PT_panel)
+           NODEFMT_OT_check, NODEFMT_OT_show_violation, NODEFMT_PT_panel, NODEFMT_PT_check, NODEFMT_PT_rules)
+_HANDLE = []  # the overlay's draw handler
 
 
 def register():
-    """Register the preferences, operators, panel and the mode property."""
-    bpy.types.WindowManager.nodefmt_mode = bpy.props.EnumProperty(name="Mode", items=MODES, default='relayout')
+    """Register the preferences, operators, panels, the window manager properties and the
+    overlay."""
+    wm = bpy.types.WindowManager
+    wm.nodefmt_mode = bpy.props.EnumProperty(name="Mode", items=MODES, default='relayout')
+    wm.nodefmt_overlay = bpy.props.BoolProperty(
+        name="Show in Editor", default=True, update=lambda self, context: _redraw_editors(),
+        description="Mark each place of the last check in the node editor with its rule code")
     for c in CLASSES:
         bpy.utils.register_class(c)
+    _HANDLE.append(bpy.types.SpaceNodeEditor.draw_handler_add(_draw_overlay, (), 'WINDOW', 'POST_PIXEL'))
 
 
 def unregister():
     """Unregister everything register() added."""
+    while _HANDLE:
+        bpy.types.SpaceNodeEditor.draw_handler_remove(_HANDLE.pop(), 'WINDOW')
     for c in reversed(CLASSES):
         bpy.utils.unregister_class(c)
+    del bpy.types.WindowManager.nodefmt_overlay
     del bpy.types.WindowManager.nodefmt_mode

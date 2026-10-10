@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests of the add-on operators: sorting with progress, Esc, undo, Sort Selection.
+"""Tests of the add-on operators: sorting with progress, Esc, undo, Sort Selection, Check.
 
     blender --factory-startup --enable-event-simulate --python tests/test_operators.py
 
@@ -155,11 +155,67 @@ def run():
     yield 0.3
     test("one undo step puts the selection back", state([sel]) == before)
 
+    # Check: results by rule, each place selected and framed in turn, marks in the editor
+    yield from check_tests(ui)
+
     # scripts: EXEC_DEFAULT sorts at once
     with override():
         r = bpy.ops.node.nodefmt_sort_all('EXEC_DEFAULT', True)
     test("sort all from a script", r == {'FINISHED'} and state(names) != start, str(r))
     ui.unregister()
+
+
+def check_tests(ui):
+    """Check, Show Violation (select, frame, cycle), the overlay, a stale result, no problems."""
+    name = append("NF004")  # two NF004 places, plus NF034, NF010 and not formatted
+    show(name)
+    yield 0.3
+    nt = bpy.data.node_groups[name]
+    with override():
+        r = bpy.ops.node.nodefmt_check()
+    found = [v.code for v in ui._LAST["violations"]]
+    test("check finds the rule", r == {'FINISHED'} and found.count("NF004") == 2 and "NF900" in found,
+         ", ".join(sorted(set(found))))
+    test("every place has nodes or a point", all(v.nodes or (v.x, v.y) != (0.0, 0.0) for v in ui._LAST["violations"]))
+    region = editor()[2]
+    shown = []
+    for _ in range(3):
+        before = tuple(region.view2d.view_to_region(0, 0, clip=False))
+        with override():
+            r = bpy.ops.node.nodefmt_show_violation(code="NF004")
+        yield 0.2
+        selected = {n.name for n in nt.nodes if n.select}
+        shown.append((r, ui._LAST["shown"], selected, before != tuple(region.view2d.view_to_region(0, 0, clip=False))))
+    test("show selects the place", all(r == {'FINISHED'} and "Group Input" in sel
+                                      and any(nt.nodes[k].bl_idname == 'NodeReroute' for k in sel)
+                                      for r, _, sel, _ in shown), str([sorted(s) for _, _, s, _ in shown][:1]))
+    test("show frames the place", any(moved for _, _, _, moved in shown))
+    test("show cycles through the places", shown[0][1] != shown[1][1] and shown[2][1] == shown[0][1],
+         str([k for _, k, _, _ in shown]))
+    calls = []
+
+    def probe():
+        """Run the overlay's draw function and keep the outcome."""
+        try:
+            ui._draw_overlay()
+            calls.append("ok")
+        except Exception as e:
+            calls.append(repr(e))
+    handle = bpy.types.SpaceNodeEditor.draw_handler_add(probe, (), 'WINDOW', 'POST_PIXEL')
+    with override():
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN', iterations=1)
+    bpy.types.SpaceNodeEditor.draw_handler_remove(handle, 'WINDOW')
+    test("overlay draws", calls and all(c == "ok" for c in calls), str(calls[:2]))
+    with override():
+        test("result is current", ui.checked(bpy.context) is not None)
+    nt.nodes["Group Input"].location.x += 40
+    with override():
+        test("result is stale after an edit", ui.checked(bpy.context) is None)
+        test("show is off when stale", not bpy.ops.node.nodefmt_show_violation.poll())
+        bpy.ops.node.nodefmt_sort_tree('EXEC_DEFAULT', True)
+        bpy.ops.node.nodefmt_check()
+    test("no problems after a sort", ui._LAST["violations"] == [],
+         ", ".join(v.code for v in ui._LAST["violations"]))
 
 
 GEN = run()

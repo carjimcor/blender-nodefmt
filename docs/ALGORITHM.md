@@ -270,7 +270,7 @@ modes (`ZONE_OUT`, `ZONE_LEVEL`) and `SEED_ONLY` (run a single seed: tests).
 nodefmt/  (the extension)
   __init__.py   add-on entry (register)
   blender_manifest.toml  extension manifest (Blender 4.2+ extensions)
-  ui.py         add-on: sidebar panel, buttons, rule toggles (preferences)
+  ui.py         add-on: sidebar panel, buttons, progress, Check results and marks, rule toggles
   rules.py      rule codes and names, nodefmt.toml, --select/--ignore, parameters per rule
   lint.py       checks: the rules a drawn tree breaks, with codes
   wires.py      the drawn wires of a whole tree: faults, tidy pass, zone outlines
@@ -312,6 +312,6 @@ tools/
 examples/       one small tree per rule that breaks it (NF0xx.blend)
 tests/
   run_tests.py  tests from the examples (check, sort, logic, idempotency, rule off)
-  test_operators.py  the add-on operators: progress, Esc, undo
+  test_operators.py  the add-on operators: progress, Esc, undo, Sort Selection, Check
 docs/           usage, rules, configuration, command line, limitations, this page
 ```

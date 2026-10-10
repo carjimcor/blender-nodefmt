@@ -4,10 +4,10 @@
 
 Blender 5.2 or newer.
 
-1. Download `nodefmt-0.7.0.zip` from the [releases](https://github.com/carjimcor/blender-nodefmt/releases),
+1. Download `nodefmt-0.8.0.zip` from the [releases](https://github.com/carjimcor/blender-nodefmt/releases),
    or build it with `tools/build.sh`.
 2. In Blender: Edit > Preferences > Get Extensions > the arrow menu > Install from Disk, and pick
-   `nodefmt-0.7.0.zip`. It is enabled on install.
+   `nodefmt-0.8.0.zip`. It is enabled on install.
 
 ## Supported editors
 

@@ -17,7 +17,7 @@ import bpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-EXAMPLES = ("NF010", "NF021", "NF030")
+EXAMPLES = ("NF010", "NF032", "NF030")
 RESULTS = []
 
 
@@ -88,7 +88,7 @@ def run():
     names = [append(c) for c in EXAMPLES]
     editor()
     yield 0.5
-    show(names[1])  # NF021: a frame, so the layout has two containers
+    show(names[1])  # NF032: a zone, so the layout has two containers
     yield 0.3
     with override():
         bpy.ops.ed.undo_push(message="test start")

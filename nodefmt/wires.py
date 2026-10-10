@@ -481,8 +481,8 @@ def _levels(d, pa, a, b, c):
 def tidy(d, rules, passes=4):
     """Move runs to better heights (see the module docstring) until nothing improves. Returns
     the number of moves. Deterministic: trees and runs in sorted order."""
-    if not ({'NF031', 'NF032', 'NF033'} & set(rules)):
-        return 0
+    if not ({'NF031', 'NF032', 'NF033', 'NF034'} & set(rules)):
+        return 0  # no wire rule on: the drawing stays as the layout made it
     moves = 0
     for _ in range(passes):
         changed = False

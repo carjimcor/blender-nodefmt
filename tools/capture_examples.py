@@ -3,13 +3,16 @@
 
     blender --factory-startup --python tools/capture_examples.py -- OUT_DIR [--only NF031 ...]
 
-Runs with Blender's window at UI scale 1.0 and closes itself; the examples are appended, never
-saved. For each examples/NF0xx.blend it writes OUT_DIR/NF0xx-before.png (the tree as it is,
-each place that breaks the rule ringed in red with its code) and OUT_DIR/NF0xx-after.png (a
-copy sorted with the default rules), both at one zoom, and OUT_DIR/boxes.json with the part of
-each screenshot that holds the tree. examples/selection.blend gives selection-before.png and
-selection-after.png (Sort Selection), and check-panel.png the Check panel on an example.
-tools/finish_images.py crops and compresses them.
+Runs with Blender's window at UI scale 1.0 (or the scale an example asks for, see
+make_examples.py) and closes itself; the examples are appended, never saved. For each
+examples/NF0xx.blend it writes OUT_DIR/NF0xx-before.png and OUT_DIR/NF0xx-after.png at one
+zoom (see make_pair): a style rule sorted with every style rule off, then with only that rule;
+a guarantee as it is, then sorted with no style rules. Each place in the before image that
+breaks the rule is ringed in red with its code; NF005 shows the logic fingerprint of the tree
+in both. OUT_DIR/boxes.json holds the part of each screenshot that holds the tree.
+examples/selection.blend gives selection-before.png and selection-after.png (Sort Selection),
+and check-panel.png the Check panel on an example. tools/finish_images.py crops and compresses
+them.
 """
 import argparse
 import glob
@@ -33,6 +36,8 @@ ap.add_argument("--width", type=float, default=600.0, help="widest tree in pixel
 ap.add_argument("--zoom", type=float, default=0.8, help="largest zoom, pixels per node unit")
 ARGS = ap.parse_args(argv)
 PAD = 24  # pixels kept around the tree
+SCALE_KEY = "nodefmt_ui_scale"  # custom property of an example shown at another UI scale
+STAMP = []  # (x, y, text) in node units: a line of text drawn by draw_marks() (NF005)
 MARKS = []  # (x, y, text) in node units, drawn by draw_marks()
 
 
@@ -48,6 +53,14 @@ def draw_marks():
     import blf
     import gpu
     from gpu_extras.batch import batch_for_shader
+    if STAMP:
+        x, y, text = STAMP[0]
+        ui = bpy.context.preferences.system.ui_scale
+        cx, cy = bpy.context.region.view2d.view_to_region(x * ui, y * ui, clip=False)
+        blf.size(0, 14)
+        blf.color(0, 0.85, 0.85, 0.85, 1.0)
+        blf.position(0, cx, cy, 0)
+        blf.draw(0, text)
     if not MARKS:
         return
     region = bpy.context.region
@@ -212,9 +225,32 @@ def shoot_panel(path):
     return box
 
 
+def fingerprint_digest(nt):
+    """The first 12 hex digits of a hash of the tree's logic fingerprint (check.fingerprint)."""
+    import hashlib
+    from nodefmt import check
+    text = json.dumps(check.fingerprint(nt), sort_keys=True, default=repr)
+    return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+
+def make_pair(code, before, after, ed):
+    """Sort the two copies of example `code` for its images: a guarantee is shown as it is and
+    after a sort with no style rules; a style rule after a sort with every style rule off and
+    after a sort with only that rule. Returns the violations of the rule in the before tree."""
+    from nodefmt import api, rules
+    guarantees = frozenset(rules.GUARANTEES)
+    if code in rules.STYLE:
+        api.format_tree(before, 'relayout', ed, cfg=rules.Config(guarantees))
+        api.format_tree(after, 'relayout', ed, cfg=rules.Config(guarantees | {code}))
+    else:
+        api.format_tree(after, 'relayout', ed, cfg=rules.Config(guarantees))
+    ed.show(before)
+    own = rules.Config(guarantees | {code})
+    return api.check_tree(before, 'relayout', ed, own, formatted=False)
+
+
 def run():
     """Capture every example (a generator: the timer waits between steps)."""
-    from nodefmt import api
     from nodefmt.draw import Editor
     bpy.context.preferences.view.ui_scale = 1.0  # in memory only
     bpy.context.preferences.view.smooth_view = 0
@@ -241,10 +277,13 @@ def run():
             code = os.path.splitext(os.path.basename(path))[0]
             if ARGS.only and code not in ARGS.only:
                 continue
-            ed = Editor(area_region()[1])
             before, after = append(path), append(path)
-            api.format_tree(after, 'relayout', ed)
-            vs = api.check_tree(before, 'relayout', ed, formatted=False)
+            scale = before.get(SCALE_KEY, 1.0)
+            if bpy.context.preferences.view.ui_scale != scale:
+                bpy.context.preferences.view.ui_scale = scale  # in memory only
+                yield 1.0
+            ed = Editor(area_region()[1])
+            vs = make_pair(code, before, after, ed)
             ed.show(after)
             wa = bbox(after)
             ed.show(before)
@@ -252,14 +291,23 @@ def run():
             width = max(wb[2] - wb[0], wa[2] - wa[0])
             zoom = min(ARGS.zoom, ARGS.width / width)
             MARKS[:] = [(v.x, v.y, v.code) for v in vs if v.code == code and (v.x, v.y) != (0.0, 0.0)]
-            ed.show(before)
-            boxes[f"{code}-before"] = yield from shoot(before, os.path.join(ARGS.out, f"{code}-before.png"), zoom)
-            MARKS[:] = []
-            ed.show(after)
-            boxes[f"{code}-after"] = yield from shoot(after, os.path.join(ARGS.out, f"{code}-after.png"), zoom)
+            for nt, when in ((before, "before"), (after, "after")):
+                ed.show(nt)
+                if code == "NF005":  # the logic fingerprint under the tree
+                    l, b, r, t = bbox(nt)
+                    STAMP[:] = [(l, b - 20 / zoom, f"Logic fingerprint: {fingerprint_digest(nt)}")]
+                box = yield from shoot(nt, os.path.join(ARGS.out, f"{code}-{when}.png"), zoom)
+                if STAMP:
+                    box[3] += 28
+                boxes[f"{code}-{when}"] = box
+                MARKS[:] = []
+                STAMP[:] = []
             bpy.data.node_groups.remove(before)
             bpy.data.node_groups.remove(after)
             print(f"captured {code} at zoom {zoom:.2f}", flush=True)
+        if bpy.context.preferences.view.ui_scale != 1.0:
+            bpy.context.preferences.view.ui_scale = 1.0
+            yield 1.0
         sel = os.path.join(ARGS.examples, "selection.blend")
         if os.path.exists(sel) and (not ARGS.only or "selection" in ARGS.only):
             from nodefmt import part

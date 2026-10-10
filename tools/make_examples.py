@@ -5,6 +5,8 @@
 
 Writes examples/NF0xx.blend, each holding one Geometry Nodes group named "NF0xx <rule name>"
 (with a fake user, no objects, no screens), and examples/selection.blend for Sort Selection.
+A style rule's example is saved sorted with every style rule off (see main()). An example meant
+for another UI scale stores it in the group's custom property "nodefmt_ui_scale" (NF034: 1.25).
 Runs with Blender's window: reroutes are placed from socket positions, which only exist once a
 tree is drawn. Blender closes itself.
 """
@@ -23,6 +25,9 @@ ap = argparse.ArgumentParser(prog="make_examples.py")
 ap.add_argument("--only", action="append", default=[], help="build only this example (repeatable)")
 ap.add_argument("--out", default=os.path.join(ROOT, "examples"))
 ARGS = ap.parse_args(argv)
+
+
+SCALE_KEY = "nodefmt_ui_scale"  # custom property: the UI scale an example is made for (default 1)
 
 
 class Tree:
@@ -179,6 +184,32 @@ def nf004():
     return t
 
 
+def nf005():
+    """A messy tree: nodes out of order, links curved and crossing. The tree computes the same
+    before and after the sort."""
+    t = Tree("NF005", inputs=(("Geometry", 'Geometry'), ("Height", 'Float')))
+    gi = t.node('NodeGroupInput', 300, -260)
+    sd = t.node('GeometryNodeSubdivideMesh', 0, 0)
+    val = t.node('ShaderNodeValue', 620, -300)
+    val.outputs[0].default_value = 0.5
+    mul = t.node('ShaderNodeMath', 260, 40, operation='MULTIPLY')
+    cx = t.node('ShaderNodeCombineXYZ', 860, -180)
+    sp = t.node('GeometryNodeSetPosition', 520, 60)
+    cu = t.node('GeometryNodeMeshCube', 40, -360)
+    jo = t.node('GeometryNodeJoinGeometry', 900, 40)
+    go = t.node('NodeGroupOutput', 1100, -120)
+    t.link(gi, 0, sd, 0)
+    t.link(gi, 1, mul, 0)
+    t.link(val, 0, mul, 1)
+    t.link(mul, 0, cx, 2)
+    t.link(sd, 0, sp, 0)
+    t.link(cx, 0, sp, "Offset")
+    t.link(sp, 0, jo, 0)
+    t.link(cu, 0, jo, 0)
+    t.link(jo, 0, go, 0)
+    return t
+
+
 def nf010():
     """One Group Input feeds a node far to the right through a long wire."""
     t = Tree("NF010", inputs=(("Geometry", 'Geometry'), ("Scale", 'Float')))
@@ -232,67 +263,110 @@ def nf020():
 
 
 def nf021():
-    """A frame with nothing linked into it sits far to the left of the node it feeds."""
+    """A frame with nothing linked into it feeds Instance on Points at the end of the tree."""
     t = Tree("NF021")
     gi = t.node('NodeGroupInput', 0, 0)
     sp = t.node('GeometryNodeSetPosition', 220, 0)
-    sd = t.node('GeometryNodeSubdivideMesh', 440, 0)
-    tri = t.node('GeometryNodeTriangulate', 660, 0)
-    mp = t.node('GeometryNodeMeshToPoints', 880, 0)
-    ip = t.node('GeometryNodeInstanceOnPoints', 1100, 0)
-    go = t.node('NodeGroupOutput', 1320, 0)
-    chain(t, [gi, sp, sd, tri, mp, ip, go])
+    mp = t.node('GeometryNodeMeshToPoints', 440, 0)
+    ip = t.node('GeometryNodeInstanceOnPoints', 660, 0)
+    go = t.node('NodeGroupOutput', 880, 0)
+    chain(t, [gi, sp, mp, ip, go])
     fr = t.nt.nodes.new('NodeFrame')
     fr.label = "Cube"
     cu = t.node('GeometryNodeMeshCube', 0, -260, parent=fr)
-    tr = t.node('GeometryNodeTransform', 200, -260, parent=fr)
+    tr = t.node('GeometryNodeTransform', 210, -260, parent=fr)
     sc = t.node('GeometryNodeScaleElements', 420, -260, parent=fr)
     chain(t, [cu, tr, sc])
-    t.wire(sc, 0, ip, "Instance", [(1060, 'src'), (1060, 'dst')])
+    t.wire(sc, 0, ip, "Instance", [(620, 'src'), (620, 'dst')])
+    return t
+
+
+def nf022():
+    """A short and a long chain of Math nodes, both using inputs A and B, converge on one
+    Divide."""
+    t = Tree("NF022", inputs=(("A", 'Float'), ("B", 'Float')), outputs=(("Value", 'Float'),))
+    gi = t.node('NodeGroupInput', 0, 0)
+    short = t.node('ShaderNodeMath', 220, 0, operation='SUBTRACT')
+    c1 = t.node('ShaderNodeMath', 220, -200, operation='SUBTRACT')
+    c2 = t.node('ShaderNodeMath', 440, -200, operation='SUBTRACT')
+    c3 = t.node('ShaderNodeMath', 660, -200, operation='SUBTRACT')
+    div = t.node('ShaderNodeMath', 880, 0, operation='DIVIDE')
+    go = t.node('NodeGroupOutput', 1100, 0)
+    t.link(gi, 1, short, 0)
+    t.link(gi, 0, short, 1)
+    t.link(gi, 1, c1, 0)
+    t.link(gi, 0, c1, 1)
+    t.link(c1, 0, c2, 0)
+    t.link(gi, 1, c2, 1)
+    t.link(c2, 0, c3, 0)
+    t.link(gi, 1, c3, 1)
+    t.link(short, 0, div, 0)
+    t.link(c3, 0, div, 1)
+    t.link(div, 0, go, 0)
     return t
 
 
 def nf030():
-    """The wires that leave Separate XYZ cross each other, and so do the wires into Combine XYZ:
-    the nodes in between are in the wrong order."""
-    t = Tree("NF030", inputs=(), outputs=(("Vector", 'Vector'),))
-    pos = t.node('GeometryNodeInputPosition', 0, 0)
-    sep = t.node('ShaderNodeSeparateXYZ', 200, 0)
-    ms = [t.node('ShaderNodeMath', 460, y, operation='MULTIPLY') for y in (60, -100, -260)]
-    cx = t.node('ShaderNodeCombineXYZ', 760, 0)
-    go = t.node('NodeGroupOutput', 960, 0)
-    t.link(pos, 0, sep, 0)
-    t.level(pos, 0, sep, 0)
-    for k in range(3):  # output k feeds the node of row 2 - k, which feeds input k
-        r = ms[2 - k]
-        t.wire(sep, k, r, 0, [(340 + 20 * k, 'src'), (340 + 20 * k, 'dst')])
-        t.wire(r, 0, cx, k, [(720 - 20 * k, 'src'), (720 - 20 * k, 'dst')])
+    """Combine XYZ and Separate XYZ both feed the Group Output; with Combine XYZ lower, the two
+    wires into the Group Output cross."""
+    t = Tree("NF030", inputs=(("Size", 'Float'),), outputs=(("Scale", 'Vector'), ("X", 'Float')))
+    gi = t.node('NodeGroupInput', 0, 0)
+    sep = t.node('ShaderNodeSeparateXYZ', 260, 20)
+    cx = t.node('ShaderNodeCombineXYZ', 460, 0)
+    go = t.node('NodeGroupOutput', 660, 0)
+    t.link(gi, 0, sep, 0)
+    for k in (1, 0, 2):
+        t.link(gi, 0, cx, k)
     t.link(cx, 0, go, 0)
-    t.level(cx, 0, go, 0)
+    t.link(sep, 0, go, 1)
     return t
 
 
 def nf031():
-    """A U-jog: the wire climbs over nothing and comes back down."""
-    t = Tree("NF031")
-    gi = t.node('NodeGroupInput', 0, 0)
-    sp = t.node('GeometryNodeSetPosition', 420, 0)
-    go = t.node('NodeGroupOutput', 640, 0)
-    t.level(gi, 0, sp, 0)
-    t.wire(gi, 0, sp, 0, [(200, 'src'), (200, 'src', 80), (340, 'src', 80), (340, 'dst')])
-    chain(t, [sp, go])
+    """The Height wire climbs over Separate XYZ and comes back down to Combine XYZ."""
+    t = Tree("NF031", inputs=(("Height", 'Float'), ("Width", 'Float'), ("Position", 'Vector')),
+             outputs=(("Difference", 'Float'), ("Size", 'Vector')))
+    gi = t.node('NodeGroupInput', 0, -100)
+    sep = t.node('ShaderNodeSeparateXYZ', 220, -120)
+    sub = t.node('ShaderNodeMath', 440, 0, operation='SUBTRACT')
+    cx = t.node('ShaderNodeCombineXYZ', 440, -180)
+    go = t.node('NodeGroupOutput', 660, 0)
+    t.link(gi, 2, sep, 0)
+    t.link(gi, 1, cx, 1)
+    t.link(gi, 0, cx, 2)
+    t.link(sep, 0, sub, 0)
+    t.link(sep, 2, sub, 1)
+    t.link(sub, 0, go, 0)
+    t.link(cx, 0, go, 1)
     return t
 
 
 def nf032():
-    """A wire runs along the bottom edge of Transform, 6 units below it."""
-    t = Tree("NF032", inputs=(("Geometry", 'Geometry'), ("Value", 'Float')))
+    """In a Repeat zone, the Offset wire from outside runs along the bottom of the zone's
+    outline to the Add inside."""
+    t = Tree("NF032", inputs=(("Geometry", 'Geometry'), ("Count", 'Int'), ("Offset", 'Float')),
+             outputs=(("Geometry", 'Geometry'), ("Value", 'Float')))
     gi = t.node('NodeGroupInput', 0, 0)
-    tr = t.node('GeometryNodeTransform', 240, 0)
-    sp = t.node('GeometryNodeSetPosition', 520, 0)
-    go = t.node('NodeGroupOutput', 740, 0)
-    chain(t, [gi, tr, sp, go])
-    t.wire(gi, 1, sp, "Offset", [(200, 'src'), (200, 'bottom'), (460, 'bottom'), (460, 'dst')])
+    rin = t.node('GeometryNodeRepeatInput', 220, 0)
+    rout = t.node('GeometryNodeRepeatOutput', 880, 0)
+    rin.pair_with_output(rout)
+    rout.repeat_items.new('FLOAT', "Value")
+    mul = t.node('ShaderNodeMath', 440, -160, operation='MULTIPLY')
+    add = t.node('ShaderNodeMath', 660, -230, operation='ADD')
+    sub = t.node('ShaderNodeMath', 1100, -150, operation='SUBTRACT')
+    go = t.node('NodeGroupOutput', 1320, 0)
+    t.link(gi, 1, rin, "Iterations")
+    t.link(gi, 0, rin, "Geometry")
+    t.link(rin, "Geometry", rout, "Geometry")
+    t.link(rin, "Iteration", mul, 0)
+    t.link(rin, "Iteration", mul, 1)
+    t.link(mul, 0, add, 0)
+    t.link(gi, 2, add, 1)
+    t.link(add, 0, rout, "Value")
+    t.link(rout, "Geometry", go, 0)
+    t.link(rout, "Value", sub, 0)
+    t.link(gi, 2, sub, 1)
+    t.link(sub, 0, go, 1)
     return t
 
 
@@ -310,14 +384,20 @@ def nf033():
 
 
 def nf034():
-    """A reroute in the middle of a straight wire looks like a junction."""
-    t = Tree("NF034")
+    """Combine XYZ in a frame feeds Subtract from above. Shown at UI scale 1.25, where rounding
+    to the pixel grid can leave a reroute in a straight run."""
+    t = Tree("NF034", inputs=(("Y", 'Float'), ("Z", 'Float')), outputs=(("Value", 'Float'),))
+    t.nt[SCALE_KEY] = 1.25
     gi = t.node('NodeGroupInput', 0, 0)
-    sp = t.node('GeometryNodeSetPosition', 400, 0)
-    go = t.node('NodeGroupOutput', 620, 0)
-    t.level(gi, 0, sp, 0)
-    t.wire(gi, 0, sp, 0, [(260, 'src')])
-    chain(t, [sp, go])
+    fr = t.nt.nodes.new('NodeFrame')
+    cx = t.node('ShaderNodeCombineXYZ', 200, 40, parent=fr)
+    sub = t.node('ShaderNodeMath', 460, -20, operation='SUBTRACT')
+    go = t.node('NodeGroupOutput', 680, 0)
+    t.link(gi, 0, cx, 1)
+    t.link(gi, 1, cx, 2)
+    t.link(gi, 1, sub, 0)
+    t.link(cx, 0, sub, 1)
+    t.link(sub, 0, go, 0)
     return t
 
 
@@ -362,23 +442,32 @@ def selection():
 
 EXTRAS = {"selection": selection}  # examples for other tests (not of a rule)
 
-EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF004": nf004, "NF010": nf010,
-            "NF011": nf011, "NF020": nf020, "NF021": nf021, "NF030": nf030, "NF031": nf031,
-            "NF032": nf032, "NF033": nf033, "NF034": nf034, "NF040": nf040}
+EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF004": nf004, "NF005": nf005,
+            "NF010": nf010, "NF011": nf011, "NF020": nf020, "NF021": nf021, "NF022": nf022,
+            "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033, "NF034": nf034,
+            "NF040": nf040}
 
 
 def main():
-    """Build every example (or the --only ones) and write each to its own file."""
+    """Build every example (or the --only ones) and write each to its own file. A style rule's
+    example is saved sorted with every style rule off, so the file shows the rule broken the way
+    the formatter leaves it when the rule is off."""
+    from nodefmt import api, rules
     from nodefmt.draw import Editor
-    bpy.context.preferences.view.ui_scale = 1.0  # in memory only: positions are made at scale 1
     os.makedirs(ARGS.out, exist_ok=True)
     ed = Editor()
     try:
         for code, make in {**EXAMPLES, **EXTRAS}.items():
             if ARGS.only and code not in ARGS.only:
                 continue
+            bpy.context.preferences.view.ui_scale = 1.0  # in memory only: positions are made at scale 1
             t = make()
             t.finish(ed)
+            if code in rules.STYLE:
+                bpy.context.preferences.view.ui_scale = t.nt.get(SCALE_KEY, 1.0)
+                api.format_tree(t.nt, 'relayout', ed, cfg=rules.Config(rules.GUARANTEES))
+                for n in t.nt.nodes:
+                    n.select = False
             path = os.path.join(ARGS.out, f"{code}.blend")
             bpy.data.libraries.write(path, {t.nt}, fake_user=True, compress=True)
             print(f"wrote {os.path.relpath(path, ROOT)}: {t.nt.name}", flush=True)

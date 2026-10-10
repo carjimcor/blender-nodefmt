@@ -6,7 +6,12 @@
   limitations).
 - One example per rule in `examples/NF0xx.blend`, built by `tools/make_examples.py`, with before
   and after screenshots in `docs/RULES.md` (`tools/capture_examples.py`, `tools/finish_images.py`).
-- Tests from the examples: `tests/run_tests.py`.
+  A style rule is shown sorted with every style rule off and with only that rule, so the two
+  images differ only by what the rule does; NF005 shows the same logic fingerprint in both.
+- Tests from the examples: `tests/run_tests.py`. Each rule on its own removes its example's
+  violation, and every style rule off keeps it.
+- Fix: with NF034 the only wire rule on (NF031-NF033 off), the pass that tidies the drawn wires
+  did not run, so wires on one line or reroutes on another wire were left as they were.
 - Sort Selection: sorts only the selected nodes and reroutes, or what is inside a selected
   frame, and leaves the rest of the tree where it is. The part keeps its top-left corner (or
   moves down or right to clear the nodes around it), its links to the rest are routed

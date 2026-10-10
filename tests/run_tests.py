@@ -4,18 +4,21 @@
     blender --factory-startup --python tests/run_tests.py [-- --only NF031 ...]
 
 Runs with Blender's window, like the command line (node sizes only exist once a tree is
-drawn), at UI scale 1.0 (--factory-startup), and closes itself. For each example:
+drawn), at UI scale 1.0 (--factory-startup; an example made for another scale, NF034, at
+that scale), and closes itself. For each example:
 
-  check    the check reports the rule on the original tree (a guarantee, NF020 or NF022: the
+  check    the check reports the rule on the tree as saved (a guarantee, NF020 or NF022: the
            tree is reported as not formatted, NF900, since they have no geometric test)
+  only     a copy sorted with only the example's rule (a guarantee: no style rule at all) no
+           longer breaks it nor a guarantee, computes the same and leaves no reroute leading
+           nowhere; NF020 and NF022, which have no geometric test, show their effect instead
+  off      style rules: a copy sorted with every style rule off still breaks the rule (NF020,
+           NF022: does not show the effect), so the difference is the rule's own
   sort     sorting with the default rules works
-  fixed    the check no longer reports the rule, a guarantee or NF900 after the sort, and no
+  fixed    the check no longer reports the rule, a guarantee or NF900 after that sort, and no
            reroute is left leading nowhere
   logic    the logic fingerprint is the same before and after the sort
   again    a second sort changes nothing
-  ignored  style rules: a fresh copy sorted with the rule ignored does not get its behaviour
-           ('kept': the check still reports the rule; 'differs': the layout differs from the
-           default sort; 'n/a': the example sorts the same either way)
 
 VARIANTS run an example again after a change that real trees often have (a Group Input that
 shows every socket, Blender's default). examples/selection.blend tests Sort Selection: the rest
@@ -43,8 +46,9 @@ ap.add_argument("--examples", default=os.path.join(ROOT, "examples"))
 ap.add_argument("--verbose", action="store_true", help="print the violations found")
 ARGS = ap.parse_args(argv)
 
-COLUMNS = ("check", "sort", "fixed", "logic", "again", "ignored")
+COLUMNS = ("check", "only", "off", "sort", "fixed", "logic", "again")
 NOT_GEOMETRIC = ("NF005", "NF020", "NF022")  # reported as NF900 (not formatted)
+SCALE_KEY = "nodefmt_ui_scale"  # custom property of an example made for another UI scale
 
 
 def append(path):
@@ -86,26 +90,41 @@ def zone_offset(nt):
     return None
 
 
-def feeds(nt, node_type, out_index, to_type):
-    """Index of the input of the first `to_type` node that output `out_index` of the first
-    `node_type` node reaches (through reroutes), or None."""
-    src = next(n for n in nt.nodes if n.bl_idname == node_type)
-    todo = list(src.outputs[out_index].links)
-    while todo:
-        l = todo.pop()
-        if l.to_node.bl_idname == 'NodeReroute':
-            todo += list(l.to_node.outputs[0].links)
-        elif l.to_node.bl_idname == to_type:
-            return list(l.to_node.inputs).index(l.to_socket)
-    return None
+def source(link):
+    """The node a link comes from, through reroutes."""
+    n = link.from_node
+    while n.bl_idname == 'NodeReroute':
+        n = n.inputs[0].links[0].from_node
+    return n
 
 
-# observable effect of a style rule: (what to measure, the value with the rule, without it)
+def centred(nt):
+    """True if the node that feeds the Group Output sits strictly between the nodes that feed
+    it (a '>' shape), False if it is level with one of them or outside."""
+    go = next(n for n in nt.nodes if n.bl_idname == 'NodeGroupOutput')
+    last = source(go.inputs[0].links[0])
+    ys = [source(l).location_absolute.y for s in last.inputs for l in s.links]
+    y = last.location_absolute.y
+    return min(ys) < y - 1.0 and y + 1.0 < max(ys)
+
+
+# rules with no geometric check: what to measure instead (the value with the rule differs
+# from the value without it, and a sort with the rule off keeps the example's value)
 EFFECT = {
-    "NF010": ("Group Input nodes", lambda nt: sum(n.bl_idname == 'NodeGroupInput' for n in nt.nodes)),
-    "NF011": ("input fed by X", lambda nt: feeds(nt, 'ShaderNodeSeparateXYZ', 0, 'ShaderNodeMath')),
     "NF020": ("zone output above input", zone_offset),
+    "NF022": ("output between its inputs", centred),
 }
+
+
+def sorted_copy(path, ed, cfg, prepare=None):
+    """A fresh copy of an example, sorted with the rules of cfg."""
+    from nodefmt import api
+    nt = append(path)[0]
+    if prepare:
+        prepare(nt)
+    api.format_tree(nt, 'relayout', ed, cfg=cfg)
+    ed.show(nt)
+    return nt
 
 
 def run_one(path, ed, prepare=None):
@@ -115,10 +134,14 @@ def run_one(path, ed, prepare=None):
     code = os.path.splitext(os.path.basename(path))[0]
     out = {}
     nt = append(path)[0]
+    scale = nt.get(SCALE_KEY, 1.0)
+    if bpy.context.preferences.view.ui_scale != scale:
+        bpy.context.preferences.view.ui_scale = scale  # in memory only
     if prepare:
         prepare(nt)
     dead = dead_ends(nt)
     cfg = rules.Config()
+    guarantees = frozenset(rules.GUARANTEES)
     vs = api.check_tree(nt, 'relayout', ed, cfg)
     found = codes(vs)
     want = 'NF900' if code in NOT_GEOMETRIC else code
@@ -127,6 +150,34 @@ def run_one(path, ed, prepare=None):
     if ARGS.verbose:
         for v in vs:
             print(f"  {code} before: {v.code} {v.msg} at ({v.x:g}, {v.y:g})", flush=True)
+    # the example's rule on its own (a guarantee: no style rule at all), then every style rule off
+    own = rules.Config(guarantees | ({code} if code in rules.STYLE else set()))
+    one = sorted_copy(path, ed, own, prepare)
+    d = check.diff(check.fingerprint(nt), check.fingerprint(one))
+    left = codes(api.check_tree(one, 'relayout', ed, own, formatted=False))
+    bad = sorted(left & ({code} | guarantees))
+    loose = dead_ends(one) - dead
+    if code in EFFECT:
+        what, measure = EFFECT[code]
+        before_v, one_v = measure(nt), measure(one)
+        out["only"] = (before_v != one_v and not bad and not d and loose <= 0,
+                       f"{what}: {one_v} (before: {before_v})")
+    else:
+        out["only"] = (not bad and not d and loose <= 0,
+                       ", ".join(bad) or ("logic differs" if d else "clean"))
+    if code in rules.STYLE:
+        off = sorted_copy(path, ed, rules.Config(guarantees), prepare)
+        if code in EFFECT:
+            what, measure = EFFECT[code]
+            off_v = measure(off)
+            out["off"] = (off_v == measure(nt) and off_v != measure(one), f"{what}: {off_v}")
+        else:
+            kept = code in codes(api.check_tree(off, 'relayout', ed, own, formatted=False))
+            out["off"] = (kept, "kept" if kept else "gone")
+        bpy.data.node_groups.remove(off)
+    else:
+        out["off"] = (None, "guarantee")
+    bpy.data.node_groups.remove(one)
     fp = check.fingerprint(nt)
     try:
         st = api.format_tree(nt, 'relayout', ed, cfg=cfg)
@@ -150,23 +201,6 @@ def run_one(path, ed, prepare=None):
     api.format_tree(nt, 'relayout', ed, cfg=cfg)
     ed.show(nt)
     out["again"] = (api.same_layout(api._signature(nt), sig), "")
-    if code in rules.STYLE:
-        off = append(path)[0]
-        if prepare:
-            prepare(off)
-        api.format_tree(off, 'relayout', ed, cfg=rules.Config(rules.resolve(None, [code])))
-        ed.show(off)
-        if code in EFFECT:
-            what, measure = EFFECT[code]
-            on_v, off_v = measure(nt), measure(off)
-            out["ignored"] = (on_v != off_v, f"{what}: {on_v} with the rule, {off_v} without")
-        else:
-            kept = code in codes(api.check_tree(off, 'relayout', ed, cfg, formatted=False))
-            differs = not api.same_layout(api._signature(off), api._signature(nt))
-            out["ignored"] = (None, "kept" if kept else "differs" if differs else "n/a")
-        bpy.data.node_groups.remove(off)
-    else:
-        out["ignored"] = (None, "guarantee")
     bpy.data.node_groups.remove(nt)
     return out
 
@@ -283,6 +317,7 @@ def main():
             cells.append(" ".join(x for x in (mark, f"({text})" if text and ok is not None else text) if x))
         print(f"| {code} | " + " | ".join(cells) + " |")
     print(f"\n{len(rows) - failed} of {len(rows)} examples pass ({time.perf_counter() - t0:.1f} s)", flush=True)
+    bpy.context.preferences.view.ui_scale = 1.0
     sel = os.path.join(ARGS.examples, "selection.blend")
     if os.path.exists(sel) and (not ARGS.only or "selection" in ARGS.only):
         print("\n| Sort Selection | " + " | ".join(SEL_COLUMNS) + " |")

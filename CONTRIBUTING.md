@@ -31,15 +31,18 @@ blender --factory-startup --python tests/run_tests.py -- --only NF031 --verbose
 ```
 
 Blender opens its window for a few seconds (node sizes only exist once a tree is drawn) and
-closes itself. `--factory-startup` gives a fixed UI scale of 1.0. For every example in
-`examples/` the tests check that:
+closes itself. `--factory-startup` gives a fixed UI scale of 1.0 (NF034 is tested at 1.25, the
+scale its example is made for). For every example in `examples/` the tests check that:
 
-- the check reports the example's rule on the original tree (NF020 has no geometric check:
-  there, that the tree is not formatted);
-- after a sort with the default rules it no longer does, the logic fingerprint is unchanged, no
-  reroute is left leading nowhere, and a second sort changes nothing;
-- for a style rule, a sort with the rule switched off does not show its behaviour, where that is
-  observable in the example.
+- the check reports the example's rule on the tree as saved (NF005, NF020 and NF022 have no
+  geometric check: there, that the tree is not formatted);
+- a sort with only that rule (for a guarantee: no style rule at all) removes the violation,
+  keeps the logic and leaves no reroute leading nowhere; for NF020 and NF022, the layout shows
+  the rule's effect;
+- for a style rule, a sort with every style rule off keeps the violation (NF020, NF022: does not
+  show the effect), so the difference between the two is the rule's own;
+- after a sort with the default rules the rule is no longer reported, the logic fingerprint is
+  unchanged, no reroute is left leading nowhere, and a second sort changes nothing.
 
 `examples/selection.blend` tests Sort Selection in three ways (the frame, two nodes, two nodes
 with a third between them): the rest does not move, the part keeps its corner or moves just

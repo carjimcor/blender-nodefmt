@@ -29,11 +29,19 @@ Check also reports **NF900 not-formatted** when a sort would move anything.
 
 ## The examples
 
-Each rule that can be shown has a small synthetic tree that breaks it, in
-`examples/NF0xx.blend` (one Geometry Nodes group, "NF0xx" plus the rule name; open the file,
-switch an editor to Geometry Node Editor and pick the group). The images below are Blender
-screenshots at UI scale 1.0: before, with each place that breaks the rule ringed in red, and
-after a sort with the default rules. `tests/run_tests.py` checks every example (see
+Every rule has a small synthetic tree in `examples/NF0xx.blend` (one Geometry Nodes group,
+"NF0xx" plus the rule name; open the file, switch an editor to Geometry Node Editor and pick the
+group), and a before and after image made from it:
+
+- **Guarantees**: before, the example as built, which breaks the rule; after, the example sorted
+  with no style rules at all.
+- **Style rules**: before, the example sorted with every style rule off (the file is saved that
+  way), so the rule is broken the way the formatter leaves it without the rule; after, the
+  example sorted with only that rule on. The two differ only by what the rule does.
+
+The images are Blender screenshots at UI scale 1.0 (NF034 at 1.25, see there). Each place that
+breaks the rule is ringed in red in the before image, where the check gives a place (NF010,
+NF020 and NF022 have none). `tests/run_tests.py` checks every example (see
 [CONTRIBUTING.md](../CONTRIBUTING.md)); `tools/make_examples.py` rebuilds them and
 `tools/capture_examples.py` the images.
 
@@ -50,6 +58,8 @@ straight runs and right angles read like a circuit diagram.
 Example: Set Position sits lower than the nodes it connects, so both links curve. After the sort
 it is level with them and both links are straight.
 
+Images: before, the example as built; after, sorted with no style rules.
+
 | Before | After |
 |---|---|
 | ![NF001 before: two curved links](rules/NF001-before.png) | ![NF001 after: straight links](rules/NF001-after.png) |
@@ -60,12 +70,15 @@ Guarantee. No wire passes behind a node.
 
 Why: a wire behind a node looks as if it were connected to it, and its own path is hidden.
 
-Example: the Value wire runs straight through Transform Geometry. After the sort the Group Input
-has a copy next to Set Position (NF010) and the wire goes around.
+Example: the Value wire runs straight through Transform Geometry. After the sort it goes over
+Transform Geometry. It crosses the Geometry wire twice on the way: avoiding that is NF033, off
+here.
+
+Images: before, the example as built; after, sorted with no style rules.
 
 | Before | After |
 |---|---|
-| ![NF002 before: a wire behind Transform Geometry](rules/NF002-before.png) | ![NF002 after: the wire goes around](rules/NF002-after.png) |
+| ![NF002 before: a wire behind Transform Geometry](rules/NF002-before.png) | ![NF002 after: the wire goes over the node](rules/NF002-after.png) |
 
 ### NF003 orthogonal-segments
 
@@ -79,6 +92,8 @@ the sort reads back what Blender draws and straightens what rounding left (see
 
 Example: a reroute 1.5 units above the line of its wire. After the sort the link is straight.
 
+Images: before, the example as built; after, sorted with no style rules.
+
 | Before | After |
 |---|---|
 | ![NF003 before: a reroute slightly off the line](rules/NF003-before.png) | ![NF003 after: a straight link](rules/NF003-after.png) |
@@ -89,12 +104,15 @@ Guarantee. No two reroutes of different wires sit on top of each other (closer t
 
 Why: two reroutes on one spot look like one, as if the wires were joined.
 
-Example: two crossing wires turn 4 units apart. After the sort each wire has its own Group Input
-copy (NF010) and no reroutes share a spot.
+Example: two crossing wires turn 4 units apart. After the sort each wire turns at its own place.
+The wires still cross: Combine XYZ cannot swap its inputs, and copying the Group Input is NF010,
+off here.
+
+Images: before, the example as built; after, sorted with no style rules.
 
 | Before | After |
 |---|---|
-| ![NF004 before: reroutes of two wires on one spot](rules/NF004-before.png) | ![NF004 after: separate wires](rules/NF004-after.png) |
+| ![NF004 before: reroutes of two wires on one spot](rules/NF004-before.png) | ![NF004 after: the reroutes apart](rules/NF004-after.png) |
 
 ### NF005 logic-unchanged
 
@@ -105,8 +123,15 @@ multi-input links. Copies of input-like nodes count as one source and the two in
 commutative node as a pair. After the sort the fingerprint is taken again; if anything differs
 the tree is restored and the sort reports an error.
 
-There is no example: a tree cannot break this rule, only a sort could. The tests check it on
-every example.
+Example: a messy tree, with nodes out of order and links that curve and cross. After the sort
+the layout is new, and the logic fingerprint is the same: each image shows the first 12 hex
+digits of a hash of the fingerprint of its tree, under the tree.
+
+Images: before, the example as built; after, sorted with no style rules.
+
+| Before | After |
+|---|---|
+| ![NF005 before: a messy tree and its logic fingerprint](rules/NF005-before.png) | ![NF005 after: the sorted tree with the same fingerprint](rules/NF005-after.png) |
 
 ## Style rules
 
@@ -120,9 +145,11 @@ Why: a long wire across the tree is hard to follow and crosses everything on its
 next to the consumer says the same thing locally.
 
 Example: the Scale input of the Group Input runs under the whole tree to Transform Geometry.
-After the sort Transform Geometry has its own Group Input.
+With the rule, Transform Geometry gets its own Group Input.
 
 Off: the tree keeps one Group Input and the long wire.
+
+Images: before, sorted with every style rule off; after, sorted with only NF010.
 
 | Before | After |
 |---|---|
@@ -136,10 +163,12 @@ Equal, Not Equal, Add Shader) may be swapped when that removes a crossing.
 Why: a + b is b + a, so the crossing is free to remove.
 
 Example: X goes to the lower input of Add and Y to the upper one, so the wires cross; Separate
-XYZ cannot change the order of its outputs. After the sort the inputs are swapped and the wires
+XYZ cannot change the order of its outputs. With the rule the inputs are swapped and the wires
 are straight.
 
 Off: the links keep their inputs and the crossing stays.
+
+Images: before, sorted with every style rule off; after, sorted with only NF011.
 
 | Before | After |
 |---|---|
@@ -152,16 +181,20 @@ Style. A zone's output may sit where its inputs are instead of level with the zo
 Why: the wires into the zone output can then be straight, at the price of a zone that is not
 rectangular.
 
-Example: the Repeat output is level with the Repeat input, so the wire from Instance on Points
-steps down into it. After the sort the output is 25 units higher and the wire is straight.
+Example: with the Repeat output level with the Repeat input, Instance on Points sits lower and
+the wire into its Points input steps down. With the rule the zone output is 25 units higher,
+Instance on Points rises with it, and the wires from the Repeat input and into the Repeat output
+are straight.
 
 Off: the zone output stays level with the zone input (its item sockets on one line).
 
 This rule has no geometric check of its own: Check reports such a tree as not formatted (NF900).
 
+Images: before, sorted with every style rule off; after, sorted with only NF020.
+
 | Before | After |
 |---|---|
-| ![NF020 before: a level zone output and a bent wire](rules/NF020-before.png) | ![NF020 after: the zone output moved up, the wire straight](rules/NF020-after.png) |
+| ![NF020 before: a level zone output and a bent wire](rules/NF020-before.png) | ![NF020 after: the zone output moved up, the wires straight](rules/NF020-after.png) |
 
 ### NF021 blocks-next-to-consumer
 
@@ -171,10 +204,13 @@ feeds, above or below the main flow, instead of at the far left.
 Why: a self-contained block (a frame that builds an instance, a constant) belongs to where it is
 used; at the far left it needs a wire across the whole tree.
 
-Example: the "Cube" frame sits under the start of the tree and feeds Instance on Points at the
-end. After the sort it sits right before Instance on Points.
+Example: the "Cube" frame feeds Instance on Points at the end of the tree. Without the rule it
+takes the first columns, far from its consumer; with it, it sits right before Instance on
+Points, below the main row.
 
 Off: the frame takes the first columns, far from its consumer.
+
+Images: before, sorted with every style rule off; after, sorted with only NF021.
 
 | Before | After |
 |---|---|
@@ -186,11 +222,24 @@ Style. A tree that converges on one output may take a ">" shape, with the output
 of its inputs, instead of everything hanging from a common top line.
 
 The sort tries this placement next to the others and keeps it only when it costs less (fewer
-bends, shorter wires). On small trees it rarely does, so there is no example: on the synthetic
-converging trees tried for this page (chains into a Join Geometry, trees of Math nodes) the
-result was the same with the rule on and off.
+bends, shorter wires). It only differs from the usual placement where a block is not held by a
+straight link: in a plain tree of Math nodes every block is, and the result is the same with the
+rule on and off. It pays off in trees where branches of different lengths share inputs.
+
+Example: a short branch (one Subtract) and a long one (three Subtracts) converge on a Divide;
+both use the two group inputs. Without the rule, Divide and the output hang from the top line
+and the long branch climbs up to them like a staircase. With it, Divide sits between its two
+inputs, and the tree is lower.
 
 Off: the ">" placement is not tried.
+
+This rule has no geometric check of its own: Check reports such a tree as not formatted (NF900).
+
+Images: before, sorted with every style rule off; after, sorted with only NF022.
+
+| Before | After |
+|---|---|
+| ![NF022 before: the tree hangs from the top line](rules/NF022-before.png) | ![NF022 after: Divide between its inputs](rules/NF022-after.png) |
 
 ### NF030 staircase-bundles
 
@@ -200,15 +249,18 @@ other.
 Why: wires of one node that cross each other are the hardest to follow, since they start or
 end side by side.
 
-Example: X, Y and Z of Separate XYZ go to three Multiply nodes in the wrong order, so the wires
-cross on both sides. After the sort the Multiply nodes are in order and no wires cross.
+Example: Combine XYZ and Separate XYZ both feed the Group Output, Combine XYZ the upper socket.
+Without the rule Combine XYZ sits lower, so the wire from Separate XYZ comes down across the
+wire of Combine XYZ just before the Group Output. With the rule Combine XYZ sits on top and the
+two wires do not cross.
 
-Off: crossings inside a bundle cost as much as any other crossing. This example sorts the same
-either way; the rule matters in larger trees, where a crossing has to go somewhere.
+Off: crossings inside a bundle cost as much as any other crossing.
+
+Images: before, sorted with every style rule off; after, sorted with only NF030.
 
 | Before | After |
 |---|---|
-| ![NF030 before: crossing wires of one node](rules/NF030-before.png) | ![NF030 after: nested wires](rules/NF030-after.png) |
+| ![NF030 before: crossing wires into the Group Output](rules/NF030-before.png) | ![NF030 after: nested wires](rules/NF030-after.png) |
 
 ### NF031 no-u-jogs
 
@@ -219,14 +271,16 @@ reroutes sit on one spot.
 Why: a wire that climbs over nothing and comes back down looks like it avoids something that is
 not there.
 
-Example: the Geometry wire climbs 80 units and comes back down. After the sort it is straight.
+Example: without the rule the Height wire climbs over Separate XYZ and comes all the way back
+down to Combine XYZ. With it, the wire goes down at once and runs below the other wires.
 
-Off: the final pass over the drawing no longer moves runs to remove U-jogs and landings. This
-example sorts the same either way, since the new layout has no jog to remove.
+Off: the final pass over the drawing no longer moves runs to remove U-jogs and landings.
+
+Images: before, sorted with every style rule off; after, sorted with only NF031.
 
 | Before | After |
 |---|---|
-| ![NF031 before: a U-jog](rules/NF031-before.png) | ![NF031 after: a straight wire](rules/NF031-after.png) |
+| ![NF031 before: a U-jog](rules/NF031-before.png) | ![NF031 after: no U-jog](rules/NF031-after.png) |
 
 ### NF032 wire-clearance
 
@@ -235,15 +289,17 @@ them).
 
 Why: a wire along an edge merges with it and looks like part of the node or the frame.
 
-Example: the Value wire runs 6 units under the bottom edge of Transform Geometry. After the sort
-it comes from a Group Input copy below Transform, clear of its edge.
+Example: the Offset wire enters a Repeat zone to the Add inside it. Without the rule it runs
+along the bottom of the zone's outline; with it, the lane keeps clear of the outline.
 
-Off: wires may run close to edges (the layout no longer pays for it). This example sorts the
-same either way.
+Off: lanes in a zone keep the usual gap from the nodes (20 units instead of 34), and runs along
+edges and outlines cost nothing.
+
+Images: before, sorted with every style rule off; after, sorted with only NF032.
 
 | Before | After |
 |---|---|
-| ![NF032 before: a wire along a node edge](rules/NF032-before.png) | ![NF032 after: the wire clear of the node](rules/NF032-after.png) |
+| ![NF032 before: a wire along the zone outline](rules/NF032-before.png) | ![NF032 after: the wire clear of the outline](rules/NF032-after.png) |
 
 ### NF033 avoid-crossings
 
@@ -252,11 +308,12 @@ input) is avoided.
 
 Why: every crossing is a place where the eye can take the wrong wire.
 
-Example: the Value wire goes over the Geometry wire and crosses it twice; under Transform it
-would not cross at all. After the sort it runs under Transform.
+Example: without the rule the Value wire goes over Transform Geometry and crosses the Geometry
+wire twice. With it, the wire runs under Transform Geometry and crosses nothing.
 
-Off: a crossing costs little more than a bend and lanes keep to one side. This example sorts the
-same either way.
+Off: a crossing costs little more than a bend and lanes keep to one side.
+
+Images: before, sorted with every style rule off; after, sorted with only NF033.
 
 | Before | After |
 |---|---|
@@ -269,10 +326,17 @@ of a straight run: nothing looks like a junction.
 
 Why: a dot on a straight wire, or two wires on one line, read as a junction where wires meet.
 
-Example: a reroute in the middle of the straight Geometry wire. After the sort it is gone.
+Example: at UI scale 1.25, rounding to the pixel grid leaves a reroute in the middle of the
+straight Z wire into Subtract, just before it crosses the Vector wire: a dot on a straight wire
+looks like a junction. With the rule the run is made level and the reroute is gone. The images
+are at UI scale 1.25 (the example stores it): at 1.0 nothing is rounded and this does not
+happen in a tree this small.
 
-Off: almost level runs are not made level and leftover reroutes in straight runs stay. This
-example sorts the same either way.
+Off: almost level runs are not made level, reroutes left in straight runs stay, and wires on
+one line or reroutes on another wire cost nothing.
+
+Images: before, sorted with every style rule off; after, sorted with only NF034 (both at UI
+scale 1.25).
 
 | Before | After |
 |---|---|
@@ -285,10 +349,12 @@ Style. The label of a labelled reroute goes on the first reroute of its wire, ne
 Why: Blender 5 shows a reroute's label, greyed, on every reroute after it on the same wire, so
 one label at the start names the whole wire.
 
-Example: the label "Offset" is on the second reroute of the Value wire. After the sort it is on
-the first.
+Example: without the rule the label "Offset" stays on the reroute nearest to where it was, the
+second reroute of the Value wire. With it, the label is on the first.
 
 Off: the label goes on the reroute nearest to where it was.
+
+Images: before, sorted with every style rule off; after, sorted with only NF040.
 
 | Before | After |
 |---|---|

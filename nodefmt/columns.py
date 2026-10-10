@@ -1,0 +1,268 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Columns: x positions of the columns and of the vertical routing tracks between them."""
+from . import params as P
+from .graph import snap_up, snap_down, _name
+
+
+class ColumnsMixin:
+    """Column x positions and track order."""
+
+    def assign_x(self):
+        """Columns and tracks. A node or block with no links out (the end of a side branch) may
+        stick out of its column into the next ones, if nothing there is in its way."""
+        sats = self._sat_groups()
+        hang = {i for i in self.items if P.OVERHANG and not i.is_point and not self.succ_edges[i] and i.pin is None}
+        hang -= set(sats)
+        while True:
+            self._assign_x(hang, sats)
+            bad = self._in_the_way(hang)
+            if not bad:
+                break
+            hang -= bad
+        if sats:
+            self._place_sats(sats)
+            self._assign_x(hang, sats)  # tracks for the links of the satellites as placed
+
+    def _sat_groups(self):
+        """Satellites (ranking.py, NF021) that head or end their column: {item: 'top' | 'bottom'}.
+        One that ended up between other items is laid out as a plain item of its column."""
+        out = {}
+        for layer in getattr(self, 'layers', []):
+            for n, i in enumerate(layer):
+                if not getattr(i, 'sat', False):
+                    continue
+                if all(getattr(j, 'sat', False) for j in layer[:n]):
+                    out[i] = 'top'
+                elif all(getattr(j, 'sat', False) for j in layer[n + 1:]):
+                    out[i] = 'bottom'
+        return out
+
+    def _place_sats(self, sats):
+        """A satellite reaches left over the columns before its own; it goes above (top) or
+        below (bottom) everything there, items and wires, with a node gap."""
+        segs = self._route()
+        for k, layer in enumerate(self.layers):
+            top = [i for i in layer if sats.get(i) == 'top']
+            bottom = [i for i in layer if sats.get(i) == 'bottom']
+            for group, up in ((top[::-1], True), (bottom, False)):
+                prev = None
+                for s in group:
+                    # the part that reaches over earlier columns (its own column is stacked)
+                    x0, x1 = s.x - P.COL_GAP / 2, self.col_x[s.rank]
+                    lo, hi = [], []
+                    for j in (self.items if x0 < x1 else ()):
+                        if j.rank >= s.rank:
+                            continue
+                        jx1 = j.x + (0 if j.is_point else j.w)
+                        if j.x < x1 and jx1 > x0:
+                            lo.append(j.y)
+                            hi.append(j.y + (0 if j.is_point else j.h))
+                    for tag, p, q in (segs if x0 < x1 else ()):
+                        if min(p[0], q[0]) < x1 and max(p[0], q[0]) > x0:
+                            lo.append(min(p[1], q[1]))
+                            hi.append(max(p[1], q[1]))
+                    if up:
+                        if lo:
+                            s.y = min(s.y, min(lo) - P.NODE_GAP - s.h)
+                        if prev is not None:
+                            s.y = min(s.y, prev.y - P.NODE_GAP - s.h)
+                    else:
+                        if hi:
+                            s.y = max(s.y, max(hi) + P.NODE_GAP)
+                        if prev is not None:
+                            s.y = max(s.y, prev.y + prev.h + P.NODE_GAP)
+                    prev = s
+
+    def _in_the_way(self, hang):
+        """Items of `hang` that may not overhang: a node or a wire of a later column is in the way."""
+        bad = set()
+        segs = None
+        for i in hang:
+            right = self.col_x[i.rank] + self.colw[i.rank]
+            if i.x + i.w <= right + P.EPS:
+                continue
+            x0, y0, x1, y1 = i.x, i.y - P.NODE_GAP / 2, i.x + i.w + P.COL_GAP / 2, i.y + i.h + P.NODE_GAP / 2
+            for j in self.items:
+                if j is i or j.rank <= i.rank:
+                    continue
+                jx1 = j.x + (0 if j.is_point else j.w)
+                jy1 = j.y + (0 if j.is_point else j.h)
+                if j.x < x1 and jx1 > x0 and j.y < y1 and jy1 > y0:
+                    bad.add(i)
+                    break
+            if i in bad:
+                continue
+            if segs is None:
+                segs = self._route()
+            for _, p, q in segs:
+                sx0, sx1 = sorted((p[0], q[0]))
+                sy0, sy1 = sorted((p[1], q[1]))
+                if sx0 < x1 and sx1 > right + P.EPS and sy0 < y1 and sy1 > y0:
+                    bad.add(i)
+                    break
+        return bad
+
+    def _assign_x(self, hang, sats=()):
+        """Column widths and x positions, and the x of every routing track. A gap is wide enough for
+        its tracks (TRACK apart) and at least COL_GAP; tracks are centred in it."""
+        colw = [0.0] * (self.R + 1)
+        for i in self.items:
+            if not i.is_point and i not in hang and i not in sats:
+                colw[i.rank] = max(colw[i.rank], i.w)
+        self.colw = colw
+        # which source sockets bend in which gap
+        bends = [dict() for _ in range(self.R)]  # gap -> tag -> list of (y_from, y_to)
+        for e in self.edges:
+            k = e.u.rank
+            t = self._turn_y(e)
+            if t is not None:  # every link that is not straight turns on a track
+                bends[k].setdefault(e.tag, []).append((self._sock_y(e.u, e.uk, True), t, _node_of(e.v)))
+        self.bends = bends
+        self.track_x = [dict() for _ in range(self.R)]
+        col_x = [0.0] * (self.R + 1)
+        for k in range(self.R + 1):
+            if k == 0:
+                col_x[0] = 0.0
+            if k == self.R:
+                break
+            base = snap_up(col_x[k] + colw[k])
+            tags = self._order_tracks(bends[k])
+            T = len(tags)
+            nxt = max(base + P.TRACK * (T + 1), snap_up(col_x[k] + colw[k] + P.COL_GAP))
+            # centre the tracks in the gap
+            free = (nxt - base) - P.TRACK * (T + 1)
+            start = base + snap_down(free / 2) + P.TRACK
+            for n, t in enumerate(tags):
+                self.track_x[k][t] = start + P.TRACK * n
+            col_x[k + 1] = nxt
+        self.col_x = col_x
+        for i in self.items:
+            if i.is_point:
+                i.x = col_x[i.rank] + colw[i.rank]
+            elif i in sats:  # a satellite ends at its column's right edge and reaches left
+                i.x = col_x[i.rank] + colw[i.rank] - i.w
+            else:
+                i.x = col_x[i.rank]
+
+    def _order_tracks(self, segs):
+        """Memoised _order_tracks_ (the same gap is ordered many times during the search)."""
+        key = tuple(sorted((t, tuple(v)) for t, v in segs.items()))
+        memo = self.__dict__.setdefault('_track_memo', {})
+        if key not in memo:
+            memo[key] = self._order_tracks_(segs)
+        return list(memo[key])
+
+    def _order_tracks_(self, segs):
+        """Left-to-right order of the tracks of one gap with the fewest crossings.
+
+        A track carries one source socket (tag): it is entered at the source height and left at
+        one or more destination heights. With track a left of track b, b's entry crosses a's
+        vertical, and a's exits cross b's vertical, wherever those heights fall inside the other
+        vertical's span. The cost is additive over pairs, so it is a linear ordering problem:
+        solved exactly (dynamic programming over subsets) for up to EXACT_TRACKS tracks, else by
+        insertion and moves of single tracks. Crossings inside a bundle (two links leaving the
+        same node or entering the same node) and a wire running into another's corner cost more,
+        which nests the tracks of a bundle like stairs."""
+        tags = sorted(segs, key=repr)
+        n = len(tags)
+        if n <= 1:
+            return tags
+        info = {}
+        for t in tags:
+            ys = segs[t]
+            src = ys[0][0]
+            outs = [b for _, b, _ in ys]
+            info[t] = (src, outs, min([src] + outs), max([src] + outs), {v for _, _, v in ys})
+
+        def pair(a, b):  # cost when a is left of b
+            """Crossings (weighted) when track a is left of track b."""
+            sa, oa, lo_a, hi_a, va = info[a]
+            sb, ob, lo_b, hi_b, vb = info[b]
+            w = P.TRACK_BUNDLE if (a[0] == b[0] or va & vb) else 1.0
+            c = 0.0
+            if lo_a + P.EPS < sb < hi_a - P.EPS:      # b's entry passes a's vertical
+                c += w
+            elif lo_a - P.EPS <= sb <= hi_a + P.EPS and hi_a - lo_a > P.EPS:
+                c += P.TRACK_TOUCH                   # b's entry runs into a's corner
+            for y in oa:                             # a's exits pass b's vertical
+                if lo_b + P.EPS < y < hi_b - P.EPS:
+                    c += w
+                elif lo_b - P.EPS <= y <= hi_b + P.EPS and hi_b - lo_b > P.EPS:
+                    c += P.TRACK_TOUCH
+            return c
+
+        W = [[0.0 if i == j else pair(tags[i], tags[j]) for j in range(n)] for i in range(n)]
+        if n <= P.EXACT_TRACKS:
+            order = _exact_order(W)
+        else:
+            order = _heuristic_order(W, tags, info)
+        return [tags[i] for i in order]
+
+    def shelf(self, alone):
+        """Items with no link at all go in a row under the layout, so they do not stretch it."""
+        if not alone:
+            return
+        ys = [i.y + i.h for i in self.items]
+        y = snap_up(max(ys, default=0.0) + P.COL_GAP)
+        x = 0.0
+        for i in sorted(alone, key=lambda i: _name(i)):
+            i.x, i.y, i.rank = x, y, 0
+            x = snap_up(x + i.w + P.COL_GAP)
+            self.items.append(i)
+
+
+def _node_of(item):
+    """The node a routed link enters (dummies and ports stand for themselves)."""
+    return item.id
+
+
+def _exact_order(W):
+    """Order of 0..n-1 minimising sum(W[a][b] for a placed left of b): dynamic programming over
+    subsets (Held-Karp style), O(2^n n^2). Ties go to the lower index, so the result is stable."""
+    n = len(W)
+    full = (1 << n) - 1
+    best = {0: (0.0, ())}
+    for mask in range(full + 1):
+        if mask not in best:
+            continue
+        c, seq = best[mask]
+        for b in range(n):
+            if mask & (1 << b):
+                continue
+            add = sum(W[a][b] for a in seq)
+            m2 = mask | (1 << b)
+            if m2 not in best or c + add < best[m2][0] - 1e-9:
+                best[m2] = (c + add, seq + (b,))
+    return list(best[full][1])
+
+
+def _heuristic_order(W, tags, info):
+    """Order for many tracks: start with tracks sorted by how far they drop, then move single
+    tracks to the best position while that lowers the cost."""
+    n = len(W)
+    order = sorted(range(n), key=lambda i: (info[tags[i]][0] - sum(info[tags[i]][1]) / len(info[tags[i]][1]),
+                                            repr(tags[i])))
+
+    def total(o):
+        """Cost of a whole order."""
+        return sum(W[o[x]][o[y]] for x in range(n) for y in range(x + 1, n))
+
+    cur = total(order)
+    for _ in range(4 * n):
+        improved = False
+        for x in range(n):
+            t = order[x]
+            rest = order[:x] + order[x + 1:]
+            for y in range(n):
+                if y == x:
+                    continue
+                cand = rest[:y] + [t] + rest[y:]
+                c = total(cand)
+                if c < cur - 1e-9:
+                    order, cur, improved = cand, c, True
+                    break
+            if improved:
+                break
+        if not improved:
+            break
+    return order

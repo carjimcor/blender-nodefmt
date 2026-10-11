@@ -1,6 +1,7 @@
 # nodefmt
 
-A formatter for Blender node trees, in the spirit of code formatters such as ruff or black. It
+A formatter for Blender node trees, in the spirit of code formatters such as [ruff](https://github.com/astral-sh/ruff) or
+[black](https://github.com/psf/black). It
 sorts a tree into columns, orders the nodes to remove crossings, lines links up and routes the
 rest as orthogonal wires on reroutes. It never changes what the tree computes, and sorting a
 sorted tree changes nothing.

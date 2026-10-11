@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 - Capture Tree: saves a PNG of the whole tree shown in the editor (or of the selection) at a
   chosen zoom, larger than the screen if needed. The editor is maximised and moved across the

@@ -29,7 +29,7 @@ slower, but more configurable, and in my opinion its result is more satisfying.
 
 ## Install
 
-Blender 5.2 or newer. Download `nodefmt-0.8.1.zip` from the
+Blender 5.2 or newer. Download `nodefmt-0.9.0.zip` from the
 [releases](https://github.com/carjimcor/blender-nodefmt/releases) (or build it with
 `tools/build.sh`), then in Blender: Edit > Preferences > Get Extensions > the arrow menu > Install
 from Disk.

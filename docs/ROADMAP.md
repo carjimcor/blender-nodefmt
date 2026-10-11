@@ -36,3 +36,10 @@ never built from many reroutes.
 
 The curvature of links is a theme setting (Preferences > Themes > Node Editor > Noodle Curving),
 so the result depends on each user's theme; this mode would be tuned for the default curvature.
+
+## 4. Capture: faint long wires
+
+Blender dims a wire whose two ends are both outside the view, and this cannot be switched off. A
+capture is made of screen-sized tiles, so a straight run longer than a tile can look faint in the
+middle of the image. It rarely shows at zoom 1.0. Possible fixes: larger tiles (full-screen window
+without the top and status bars), and a warning before capturing when some wires would be dimmed.

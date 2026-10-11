@@ -43,3 +43,25 @@ Blender dims a wire whose two ends are both outside the view, and this cannot be
 capture is made of screen-sized tiles, so a straight run longer than a tile can look faint in the
 middle of the image. It rarely shows at zoom 1.0. Possible fixes: larger tiles (full-screen window
 without the top and status bars), and a warning before capturing when some wires would be dimmed.
+
+## 5. Lint rules for Check
+
+Linters for programming languages report more than formatting: code that works but is hard to
+read or maintain. Check could do the same for node trees, with a second family of rules that are
+only reported, never fixed by a sort. Each one has a code, can be switched off like the style
+rules, and its limits are set in `nodefmt.toml` or in the add-on.
+
+First candidates:
+
+- **tree-too-complex**: the tree has more than a set number of nodes (for example 150, reroutes
+  and frames not counted). Message: "Tree is too complex (212 nodes, limit 150); consider moving
+  parts into node groups."
+- **unused-nodes**: nodes whose result reaches no output of the tree.
+- **unused-group-sockets**: group inputs that nothing reads, or outputs that nothing feeds.
+- **muted-nodes**: muted nodes or links left in the tree.
+- **unlabelled-frames**: frames without a label.
+- **repeated-subtree**: the same group of nodes, with the same links and settings, appears more
+  than once; a candidate for a node group.
+
+Lint rules would use their own range of codes (for example NL001...), so `select` and `ignore`
+can take them as a group.

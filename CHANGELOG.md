@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fix: a chain of nodes fed only by input nodes (Index -> Compare) and used only inside a zone
+  is laid out inside the zone, next to where it is used, instead of before the zone with wires
+  across all of it.
+- Fix: a zone nested in another zone (a Repeat inside a Closure) that holds an input node used
+  only there (Index, Position) failed to sort ("'NoneType' object has no attribute 'parent'").
+
 ## 0.9.0
 
 - Capture Tree: saves a PNG of the whole tree shown in the editor (or of the selection) at a

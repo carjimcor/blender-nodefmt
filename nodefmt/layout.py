@@ -48,18 +48,24 @@ def containers(m):
         z.pair = (n, out)
         zones.append(z)
     zones.sort(key=lambda z: len(z.all))
-    # pure sources (nothing linked in) used only inside one zone go into it
-    has_in = {d[0] for _, d, _, _ in m.links}
-    for n in m.real:
-        if n in has_in or any(n in z.all for z in zones):
-            continue
-        cons = succ.get(n, set())
-        if not cons:
-            continue
-        for z in zones:
-            if cons <= z.all - {z.pair[0]}:  # a node feeding the zone input stays outside
-                z.all.add(n)
+    # sources used only inside one zone go into it: pure sources (nothing linked in) and the nodes
+    # that only they feed (Index -> Compare), so that their wires stay short. They also go into
+    # every zone around it, so that a nested zone stays inside its parent
+    pred = {}
+    for s, d, _, _ in m.links:
+        pred.setdefault(d[0], set()).add(s[0])
+    for z in zones:
+        inside = z.all - {z.pair[0]}  # a node feeding the zone input stays outside
+        frame = m.parent(z.pair[0])
+        cand = {n for n in m.real if succ.get(n) and not any(n in w.all for w in zones)
+                and (n not in pred or m.parent(n) == frame)}
+        while True:  # keep the nodes fed only by candidates and used only inside the zone
+            drop = {n for n in cand if not pred.get(n, set()) <= cand or not succ[n] <= inside | cand}
+            if not drop:
                 break
+            cand -= drop
+        for w in [w for w in zones if z.all <= w.all]:
+            w.all |= cand
     frames = []
     for f in m.frames:
         desc = set()

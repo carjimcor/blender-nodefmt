@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 - New rule NF023 stacked-fields, off by default: a short chain of field nodes (up to three, such
   as Index -> Compare) that feeds one input of a node and nothing else is stacked above or below

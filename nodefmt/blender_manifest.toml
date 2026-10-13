@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "nodefmt"
-version = "0.9.0"
+version = "0.10.0"
 name = "nodefmt"
 tagline = "Sort node trees: columns, straight links, orthogonal wires"
 maintainer = "Carlos Jimeno Cordero"

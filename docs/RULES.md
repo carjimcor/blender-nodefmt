@@ -4,7 +4,8 @@ Every behaviour of nodefmt is a rule with a code, as in ruff. Guarantees (NF001-
 hold. Style rules can be switched off: with their checkbox in the panel (or in Preferences >
 Add-ons > nodefmt), with `ignore = ["NF031"]` in [nodefmt.toml](CONFIGURATION.md), or with
 `--ignore NF031` on the [command line](CLI.md). A rule that is off is neither applied when
-sorting nor reported by a check.
+sorting nor reported by a check. NF023 is off by default: select it by code, by name or with
+`"ALL"`.
 
 | Code | Name | Kind | What it does |
 |---|---|---|---|
@@ -18,6 +19,7 @@ sorting nor reported by a check.
 | [NF020](#nf020-free-zone-outputs) | free-zone-outputs | style | A zone's output may sit where its inputs are instead of level with the zone input. |
 | [NF021](#nf021-blocks-next-to-consumer) | blocks-next-to-consumer | style | A frame or zone with nothing linked into it sits right before the node it feeds; one with nothing linked at all sits compactly under the tree. |
 | [NF022](#nf022-converging-shape) | converging-shape | style | A tree that converges on one output may take a ">" shape. |
+| [NF023](#nf023-stacked-fields) | stacked-fields | style, off by default | A short chain of field nodes is stacked above or below the node it feeds, in its column. |
 | [NF030](#nf030-staircase-bundles) | staircase-bundles | style | Wires leaving or entering one node are nested like stairs and do not cross. |
 | [NF031](#nf031-no-u-jogs) | no-u-jogs | style | No U-jogs, landings or tiny steps that a free height would remove. |
 | [NF032](#nf032-wire-clearance) | wire-clearance | style | Wires keep clear of node edges, frame borders and zone outlines. |
@@ -293,6 +295,40 @@ Images: before, sorted with every style rule off; after, sorted with only NF022.
 | Before | After |
 |---|---|
 | ![NF022 before: the tree hangs from the top line](rules/NF022-before.png) | ![NF022 after: Divide between its inputs](rules/NF022-after.png) |
+
+### NF023 stacked-fields
+
+Style, off by default. A short chain of field nodes that feeds one input of a node and nothing
+else sits in that node's column, stacked right above or below it, instead of in the columns
+before it.
+
+Why: small field chains (Index -> Compare into a Selection, Position into a Sample Index) are
+read as part of the node they feed. In columns of their own they push the tree apart, and a
+chain that ends inside a zone gets wires across the whole zone.
+
+A chain is up to three nodes linked one after the other: the first has nothing linked in, each
+has a single link out, the last links into one input of the consumer, and none has a geometry
+socket or is a zone, output, reroute or Group Input node. All of them are in the consumer's
+frame. With one chain, it goes above the consumer when that crosses fewer of the consumer's
+other linked inputs, and on a tie when its input is in the upper half of the node. With several,
+the chain into the highest input goes above and the one into the lowest goes below; the others
+are not stacked. Each wire of a stack leaves its node to the right, turns in the gap between the
+two nodes and enters its socket from the left. The nodes stand at the left edge of the column
+like the others, and the gaps beside the column widen for the wires round the side.
+
+Example: Index -> Equal feeds the Selection of Store Named Attribute, and Position -> Length its
+Value. Without the rule both chains take the columns before Store Named Attribute. With it,
+Index and Equal sit above it and Length and Position below it.
+
+Off: chains are laid out like any other node.
+
+This rule has no geometric check of its own: Check reports such a tree as not formatted (NF900).
+
+Images: before, sorted with every style rule off; after, sorted with only NF023.
+
+| Before | After |
+|---|---|
+| ![NF023 before: the chains in the columns before their consumer](rules/NF023-before.png) | ![NF023 after: the chains stacked above and below their consumer](rules/NF023-after.png) |
 
 ### NF030 staircase-bundles
 

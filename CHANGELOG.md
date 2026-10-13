@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New rule NF023 stacked-fields, off by default: a short chain of field nodes (up to three, such
+  as Index -> Compare) that feeds one input of a node and nothing else is stacked above or below
+  that node, in its column, with its wires round the side (example `NF023`).
 - Fix: a chain of nodes fed only by input nodes (Index -> Compare) and used only inside a zone
   is laid out inside the zone, next to where it is used, instead of before the zone with wires
   across all of it.

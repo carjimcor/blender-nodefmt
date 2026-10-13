@@ -16,6 +16,9 @@ TRACK = 20.0        # spacing of the vertical routing tracks in a gap
 EPS = 0.5           # links whose ends differ by no more than this are straight
 OVERHANG = True     # the end of a side branch may stick out of its column
 SATELLITES = True   # NF021: a big block with no inputs sits right before its consumer, reaching left
+STACK_MAX = 3       # NF023: the most nodes in a chain stacked above or below its consumer
+STACK_GAP = 40.0    # NF023: vertical space between two nodes of a stack (its wire runs in the middle)
+STACK_TRACK = 20.0  # NF023: distance of a stack's wires from the left and right edges of its nodes
 
 # ---------------------------------------------------------------- track order (columns.py)
 EXACT_TRACKS = 8    # gaps with up to this many tracks are ordered exactly

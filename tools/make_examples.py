@@ -420,6 +420,27 @@ def nf022():
     return t
 
 
+def nf023():
+    """Index -> Compare feeds the Selection of Store Named Attribute and Position -> Length its
+    Value; with the rule off both chains sit at the far left of the tree."""
+    t = Tree("NF023")
+    gi = t.node('NodeGroupInput', 0, 0)
+    sp = t.node('GeometryNodeSetPosition', 220, 0)
+    mp = t.node('GeometryNodeMeshToPoints', 440, 0)
+    st = t.node('GeometryNodeStoreNamedAttribute', 660, 0)
+    go = t.node('NodeGroupOutput', 880, 0)
+    chain(t, [gi, sp, mp, st, go])
+    ix = t.node('GeometryNodeInputIndex', 0, -260)
+    cmp = t.node('FunctionNodeCompare', 200, -260, data_type='INT', operation='EQUAL')
+    t.link(ix, 0, cmp, "A")
+    t.link(cmp, 0, st, "Selection")
+    po = t.node('GeometryNodeInputPosition', 0, -460)
+    ln = t.node('ShaderNodeVectorMath', 200, -460, operation='LENGTH')
+    t.link(po, 0, ln, 0)
+    t.link(ln, "Value", st, "Value")
+    return t
+
+
 def nf030():
     """Combine XYZ and Separate XYZ both feed the Group Output; with Combine XYZ lower, the two
     wires into the Group Output cross."""
@@ -572,7 +593,7 @@ EXTRAS = {"selection": selection}  # examples for other tests (not of a rule)
 EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF003-rows": nf003_rows, "NF004": nf004,
             "NF005": nf005, "NF010": nf010, "NF011": nf011, "NF011-frame": nf011_frame,
             "NF011-zone": nf011_zone, "NF020": nf020, "NF021": nf021, "NF021-alone": nf021_alone,
-            "NF022": nf022, "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033,
+            "NF022": nf022, "NF023": nf023, "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033,
             "NF034": nf034, "NF040": nf040, "NF041": nf041}
 
 

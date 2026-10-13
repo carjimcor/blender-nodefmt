@@ -12,7 +12,8 @@ ui-scale = 1.4          # the Resolution Scale to sort for (default: Blender's)
 ```
 
 - `select`: the style rules to apply and check: `"ALL"`, codes (`"NF031"`), prefixes (`"NF03"`
-  selects NF030-NF039) or names (`"no-u-jogs"`). Default: all.
+  selects NF030-NF039) or names (`"no-u-jogs"`). Default: all but NF023 stacked-fields, which
+  is off unless selected (by code, prefix, name or `"ALL"`).
 - `ignore`: rules to switch off, in the same forms. Guarantees (NF001-NF005) cannot be switched
   off.
 - `thorough`: search with several seeds and keep the best layout (slower, rarely better). The

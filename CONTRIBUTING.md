@@ -35,14 +35,15 @@ closes itself. `--factory-startup` gives a fixed UI scale of 1.0 (NF034 is teste
 NF003-rows at 1.4, the scales their examples are made for). For every example in `examples/`
 (a second example of a rule is `NF0xx-<what>.blend`) the tests check that:
 
-- the check reports the example's rule on the tree as saved (NF005, NF020 and NF022 have no
-  geometric check: there, that the tree is not formatted);
+- the check reports the example's rule on the tree as saved (NF005, NF020, NF022 and NF023
+  have no geometric check: there, that the tree is not formatted);
 - a sort with only that rule (for a guarantee: no style rule at all) removes the violation,
-  keeps the logic and leaves no reroute leading nowhere; for NF020 and NF022, the layout shows
-  the rule's effect;
-- for a style rule, a sort with every style rule off keeps the violation (NF020, NF022: does not
-  show the effect), so the difference between the two is the rule's own;
-- after a sort with the default rules the rule is no longer reported, the logic fingerprint is
+  keeps the logic and leaves no reroute leading nowhere; for NF020, NF022 and NF023, the layout
+  shows the rule's effect;
+- for a style rule, a sort with every style rule off keeps the violation (NF020, NF022, NF023:
+  does not show the effect), so the difference between the two is the rule's own;
+- after a sort with the default rules (plus the example's rule if it is off by default, NF023)
+  the rule is no longer reported, the logic fingerprint is
   unchanged, no reroute is left leading nowhere, and a second sort changes nothing;
 - for NF003-rows, no sort leaves a wire with a step too small to see (two reroutes closer than
   10 units).

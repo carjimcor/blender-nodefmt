@@ -40,7 +40,7 @@ def config(context):
             return rules.load(start)
     if p is None:
         return rules.Config()
-    on = [c for c in rules.STYLE if getattr(p, "rule_" + c, True)]
+    on = [c for c in rules.STYLE if getattr(p, "rule_" + c, c not in rules.OPT_IN)]
     enabled = rules.resolve(on, []) if on else rules.resolve(None, ["ALL"])
     return rules.Config(enabled, thorough=p.thorough)
 
@@ -50,7 +50,8 @@ def _rule_props():
     props = {}
     for code in rules.STYLE:
         props["rule_" + code] = bpy.props.BoolProperty(
-            name=f"{code} {rules.NAMES[code]}", description=rules.SHORT[code], default=True)
+            name=f"{code} {rules.NAMES[code]}", description=rules.SHORT[code],
+            default=code not in rules.OPT_IN)
     return props
 
 

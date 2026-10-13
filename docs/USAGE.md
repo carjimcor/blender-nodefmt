@@ -102,6 +102,9 @@ Besides that, with the default rules it:
   label and the greyed copies Blender shows on the later reroutes overlap no label, node or wire
   (NF041).
 
+Off by default, NF023 stacks a short chain of field nodes (Index -> Compare) right above or below
+the node it feeds, in its column; select it to use it (see [Rules](RULES.md#nf023-stacked-fields)).
+
 Every sort is checked against a logic fingerprint of the tree (nodes, values, links, the order
 of multi-input links): if anything differs, the tree is restored and the sort reports an error.
 

@@ -42,6 +42,10 @@ RULES = [
     ("NF022", "converging-shape", "style",
      "A tree that converges on one output may take a '>' shape with the output in the middle of "
      "its inputs."),
+    ("NF023", "stacked-fields", "style",
+     "A short chain of field nodes (up to three, such as Index -> Compare) that feeds one input "
+     "of a node and nothing else sits in that node's column, stacked right above or below it, "
+     "with its wires running round the side. Off by default."),
     ("NF030", "staircase-bundles", "style",
      "Wires that leave one node or enter one node are nested like stairs and never cross each "
      "other."),
@@ -70,6 +74,7 @@ SHORT = {
     "NF020": "Let a zone's output move to the height of its inputs",
     "NF021": "Place a self-contained frame right before the node it feeds",
     "NF022": "Allow a '>' shape, with the output centred among its inputs",
+    "NF023": "Stack a short chain of field nodes above or below the node it feeds (off by default)",
     "NF030": "Nest the wires that leave or enter one node like stairs, without crossings",
     "NF031": "No U-turns or tiny steps in wires",
     "NF032": "Keep wires away from the edges of nodes, frames and zones",
@@ -84,6 +89,7 @@ KIND = {r[0]: r[2] for r in RULES}
 SUMMARY = {r[0]: r[3] for r in RULES}
 GUARANTEES = [c for c in CODES if KIND[c] == 'guarantee']
 STYLE = [c for c in CODES if KIND[c] == 'style']
+OPT_IN = {"NF023"}  # style rules that are off unless selected (by code, prefix, name or ALL)
 CONFIG_NAMES = ("nodefmt.toml", "pyproject.toml")
 
 
@@ -97,12 +103,15 @@ def _match(code, pats):
 
 
 def resolve(select=None, ignore=None):
-    """The set of enabled codes: guarantees, plus the selected style rules (default all) minus
-    the ignored ones. Unknown codes raise ValueError."""
+    """The set of enabled codes: guarantees, plus the selected style rules (default: all but the
+    opt-in ones) minus the ignored ones. Unknown codes raise ValueError."""
     for p in list(select or []) + list(ignore or []):
         if p.strip() and p.strip().upper() != 'ALL' and not any(_match(c, [p]) for c in CODES):
             raise ValueError(f"unknown rule {p!r}")
-    sel = [c for c in STYLE if _match(c, select if select else ['ALL'])]
+    if select:
+        sel = [c for c in STYLE if _match(c, select)]
+    else:
+        sel = [c for c in STYLE if c not in OPT_IN]
     sel = [c for c in sel if not _match(c, ignore or [])]
     return frozenset(GUARANTEES + sel)
 

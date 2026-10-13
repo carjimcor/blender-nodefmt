@@ -3,7 +3,9 @@
 positions and reroute routes. Works on a model.Model; blend.py writes the result to Blender."""
 import math
 
-from . import engine, routes, rules as _rules, wires
+from . import engine, params as P, routes, rules as _rules, wires
+from .graph import Result
+from .model import FLOW
 
 PORT_D = engine.PORT_DIRECT  # border port at a socket of a first-column item
 PORT_IN = '<port:in>'     # border port on the container's left edge
@@ -15,17 +17,19 @@ OUTPUTS = (GROUP_OUTPUT, 'ShaderNodeOutputMaterial', 'ShaderNodeOutputWorld', 'S
 
 class Container:
     """A part of the tree laid out as one block: the root, a zone (input, output and everything
-    between) or a frame. `all` holds its nodes, `direct` the ones not in a child container."""
+    between), a frame or a stack (rule NF023: a node and the chains of field nodes stacked above
+    and below it). `all` holds its nodes, `direct` the ones not in a child container."""
     def __init__(self, kind, key, nodes):
-        """A container of `kind` ('root', 'zone', 'frame') named `key`."""
+        """A container of `kind` ('root', 'zone', 'frame', 'stack') named `key`."""
         self.kind, self.key, self.all = kind, key, set(nodes)
         self.children = []
         self.parent = None
         self.direct = set()
 
 
-def containers(m):
-    """Zones and frames that can be laid out as one block, nested as a tree."""
+def containers(m, stacks=False):
+    """Zones and frames that can be laid out as one block, nested as a tree; with stacks=True
+    also the stacks of rule NF023 (see _stacks)."""
     succ = {}
     for s, d, _, _ in m.links:
         succ.setdefault(s[0], set()).add(d[0])
@@ -82,7 +86,90 @@ def containers(m):
     for f in sorted(frames, key=lambda c: -len(c.all)):
         if all(not (f.all & c.all) or f.all <= c.all or c.all <= f.all for c in kept):
             kept.append(f)
+    if stacks:
+        for s in _stacks(m):
+            if all(not (s.all & c.all) or s.all < c.all for c in kept):
+                kept.append(s)
     return kept
+
+
+def _stacks(m):
+    """The stacks of rule NF023 stacked-fields. A chain is up to STACK_MAX field nodes (no
+    geometry socket, no zone, output or reroute) linked one after the other, the first with
+    nothing linked in, each with one link out, the last into one input of a consumer node in the
+    same frame (Index -> Compare -> Selection). A consumer with one chain gets it above when that
+    crosses fewer of its other linked inputs (on a tie: when the input is in the upper half);
+    with several, the chain into its highest input goes above and the one into its lowest goes
+    below, and the others are not stacked. Containers named after the consumer, with the chains
+    as lists from their first node: `above` and `below`."""
+    zone = set()
+    for n in m.real:
+        if m.paired(n):
+            zone |= {n, m.paired(n)}
+    outl, inl = {}, {}
+    for s, d, _, sid in m.links:
+        outl.setdefault(s[0], []).append((s, d, sid))
+        inl.setdefault(d[0], []).append((s, d, sid))
+
+    def plain(n):
+        """True if node n can be a consumer: no zone node, output or reroute."""
+        return n not in zone and m.type(n) not in OUTPUTS and m.type(n) != 'NodeReroute'
+
+    def field(n):
+        """True if node n can be part of a chain: plain, not a Group Input, no geometry socket."""
+        return plain(n) and m.type(n) != 'NodeGroupInput' and \
+            not any(s["type"] in FLOW for s in m.info[n]["socks"].values() if s["vis"])
+
+    def chain(link, v):
+        """The nodes of the chain that ends with `link` into v, first node first, or None."""
+        nodes, s = [], link[0]
+        while True:
+            n = s[0]
+            if not field(n) or m.parent(n) != m.parent(v) or len(outl.get(n, [])) != 1:
+                return None
+            nodes.insert(0, n)
+            ins = inl.get(n, [])
+            if not ins:
+                return nodes
+            if len(ins) != 1 or len(nodes) == P.STACK_MAX:
+                return None
+            s = ins[0][0]
+
+    found = []
+    for v in m.real:
+        if not plain(v):
+            continue
+        h = m.box[v][3]
+        chains, others = [], []
+        for link in inl.get(v, []):
+            s, d, sid = link
+            key = m.slot_key(s, d, sid)
+            c = None if key != d else chain(link, v)  # never into a multi-input slot
+            (chains if c else others).append((m.ins[v][key][1], c))
+        if not chains:
+            continue
+        chains.sort(key=lambda t: t[0])
+        st = Container('stack', v, {v})
+        st.above, st.below = [], []
+        if len(chains) == 1:
+            y, c = chains[0]
+            up = sum(1 for o, _ in others if o < y)
+            down = sum(1 for o, _ in others if o > y)
+            if up < down or (up == down and y <= h / 2):
+                st.above = c
+            else:
+                st.below = c
+        else:
+            st.above, st.below = chains[0][1], chains[-1][1]
+        st.all |= set(st.above) | set(st.below)
+        found.append(st)
+    # a consumer can be a link of a longer chain: the biggest stack wins
+    out, used = [], set()
+    for st in sorted(found, key=lambda st: (-len(st.all), st.key)):
+        if not st.all & used:
+            used |= st.all
+            out.append(st)
+    return sorted(out, key=lambda st: st.key)
 
 
 def nest(m, conts):
@@ -163,7 +250,9 @@ class Formatter:
         if self.snapshots is not None:
             self.snapshots.append({"phase": "direct", **self._direct()})
         while True:
-            conts = [c for c in containers(self.m) if not (c.kind == 'frame' and c.key in self.loose_frames)]
+            stacks = 'NF023' in self.rules and self.mode == 'relayout'
+            conts = [c for c in containers(self.m, stacks)
+                     if not (c.kind == 'frame' and c.key in self.loose_frames)]
             self.root, self.home = nest(self.m, conts)
             try:
                 self.res, self.node_items, self.comp_items = {}, {}, {}
@@ -254,6 +343,9 @@ class Formatter:
     def _run(self, c):
         """Build the items and edges of container c (its children as compound items), run the
         engine, apply the input swaps it chose (undoing those of an earlier run of c)."""
+        if c.kind == 'stack':
+            self._run_stack(c)
+            return
         for v, a, b in self.applied.pop(id(c), []):
             self._exchange(v, a, b)  # undo: an exchange is its own inverse
         m = self.m
@@ -364,6 +456,61 @@ class Formatter:
         self.ctx[id(c)] = (ports_in, direct_in, ports_out, direct_out, set(direct_in) - linked)
         self._apply(c, res)
 
+    def _run_stack(self, c):
+        """Lay out stack c (rule NF023) without the engine: one column, the chain above the
+        consumer from its first node down, the chain below it from its last node down, STACK_GAP
+        apart. Each link leaves its node to the right, turns in the gap between the two nodes,
+        runs back along the left side of the column and enters its socket from the left. Links
+        from outside reach the consumer's sockets directly; nothing in a stack is swapped.
+        The block is as wide as its nodes, which stand at its left edge like the other nodes of
+        the column; the wires round the side run outside it, in the gaps beside the column
+        (res.reach: how far they reach out on the left and on the right, see columns.py)."""
+        m = self.m
+        left = -P.STACK_TRACK  # the left track, in the gap before the column
+        x = 0.0
+        order = list(c.above) + [c.key] + list(reversed(c.below))
+        items, y = [], 0.0
+        for name in order:
+            bx, by, w, h = m.box[name]
+            it = engine.Item(name, 'node', w, h, dict(m.ins[name]), dict(m.outs[name]), bx, by)
+            it.x, it.y = x, y
+            self.node_items[name] = it
+            items.append(it)
+            y += h + P.STACK_GAP
+        at = {it.id: it for it in items}
+        segs = []
+        width = right = max(it.x + it.w for it in items)
+        for s, d0, _, sid in self.links:
+            if s[0] not in c.all or d0[0] not in c.all:
+                continue
+            a, b = at[s[0]], at[d0[0]]
+            key = m.slot_key(s, d0, sid)
+            p = (a.x + a.outs[s][0], a.y + a.outs[s][1])
+            q = (b.x + b.ins[key][0], b.y + b.ins[key][1])
+            xr = a.x + a.w + P.STACK_TRACK
+            right = max(right, xr)
+            mid = a.y + a.h + P.STACK_GAP / 2 if a.y < b.y else a.y - P.STACK_GAP / 2
+            pts = [p, (xr, p[1]), (xr, mid), (left, mid), (left, q[1]), q]
+            for k in range(len(pts) - 1):
+                segs.append((s, pts[k], pts[k + 1], (b.id, key) if k == len(pts) - 2 else None))
+        direct_in, direct_out = {}, {}
+        for s, d0, _, sid in self.links:
+            if d0[0] in c.all and s[0] not in c.all:
+                key = m.slot_key(s, d0, sid)
+                direct_in[(PORT_D, d0[0], key)] = (at[d0[0]], key)
+            elif s[0] in c.all and d0[0] not in c.all:
+                direct_out[s] = at[s[0]]
+        res = Result()
+        res.items, res.segments, res.origin = items, segs, (0.0, 0.0)
+        res.w, res.h = width, y - P.STACK_GAP
+        res.reach = (P.STACK_TRACK, right - width)
+        res.ranks, res.cost, res.alts, res.swapped, res.zone_mode = 1, 0.0, [], [], None
+        res.placer, res.seconds, res.crossings, res.aligned = 'stack', 0.0, 0, 0
+        self.rank0[id(c)] = set(c.all)
+        self.exposed[id(c)] = {}
+        self.ctx[id(c)] = ({}, direct_in, {}, direct_out, set())
+        self._apply(c, res)
+
     def _border_pairs(self, c, items, edges, direct_in):
         """The commutative pairs of container c that its parent may exchange (rule NF011), as
         {(port a, port b): (item, key a, key b, tags)}. Container c is laid out before its
@@ -456,10 +603,11 @@ class Formatter:
         comp.geo_out = any(m.geo.get(s, False) for s in outs)
         comp.res = res
         comp.big = res.ranks >= 3
+        comp.reach_l, comp.reach_r = getattr(res, 'reach', (0.0, 0.0))  # a stack's side wires
         # main input: the zone input's main socket, else a geometry port, else the top port
         main = None
-        if c.kind == 'zone':
-            mk = m.main.get(c.pair[0])
+        if c.kind in ('zone', 'stack'):  # the main socket of the zone input or the consumer
+            mk = m.main.get(c.pair[0] if c.kind == 'zone' else c.key)
             for key in ins:
                 if key[0] == PORT_D and key[2] == mk:
                     main = key

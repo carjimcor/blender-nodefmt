@@ -7,13 +7,15 @@ Runs with Blender's window, like the command line (node sizes only exist once a 
 drawn), at UI scale 1.0 (--factory-startup; an example made for another scale, NF034, at
 that scale), and closes itself. For each example:
 
-  check    the check reports the rule on the tree as saved (a guarantee, NF020 or NF022: the
-           tree is reported as not formatted, NF900, since they have no geometric test)
+  check    the check reports the rule on the tree as saved (a guarantee, NF020, NF022 or NF023:
+           the tree is reported as not formatted, NF900, since they have no geometric test); an
+           opt-in rule (NF023) is switched on for the check and the sorts
   only     a copy sorted with only the example's rule (a guarantee: no style rule at all) no
            longer breaks it nor a guarantee, computes the same and leaves no reroute leading
-           nowhere; NF020 and NF022, which have no geometric test, show their effect instead
+           nowhere; NF020, NF022 and NF023, which have no geometric test, show their effect
+           instead
   off      style rules: a copy sorted with every style rule off still breaks the rule (NF020,
-           NF022: does not show the effect), so the difference is the rule's own
+           NF022, NF023: does not show the effect), so the difference is the rule's own
   sort     sorting with the default rules works
   fixed    the check no longer reports the rule, a guarantee or NF900 after that sort, and no
            reroute is left leading nowhere
@@ -51,7 +53,7 @@ ap.add_argument("--verbose", action="store_true", help="print the violations fou
 ARGS = ap.parse_args(argv)
 
 COLUMNS = ("check", "only", "off", "sort", "fixed", "logic", "again", "extra")
-NOT_GEOMETRIC = ("NF005", "NF020", "NF022")  # reported as NF900 (not formatted)
+NOT_GEOMETRIC = ("NF005", "NF020", "NF022", "NF023")  # reported as NF900 (not formatted)
 SCALE_KEY = "nodefmt_ui_scale"  # custom property of an example made for another UI scale
 
 
@@ -125,6 +127,18 @@ def tiny_steps(nt):
     return n
 
 
+def same_column(nt):
+    """Links (through reroutes) whose two nodes share a column: the left edges level within a
+    unit (NF023 stacks a chain in the column of the node it feeds)."""
+    n = 0
+    for l in nt.links:
+        if l.to_node.bl_idname == 'NodeReroute':
+            continue
+        a = source(l)
+        n += abs(a.location_absolute.x - l.to_node.location_absolute.x) <= 1.0
+    return n
+
+
 # tests of one example (its file name): what, measure(tree) -> number that must be 0
 EXTRA = {"NF003-rows": ("tiny steps", tiny_steps)}
 
@@ -133,6 +147,7 @@ EXTRA = {"NF003-rows": ("tiny steps", tiny_steps)}
 EFFECT = {
     "NF020": ("zone output above input", zone_offset),
     "NF022": ("output between its inputs", centred),
+    "NF023": ("links within a column", same_column),
 }
 
 
@@ -163,7 +178,7 @@ def run_one(path, ed, prepare=None):
     if prepare:
         prepare(nt)
     dead = dead_ends(nt)
-    cfg = rules.Config()
+    cfg = rules.Config(rules.DEFAULT | ({code} & rules.OPT_IN))  # an opt-in rule: on
     guarantees = frozenset(rules.GUARANTEES)
     vs = api.check_tree(nt, 'relayout', ed, cfg)
     found = codes(vs)

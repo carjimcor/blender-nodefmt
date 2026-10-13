@@ -144,17 +144,25 @@ class ColumnsMixin:
         self.bends = bends
         self.track_x = [dict() for _ in range(self.R)]
         col_x = [0.0] * (self.R + 1)
+        # NF023: a stack's wires run round its side, outside its box: on the right of its
+        # column, and on the left in the gap before it; the tracks of a gap keep clear of them
+        reach_r, reach_l = [0.0] * (self.R + 1), [0.0] * (self.R + 1)
+        for i in self.items:
+            if not i.is_point and i not in hang and i not in sats:
+                reach_r[i.rank] = max(reach_r[i.rank], i.w + getattr(i, 'reach_r', 0.0) - colw[i.rank])
+                reach_l[i.rank] = max(reach_l[i.rank], getattr(i, 'reach_l', 0.0))
         for k in range(self.R + 1):
             if k == 0:
                 col_x[0] = 0.0
             if k == self.R:
                 break
-            base = snap_up(col_x[k] + colw[k])
+            base = snap_up(col_x[k] + colw[k] + reach_r[k])
             tags = self._order_tracks(bends[k])
             T = len(tags)
-            nxt = max(base + P.TRACK * (T + 1), snap_up(col_x[k] + colw[k] + P.COL_GAP))
-            # centre the tracks in the gap
-            free = (nxt - base) - P.TRACK * (T + 1)
+            lr = reach_l[k + 1]
+            nxt = max(base + P.TRACK * (T + 1) + lr, snap_up(col_x[k] + colw[k] + P.COL_GAP + reach_r[k] + lr))
+            # centre the tracks in the gap (between the side wires of stacks)
+            free = (nxt - lr - base) - P.TRACK * (T + 1)
             start = base + snap_down(free / 2) + P.TRACK
             left, right = self._label_room(k, tags, bends[k])
             if left or right:  # NF041: a labelled track keeps its labels clear of the nodes beside it

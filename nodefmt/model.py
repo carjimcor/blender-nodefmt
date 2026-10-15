@@ -70,9 +70,10 @@ def read(nt, where=None, part=None, pins=None):
     that stand for its links to the rest: they are kept and take the first or last column."""
     where = where or {}
     pins = pins or {}
-    from .sockets import socket_location
+    from .sockets import socket_location, verify
     from . import dup, ortho
     from .labels import text_width
+    verify(nt)
     ui = ortho.ui_scale()
     nodes = [n for n in nt.nodes if part is None or n.name in part]
     # reroutes we may remove and rebuild; a labelled one is kept but treated the same way, and

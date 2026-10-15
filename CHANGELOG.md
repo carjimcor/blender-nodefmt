@@ -8,6 +8,9 @@
   quarter widget unit apart (examples `NF035` and `NF035-strings`).
 - New rule NF036 shared-tracks: vertical runs one above the other in a gap share one x
   instead of a staircase of tracks, which also makes gaps narrower (example `NF036`).
+- Socket positions are checked before they are used: on a Blender version whose internal socket
+  data has another layout, a sort or a check stops with a clear message instead of placing nodes
+  from wrong data.
 - Fix: at a fractional UI scale, Check (or the next sort) moved a reroute a pixel onto the pixel
   grid, away from the height straighten had given it, and reported a segment 0.7 units off
   (NF003). Reroutes are no longer snapped to the grid: their dot sits exactly at their location.

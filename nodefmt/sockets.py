@@ -83,6 +83,35 @@ for _cls in (bNodeStack, bNodeSocketRuntime, bNodeSocket):
     _cls._fields_ = list(_cls.__annotations__.items())
 
 
+class UnsupportedBlender(RuntimeError):
+    """Blender's socket data does not have the layout these mirrors expect."""
+
+
+def verify(nt):
+    """Check the mirrors against a drawn tree: the identifier read through ctypes must be the
+    socket's own, and its location must lie on its node. Raises UnsupportedBlender otherwise,
+    so a Blender version with another layout fails clearly instead of placing nodes from
+    garbage. Call after the tree was drawn."""
+    ui = bpy.context.preferences.system.ui_scale
+    for n in nt.nodes:
+        socks = [s for s in list(n.inputs) + list(n.outputs) if s.enabled and not s.hide]
+        if n.bl_idname in ('NodeFrame', 'NodeReroute') or n.hide or not socks:
+            continue
+        for s in socks[:2]:
+            c = bNodeSocket.from_address(s.as_pointer())
+            ok = c.identifier.decode('utf-8', 'replace') == s.identifier and bool(c.runtime)
+            if ok:
+                x, y = c.runtime.contents.location
+                x0, y1 = n.location_absolute
+                w, h = n.dimensions.x / ui, n.dimensions.y / ui
+                ok = x0 - 20 <= x / ui <= x0 + w + 20 and y1 - h - 20 <= y / ui <= y1 + 20
+            if not ok:
+                raise UnsupportedBlender(
+                    f"nodefmt cannot read socket positions in Blender "
+                    f"{'.'.join(map(str, bpy.app.version))} (checked up to 5.2): update nodefmt")
+        return
+
+
 def socket_location(sock):
     """Location of a drawn socket in node units (valid only after the tree was drawn)."""
     ui = bpy.context.preferences.system.ui_scale

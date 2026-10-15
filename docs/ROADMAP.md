@@ -64,3 +64,11 @@ the rest stays where it is, as some other node editors do.
 The command line needs Blender's window, because socket positions only exist once a node editor
 has been drawn, so it cannot run with `blender -b`, for example in CI. To be explored: drawing
 off screen, or computing socket positions from Blender's node layout rules without drawing.
+
+## 7. Very large trees
+
+Blender's own "Curve to Tube" node group (392 nodes, 31 frames) sorts correctly but not well: it
+takes about 18 minutes, and its frames end up almost all in one row, so the tree becomes a long
+strip with wires across most of it, wider and harder to read than its hand-made layout. To work
+on: packing frames into rows and columns instead of a single row, and the speed of the layout
+search on trees of this size.

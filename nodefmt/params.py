@@ -41,7 +41,7 @@ SEARCH = 120        # layouts tried by the final local search of the best seed
 SLIDE = 40          # layouts tried by the final slide pass
 JITTER = 0.6        # seeds other than 0: random shift of an item's initial barycenter (in places)
 ORDERS = ('cross', 'force')                # order generators: crossing reduction, force-directed
-PLACERS = ('blocks', 'balanced', 'relax')  # placement methods tried for each order
+PLACERS = ('blocks', 'relax')  # placement methods tried for each order ('balanced': NF022)
 # zone output height, tried for each order and placement of a zone (the cheapest wins):
 #   'level'  level with the zone input (its top line)
 #   'median' a soft pull (ZONE_LEVEL) to that line, plus the weighted median of what its links want

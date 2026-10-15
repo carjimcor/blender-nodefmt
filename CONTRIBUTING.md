@@ -42,7 +42,7 @@ NF003-rows at 1.4, the scales their examples are made for). For every example in
   shows the rule's effect;
 - for a style rule, a sort with every style rule off keeps the violation (NF020, NF022, NF023:
   does not show the effect), so the difference between the two is the rule's own;
-- after a sort with the default rules (plus the example's rule if it is off by default, NF023)
+- after a sort with the default rules (plus the example's rule if it is off by default: NF022, NF023, NF035)
   the rule is no longer reported, the logic fingerprint is
   unchanged, no reroute is left leading nowhere, and a second sort changes nothing;
 - for NF003-rows, no sort leaves a wire with a step too small to see (two reroutes closer than

@@ -14,6 +14,8 @@
 - Fix: at a fractional UI scale, Check (or the next sort) moved a reroute a pixel onto the pixel
   grid, away from the height straighten had given it, and reported a segment 0.7 units off
   (NF003). Reroutes are no longer snapped to the grid: their dot sits exactly at their location.
+- NF022 converging-shape is off by default: on the test trees the ">" shape left more crossings
+  (317 against 299 without it). Select it to keep it.
 - Faster sorting, with exactly the same layouts: about 3x on a 115-node Geometry Nodes tree
   (a sort in Blender from 96 s to 32 s), and up to 48x on trees with a gap crossed by many
   wires (the order of the wires in a gap is now found without summing every pair again). The

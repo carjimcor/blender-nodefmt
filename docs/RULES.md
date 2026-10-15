@@ -4,8 +4,8 @@ Every behaviour of nodefmt is a rule with a code, as in ruff. Guarantees (NF001-
 hold. Style rules can be switched off: with their checkbox in the panel (or in Preferences >
 Add-ons > nodefmt), with `ignore = ["NF031"]` in [nodefmt.toml](CONFIGURATION.md), or with
 `--ignore NF031` on the [command line](CLI.md). A rule that is off is neither applied when
-sorting nor reported by a check. NF023 and NF035 are off by default: select them by code, by
-name or with `"ALL"`.
+sorting nor reported by a check. NF022, NF023 and NF035 are off by default: select them by
+code, by name or with `"ALL"`.
 
 | Code | Name | Kind | What it does |
 |---|---|---|---|
@@ -18,7 +18,7 @@ name or with `"ALL"`.
 | [NF011](#nf011-commutative-swaps) | commutative-swaps | style | The two inputs of a commutative node may be swapped to remove a crossing. |
 | [NF020](#nf020-free-zone-outputs) | free-zone-outputs | style | A zone's output may sit where its inputs are instead of level with the zone input. |
 | [NF021](#nf021-blocks-next-to-consumer) | blocks-next-to-consumer | style | A frame or zone with nothing linked into it sits right before the node it feeds; one with nothing linked at all sits compactly under the tree. |
-| [NF022](#nf022-converging-shape) | converging-shape | style | A tree that converges on one output may take a ">" shape. |
+| [NF022](#nf022-converging-shape) | converging-shape | style, off by default | A tree that converges on one output may take a ">" shape. |
 | [NF023](#nf023-stacked-fields) | stacked-fields | style, off by default | A short chain of field nodes is stacked above or below the node it feeds, in its column. |
 | [NF030](#nf030-staircase-bundles) | staircase-bundles | style | Wires leaving or entering one node are nested like stairs and do not cross. |
 | [NF031](#nf031-no-u-jogs) | no-u-jogs | style | No U-jogs, landings or tiny steps that a free height would remove. |
@@ -279,8 +279,9 @@ Off: blocks with nothing linked go in a row under the tree, from its left edge.
 
 ### NF022 converging-shape
 
-Style. A tree that converges on one output may take a ">" shape, with the output in the middle
-of its inputs, instead of everything hanging from a common top line.
+Style, off by default. A tree that converges on one output may take a ">" shape, with the
+output in the middle of its inputs, instead of everything hanging from a common top line. Off by
+default because on the test trees it leaves more crossings than the layouts without it.
 
 The sort tries this placement next to the others and keeps it only when it costs less (fewer
 bends, shorter wires). It only differs from the usual placement where a block is not held by a

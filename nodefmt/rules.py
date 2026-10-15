@@ -81,7 +81,7 @@ SHORT = {
     "NF011": "Swap the inputs of commutative nodes (Add, Multiply, AND, ...) to avoid crossings",
     "NF020": "Let a zone's output move to the height of its inputs",
     "NF021": "Place a self-contained frame right before the node it feeds",
-    "NF022": "Allow a '>' shape, with the output centred among its inputs",
+    "NF022": "Allow a '>' shape, with the output centred among its inputs (off by default)",
     "NF023": "Stack a short chain of field nodes above or below the node it feeds (off by default)",
     "NF030": "Nest the wires that leave or enter one node like stairs, without crossings",
     "NF031": "No U-turns or tiny steps in wires",
@@ -99,7 +99,7 @@ KIND = {r[0]: r[2] for r in RULES}
 SUMMARY = {r[0]: r[3] for r in RULES}
 GUARANTEES = [c for c in CODES if KIND[c] == 'guarantee']
 STYLE = [c for c in CODES if KIND[c] == 'style']
-OPT_IN = {"NF023", "NF035"}  # style rules that are off unless selected (by code, prefix, name or ALL)
+OPT_IN = {"NF022", "NF023", "NF035"}  # style rules that are off unless selected (by code, prefix, name or ALL)
 CONFIG_NAMES = ("nodefmt.toml", "pyproject.toml")
 
 

@@ -103,9 +103,9 @@ Besides that, with the default rules it:
 
 Off by default, NF023 stacks a short chain of field nodes (Index -> Compare) right above or below
 the node it feeds, in its column; select it to use it (see [Rules](RULES.md#nf023-stacked-fields)).
-Also off by default, NF035 spreads the links into a multi-input socket (Join Geometry, Join
-Strings) a widget unit apart and lets them converge in a short fan right before it (see
-[Rules](RULES.md#nf035-fanned-multi-inputs)).
+Also off by default: NF022 lets a tree that converges on one output take a ">" shape, and NF035
+spreads the links into a multi-input socket (Join Geometry, Join Strings) a widget unit apart and
+lets them converge in a short fan right before it (see [Rules](RULES.md#nf035-fanned-multi-inputs)).
 
 Every sort is checked against a logic fingerprint of the tree (nodes, values, links, the order
 of multi-input links): if anything differs, the tree is restored and the sort reports an error.

@@ -239,6 +239,19 @@ def _offsets_key(data):
 
 MAX_PASSES = 6  # full layout passes of one tree; a pass that moves nothing ends the sort
 
+# trees that a sort left settled (its last pass moved nothing), with the state it left them in:
+# a format of that state moves nothing either, so a check right after a sort need not sort again
+_SETTLED = {}
+
+
+def _state_key(nt, mode, cfg):
+    """What a format of tree nt depends on: its layout, the size, collapse state, label and frame
+    of every node (they change with panels, menus and hidden sockets), the rules and the UI
+    scale. Two equal keys format the same way. Call after the tree was drawn."""
+    nodes = sorted((n.name, n.bl_idname, round(n.dimensions.x, 2), round(n.dimensions.y, 2), n.hide, n.label,
+                    n.parent.name if n.parent else None) for n in nt.nodes)
+    return repr((_signature(nt), nodes, mode, sorted(cfg.rules), round(ortho.ui_scale(), 4)))
+
 
 def _drain(gen):
     """Run a generator of Steps to the end; returns its return value."""
@@ -305,6 +318,7 @@ def _format_steps(nt, mode, editor, duplicates, swaps, cfg):
             yield last._replace(phase="logic check", k=1, n=1, step=last.steps)
             editor.show(nt)
             if k and same_layout(_signature(nt), sig):
+                _SETTLED[nt.as_pointer()] = _state_key(nt, mode, cfg)  # see unformatted
                 break
         editor.redraw()
         return {"tree": tree_name(nt), "seconds": round(time.perf_counter() - t0, 3),
@@ -335,9 +349,12 @@ def unformatted(nt, mode='relayout', editor=None, cfg=None):
     editor = editor or Editor()
     try:
         editor.show(nt)
-        bad = ortho.faults(nt, fan=(cfg or rules.Config()).on('NF035'))
+        cfg = cfg or rules.Config()
+        bad = ortho.faults(nt, fan=cfg.on('NF035'))
         if bad:
             return sorted({n for l, _, _ in bad for n in (l.from_node.name, l.to_node.name)})
+        if _SETTLED.get(nt.as_pointer()) == _state_key(nt, mode, cfg):
+            return None  # a sort left it like this, and its last pass moved nothing
         snap = check.Snapshot(nt)
         sig = _signature(nt)
         where = {n.name: tuple(n.location_absolute) for n in nt.nodes

@@ -16,6 +16,10 @@
   (NF003). Reroutes are no longer snapped to the grid: their dot sits exactly at their location.
 - NF022 converging-shape is off by default: on the test trees the ">" shape left more crossings
   (317 against 299 without it). Select it to keep it.
+- Check right after a sort is much faster (a 115-node tree at UI scale 1.4: 33 s to 7 s): when
+  the sort ended because a pass moved nothing, the check knows the tree is formatted as long as
+  nothing changed since (layout, node sizes, labels, rules, UI scale), instead of sorting it
+  again on a copy.
 - Faster sorting, with exactly the same layouts: about 3x on a 115-node Geometry Nodes tree
   (a sort in Blender from 96 s to 32 s), and up to 48x on trees with a gap crossed by many
   wires (the order of the wires in a gap is now found without summing every pair again). The

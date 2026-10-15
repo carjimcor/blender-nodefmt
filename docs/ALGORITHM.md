@@ -87,9 +87,9 @@ on trees saved as plain data. In the add-on, a sort runs one step at a time
    vertical routing track per source socket in each gap. Tracks are ordered to avoid crossings:
    exactly (dynamic programming over subsets) for up to 8 tracks, else by moves of single tracks.
    Crossings inside a bundle and wires that run into another wire's corner cost more. Tracks one
-   above the other (40 units apart or more) then share one x (NF036). Gaps widen where a labelled
-   wire turns next to a node (NF041). Items with no link at all go under the layout where it grows
-   least (NF021).
+   above the other (10 units apart or more, as two reroutes must be) then share one x (NF036).
+   Gaps widen where a labelled wire turns next to a node (NF041). Items with no link at all go
+   under the layout where it grows least (NF021).
 10. **Cost and search** (`cost.py`, `search.py`, `engine.py`). Every candidate is laid out in full
     and priced by the [layout cost](#layout-cost). The cheapest is improved by a local search
     whose moves change one choice: a zone port above or below the zone input, a satellite to

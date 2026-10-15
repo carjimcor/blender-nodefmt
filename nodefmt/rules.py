@@ -66,8 +66,8 @@ RULES = [
      "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
      "Blender's noodle curving). Off by default."),
     ("NF036", "shared-tracks", "style",
-     "Vertical runs in one gap between columns that lie one above the other, at least 40 "
-     "units apart, share one x instead of each taking its own track, so the gap reads as a "
+     "Vertical runs in one gap between columns that lie one above the other, at least 10 "
+     "units apart (as far as two reroutes must be), share one x instead of each taking its own track, so the gap reads as a "
      "few clean lines and stays narrow."),
     ("NF040", "label-first-reroute", "style",
      "The label of a labelled reroute goes on the first reroute of its wire, near the source."),
@@ -239,7 +239,7 @@ class applied:
             "W_BORDER": 2.0 if on("NF032") else 0.0,
             "ZONE_LANE_GAP": 34.0 if on("NF032") else 20.0,
             "FAN": on("NF035"),
-            "TRACK_SHARE": 40.0 if on("NF036") else 0.0,
+            "TRACK_SHARE": 10.0 if on("NF036") else 0.0,
         }
         for k, v in new.items():
             self.saved[k] = getattr(P, k)

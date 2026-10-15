@@ -170,7 +170,8 @@ class ColumnsMixin:
             left, right = self._label_room(k, tags, bends[k], slot)
             if left or right:  # NF041: a labelled track keeps its labels clear of the nodes beside it
                 start = max(start, snap_up(col_x[k] + colw[k] + left))
-                nxt = max(nxt, snap_up(start + right))
+                # the gap holds every track after the shift (the next column a track away from the last)
+                nxt = max(nxt, snap_up(start + right), snap_up(start + P.TRACK * T + lr))
             for t in tags:
                 self.track_x[k][t] = start + P.TRACK * slot[t]
             col_x[k + 1] = nxt

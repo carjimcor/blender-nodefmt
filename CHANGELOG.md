@@ -8,6 +8,10 @@
   quarter widget unit apart (examples `NF035` and `NF035-strings`).
 - New rule NF036 shared-tracks: vertical runs one above the other in a gap share one x
   instead of a staircase of tracks, which also makes gaps narrower (example `NF036`).
+- Fix: in a gap widened for a reroute label (NF041), the last tracks could fall on the next
+  column, right on a node's input socket; the wire then ran through the socket and the sort
+  failed its logic check and was undone (seen on Blender's own "Curve to Tube", 392 nodes). The
+  gap now holds every track.
 - Socket positions are checked before they are used: on a Blender version whose internal socket
   data has another layout, a sort or a check stops with a clear message instead of placing nodes
   from wrong data.

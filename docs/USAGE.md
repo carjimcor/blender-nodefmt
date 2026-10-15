@@ -40,10 +40,10 @@ In a node editor, open the sidebar (N) and the nodefmt tab.
 - **Capture**: Capture Tree saves an image of the tree and its options (see
   [Capture](#capture)).
 - **Rules** (closed at first): one checkbox per style rule (see [Rules](RULES.md)), "Thorough
-  search" (several seeds, slower, rarely better) and "Use nodefmt.toml". The same options are in
-  Preferences > Add-ons > nodefmt. While "Use nodefmt.toml" is on and a `nodefmt.toml` is found
-  next to the .blend file or above it, the file wins over the checkboxes and the panel shows its
-  name (see [Configuration](CONFIGURATION.md)).
+  search" (several seeds, about 3 times slower, never worse) and "Use nodefmt.toml". The same
+  options are in Preferences > Add-ons > nodefmt. While "Use nodefmt.toml" is on and a
+  `nodefmt.toml` is found next to the .blend file or above it, the file wins over the checkboxes
+  and the panel shows its name (see [Configuration](CONFIGURATION.md)).
 
 Each sort is one undo step: Ctrl+Z puts the tree back.
 

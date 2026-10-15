@@ -62,7 +62,7 @@ class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
         **_rule_props(),
         "thorough": bpy.props.BoolProperty(
             name="Thorough search", default=False,
-            description="Try several layouts and keep the best (slower, rarely better)"),
+            description="Try several layouts and keep the best (about 3 times slower, never worse)"),
         "use_config_file": bpy.props.BoolProperty(
             name="Use nodefmt.toml", default=True,
             description="Use the rules in a nodefmt.toml next to the .blend file, if there is one"),

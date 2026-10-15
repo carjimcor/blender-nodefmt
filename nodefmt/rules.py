@@ -65,6 +65,10 @@ RULES = [
      "apart and converge only in a short fan right before the socket, instead of running a "
      "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
      "Blender's noodle curving). Off by default."),
+    ("NF036", "shared-tracks", "style",
+     "Vertical runs in one gap between columns that lie one above the other, at least 40 "
+     "units apart, share one x instead of each taking its own track, so the gap reads as a "
+     "few clean lines and stays narrow."),
     ("NF040", "label-first-reroute", "style",
      "The label of a labelled reroute goes on the first reroute of its wire, near the source."),
     ("NF041", "label-clearance", "style",
@@ -85,6 +89,7 @@ SHORT = {
     "NF033": "Avoid crossings that another route can remove",
     "NF034": "Different wires never share a point, so nothing looks like a junction",
     "NF035": "Spread the links into a Join Geometry or Join Strings, converging in a fan (off by default)",
+    "NF036": "Vertical runs one above the other in a gap share one x",
     "NF040": "Put a reroute label on the first reroute of its wire",
     "NF041": "Keep reroute labels, and their greyed copies, clear of other labels, nodes and wires",
 }
@@ -234,6 +239,7 @@ class applied:
             "W_BORDER": 2.0 if on("NF032") else 0.0,
             "ZONE_LANE_GAP": 34.0 if on("NF032") else 20.0,
             "FAN": on("NF035"),
+            "TRACK_SHARE": 40.0 if on("NF036") else 0.0,
         }
         for k, v in new.items():
             self.saved[k] = getattr(P, k)

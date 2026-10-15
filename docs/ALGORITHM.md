@@ -110,7 +110,9 @@ steps.
    vertical routing track per source socket in each gap. Tracks are ordered to avoid crossings:
    exactly (dynamic programming over subsets) for up to 8 tracks, else by moves of single
    tracks. Crossings inside a bundle and wires that run into another wire's corner cost more,
-   which nests a bundle like stairs. Where a labelled wire turns next to a node, the gap widens
+   which nests a bundle like stairs. Then tracks one above the other (40 units apart or more)
+   share one x, while tracks that overlap in height keep their order (NF036). Where a labelled
+   wire turns next to a node, the gap widens
    so its label, centred above the turn, clears the node (NF041). Items with no link at all go
    under the layout where they make it grow least: right below what is above them, within its
    width if they fit (NF021).

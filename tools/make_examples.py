@@ -565,6 +565,24 @@ def nf034():
     return t
 
 
+def nf036():
+    """Three Combine XYZ, one under the other, each fed X by a Math node level with it and Y by a
+    Math node a little lower: the three Y wires turn in one gap, one above the other. Without the
+    rule each takes its own track, a staircase; with it they share one x."""
+    t = Tree("NF036", inputs=(), outputs=(("A", 'Vector'), ("B", 'Vector'), ("C", 'Vector')))
+    go = t.node('NodeGroupOutput', 520, 0)
+    for k in range(3):
+        y = -260 * k
+        x = t.node('ShaderNodeMath', 0, y)
+        yy = t.node('ShaderNodeMath', 0, y - 150)
+        cx = t.node('ShaderNodeCombineXYZ', 260, y)
+        t.link(x, 0, cx, 0)
+        t.level(x, 0, cx, 0)
+        t.link(yy, 0, cx, 1)
+        t.link(cx, 0, go, k)
+    return t
+
+
 def nf040():
     """The label "Offset" is on the second reroute of its wire, not the first."""
     t = Tree("NF040", inputs=(("Geometry", 'Geometry'), ("Value", 'Float')))
@@ -623,7 +641,7 @@ EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF003-rows": nf003_
             "NF005": nf005, "NF010": nf010, "NF011": nf011, "NF011-frame": nf011_frame,
             "NF011-zone": nf011_zone, "NF020": nf020, "NF021": nf021, "NF021-alone": nf021_alone,
             "NF022": nf022, "NF023": nf023, "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033,
-            "NF034": nf034, "NF035": nf035, "NF035-strings": nf035_strings, "NF040": nf040, "NF041": nf041}
+            "NF034": nf034, "NF035": nf035, "NF035-strings": nf035_strings, "NF036": nf036, "NF040": nf040, "NF041": nf041}
 
 
 def main():

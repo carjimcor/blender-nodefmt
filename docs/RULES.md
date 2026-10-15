@@ -26,6 +26,7 @@ name or with `"ALL"`.
 | [NF033](#nf033-avoid-crossings) | avoid-crossings | style | A crossing that can be avoided is avoided. |
 | [NF034](#nf034-no-junction-look) | no-junction-look | style | Wires never share a point or run on one line. |
 | [NF035](#nf035-fanned-multi-inputs) | fanned-multi-inputs | style, off by default | The links into a Join Geometry or Join Strings arrive spread out and converge in a short fan. |
+| [NF036](#nf036-shared-tracks) | shared-tracks | style | Vertical runs one above the other in a gap share one x. |
 | [NF040](#nf040-label-first-reroute) | label-first-reroute | style | A reroute label goes on the first reroute of its wire. |
 | [NF041](#nf041-label-clearance) | label-clearance | style | Reroute labels, and the greyed copies Blender shows, overlap no label, node or wire. |
 
@@ -475,6 +476,34 @@ Images: before, sorted with every style rule off; after, sorted with only NF035.
 | Before | After |
 |---|---|
 | ![NF035-strings before: the Strings wires packed under the Delimiter](rules/NF035-strings-before.png) | ![NF035-strings after: the fan below the Delimiter wire](rules/NF035-strings-after.png) |
+
+### NF036 shared-tracks
+
+Style. Vertical runs in one gap between columns that lie one above the other share one x,
+instead of each taking a track of its own.
+
+Why: wires that turn in the same gap at different heights do not meet, but on tracks of their
+own they form a staircase that looks busier than it is and makes the gap wider. On one line they
+read as a few clean turns.
+
+The tracks of a gap are first ordered to avoid crossings, as before. Then each track takes the
+leftmost x right of every earlier track whose height range comes within 40 units of its own:
+tracks that overlap in height keep their order, so no crossing changes, and tracks one above
+the other share an x. The gap is as wide as the tracks it still needs.
+
+Example: three Combine XYZ, each fed Y by a Math node a little lower. Without the rule the three
+Y wires turn on three tracks, a staircase. With it they turn on one line and the gap is
+narrower.
+
+Off: every track of a gap has its own x.
+
+This rule has no geometric check of its own: Check reports such a tree as not formatted (NF900).
+
+Images: before, sorted with every style rule off; after, sorted with only NF036.
+
+| Before | After |
+|---|---|
+| ![NF036 before: three wires turning on a staircase of tracks](rules/NF036-before.png) | ![NF036 after: the three wires turning on one line](rules/NF036-after.png) |
 
 ### NF040 label-first-reroute
 

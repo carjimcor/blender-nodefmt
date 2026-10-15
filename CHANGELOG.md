@@ -6,6 +6,8 @@
   Geometry, Join Strings, ...) arrive a widget unit apart and converge in a short fan right
   before the socket, clear of the wires into the node's other inputs, instead of running a
   quarter widget unit apart (examples `NF035` and `NF035-strings`).
+- New rule NF036 shared-tracks: vertical runs one above the other in a gap share one x
+  instead of a staircase of tracks, which also makes gaps narrower (example `NF036`).
 - Faster sorting, with exactly the same layouts: about 3x on a 115-node Geometry Nodes tree
   (a sort in Blender from 96 s to 32 s), and up to 48x on trees with a gap crossed by many
   wires (the order of the wires in a gap is now found without summing every pair again). The

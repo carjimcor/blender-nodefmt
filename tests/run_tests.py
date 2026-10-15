@@ -53,7 +53,7 @@ ap.add_argument("--verbose", action="store_true", help="print the violations fou
 ARGS = ap.parse_args(argv)
 
 COLUMNS = ("check", "only", "off", "sort", "fixed", "logic", "again", "extra")
-NOT_GEOMETRIC = ("NF005", "NF020", "NF022", "NF023")  # reported as NF900 (not formatted)
+NOT_GEOMETRIC = ("NF005", "NF020", "NF022", "NF023", "NF036")  # reported as NF900 (not formatted)
 SCALE_KEY = "nodefmt_ui_scale"  # custom property of an example made for another UI scale
 
 
@@ -139,6 +139,19 @@ def same_column(nt):
     return n
 
 
+def track_xs(nt):
+    """Distinct x of the vertical wires between two reroutes (NF036 shares the x of the tracks
+    that lie one above the other)."""
+    xs = set()
+    for l in nt.links:
+        a, b = l.from_node, l.to_node
+        if a.bl_idname == b.bl_idname == 'NodeReroute':
+            (xa, ya), (xb, yb) = a.location_absolute, b.location_absolute
+            if abs(xa - xb) <= 0.5 < abs(ya - yb):
+                xs.add(round(xa))
+    return len(xs)
+
+
 # tests of one example (its file name): what, measure(tree) -> number that must be 0
 EXTRA = {"NF003-rows": ("tiny steps", tiny_steps)}
 
@@ -148,6 +161,7 @@ EFFECT = {
     "NF020": ("zone output above input", zone_offset),
     "NF022": ("output between its inputs", centred),
     "NF023": ("links within a column", same_column),
+    "NF036": ("x of the vertical wires", track_xs),
 }
 
 

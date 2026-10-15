@@ -23,7 +23,7 @@ class ColumnsMixin:
             self._place_sats(sats)
             self._assign_x(hang, sats)  # tracks for the links of the satellites as placed
 
-    def _label_room(self, k, tags, bends):
+    def _label_room(self, k, tags, bends, slot):
         """NF041: room a gap needs for the labels of its labelled tracks (self.label_w), as
         (from the column's right edge to the first track, from the first track to the next
         column). Blender shows a labelled wire's label, centred, above each of its bends; where
@@ -35,7 +35,8 @@ class ColumnsMixin:
             return 0.0, 0.0
         near = [i for layer in getattr(self, 'layers', [])[k:k + 2] for i in layer if not i.is_point]
         left = right = 0.0
-        for n, t in enumerate(tags):
+        for t in tags:
+            n = slot[t]
             w = lw.get(t)
             if not w:
                 continue
@@ -158,18 +159,19 @@ class ColumnsMixin:
                 break
             base = snap_up(col_x[k] + colw[k] + reach_r[k])
             tags = self._order_tracks(bends[k])
-            T = len(tags)
+            slot = _slots(tags, bends[k])
+            T = max(slot.values(), default=-1) + 1
             lr = reach_l[k + 1]
             nxt = max(base + P.TRACK * (T + 1) + lr, snap_up(col_x[k] + colw[k] + P.COL_GAP + reach_r[k] + lr))
             # centre the tracks in the gap (between the side wires of stacks)
             free = (nxt - lr - base) - P.TRACK * (T + 1)
             start = base + snap_down(free / 2) + P.TRACK
-            left, right = self._label_room(k, tags, bends[k])
+            left, right = self._label_room(k, tags, bends[k], slot)
             if left or right:  # NF041: a labelled track keeps its labels clear of the nodes beside it
                 start = max(start, snap_up(col_x[k] + colw[k] + left))
                 nxt = max(nxt, snap_up(start + right))
-            for n, t in enumerate(tags):
-                self.track_x[k][t] = start + P.TRACK * n
+            for t in tags:
+                self.track_x[k][t] = start + P.TRACK * slot[t]
             col_x[k + 1] = nxt
         self.col_x = col_x
         for i in self.items:
@@ -275,6 +277,26 @@ class ColumnsMixin:
             i.rank = 0
             self.items.append(i)
             occ.append((i.x, i.y, i.x + i.w, i.y + i.h))
+
+
+def _slots(tags, segs):
+    """The x slot of each track of a gap, tags in their left-to-right order. Without NF036 each
+    track has its own slot. With it (TRACK_SHARE: the vertical room kept between two tracks on
+    one x), a track takes the leftmost slot right of every earlier track whose height range
+    comes within TRACK_SHARE of its own: tracks that overlap keep their order (so no crossing
+    changes), and tracks one above the other share an x."""
+    if not P.TRACK_SHARE:
+        return {t: n for n, t in enumerate(tags)}
+    span, slot = {}, {}
+    for t in tags:
+        ys = [segs[t][0][0]] + [b for _, b, _ in segs[t]]
+        lo, hi = min(ys), max(ys)
+        s = 0
+        for u, (ulo, uhi) in span.items():
+            if lo < uhi + P.TRACK_SHARE and ulo < hi + P.TRACK_SHARE:
+                s = max(s, slot[u] + 1)
+        span[t], slot[t] = (lo, hi), s
+    return slot
 
 
 def _node_of(item):

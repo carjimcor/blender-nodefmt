@@ -94,7 +94,8 @@ def measure(nt):
              and not l.from_node.hide and not l.to_node.hide and l.to_node.bl_idname != 'NodeFrame']
     segs = [(socket_location(l.from_socket), link_end(l)) for l in links]
     horiz = sum(abs(a[1] - b[1]) <= 0.5 for a, b in segs)
-    bent = [l.to_socket.is_multi_input for l, (a, b) in zip(links, segs) if abs(a[1] - b[1]) > 0.5 and abs(a[0] - b[0]) > 0.5]
+    bent = [l.to_socket.is_multi_input for l, (a, b) in zip(links, segs)
+            if abs(a[1] - b[1]) > 0.5 and abs(a[0] - b[0]) > 0.5]
     curved, curved_multi = bent.count(False), bent.count(True)  # into a multi-input socket: on purpose
     vert = sum(abs(a[0] - b[0]) <= 0.5 and abs(a[1] - b[1]) > 0.5 for a, b in segs)
     crossings = 0
@@ -204,7 +205,8 @@ def measure(nt):
         "src_far_node": far_node,
         "collinear3": chains,
         "useless_rr": useless,
-        "size": f"{round(max(b[2] for b in allb) - min(b[0] for b in allb))}x{round(max(b[3] for b in allb) - min(b[1] for b in allb))}",
+        "size": (f"{round(max(b[2] for b in allb) - min(b[0] for b in allb))}x"
+                 f"{round(max(b[3] for b in allb) - min(b[1] for b in allb))}"),
     }
 
 

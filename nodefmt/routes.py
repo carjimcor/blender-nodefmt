@@ -5,6 +5,7 @@ Segments come from every container level in absolute coordinates (y down). Point
 several links of the same source become taps; points where a route does not turn are dropped,
 so a reroute exists only at a bend, a tap, or where a curve meets a straight run.
 """
+from itertools import pairwise
 
 
 def _r(p):
@@ -79,7 +80,7 @@ def _taps(t):
                 if len(cs) < 2:
                     continue
                 cs.sort(key=lambda c: abs(c[0] - p[0]) + abs(c[1] - p[1]))
-                for a, b in zip(cs, cs[1:]):
+                for a, b in pairwise(cs):
                     if a in t.dst:
                         continue  # never route through a socket
                     t.children[p].discard(b)
@@ -192,7 +193,7 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
         t = trees.get(src)
         if t is None:
             continue
-        lab = sorted(labs, key=lambda l: (l["depth"], l["x"], l["name"]))[0]  # the one nearest the source
+        lab = min(labs, key=lambda l: (l["depth"], l["x"], l["name"]))  # the one nearest the source
         dsts = {tuple(d) for l in labs for d in l["dsts"]}
         pts = [p for p, d in t.dst.items() if d[:3] in dsts]
         if not pts:
@@ -212,7 +213,7 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
         if own and not first:  # NF040 off: the reroute nearest to where the label was
             own = sorted(own, key=lambda q: (abs(q[0] - lab["x"]) + abs(q[1] - lab["y"]), q))
 
-        def new(runs):
+        def new(runs, t=t, src=src, text=text):
             """A new reroute near the start of the first horizontal run of `runs` where it
             troubles nothing (and is put on the tree), else None."""
             for a, b in runs:
@@ -222,12 +223,14 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
                 span = abs(b[0] - a[0])
                 ds = [MARGIN + 20.0 * k for k in range(int(span // 20))] + [span / 2]
                 if clear:  # any free spot along the run, the nearest to MARGIN first
-                    ds += sorted((CLEAR * k for k in range(1, int(span // CLEAR))), key=lambda d: (abs(d - MARGIN), d))
+                    ds += sorted((CLEAR * k for k in range(1, int(span // CLEAR))),
+                                 key=lambda d: (abs(d - MARGIN), d))
                 # the greyed copies Blender will show on the reroutes after it
                 copies = [_label_box(c, text) for c in _below(t, b)] if clear else []
                 for d in ds:
                     q = (round(a[0] + sign * d, 1), a[1])
-                    if CLEAR <= d <= span - CLEAR and free(src, q, text)                             and not any(_overlap(_label_box(q, text), o) for o in copies) and _insert(t, a, b, q):
+                    if (CLEAR <= d <= span - CLEAR and free(src, q, text)
+                            and not any(_overlap(_label_box(q, text), o) for o in copies) and _insert(t, a, b, q)):
                         points.add((src, q))
                         return q
             return None
@@ -246,7 +249,7 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
             p = next((q for q in ok if not any(_overlap(_label_box(q, text), b) for b in boxes)),
                      ok[0] if ok else own[0])
         elif p is None:  # no reroute on the way: a new one near the start of the first horizontal run
-            p = new(list(zip(path, path[1:])))
+            p = new(list(pairwise(path)))
             if p is None:
                 continue
         out[(src, p)] = (lab["name"], lab["label"])

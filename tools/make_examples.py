@@ -15,6 +15,7 @@ import argparse
 import os
 import sys
 import traceback
+from itertools import pairwise
 
 import bpy
 
@@ -40,10 +41,10 @@ class Tree:
         from nodefmt import rules
         self.nt = bpy.data.node_groups.new(name or f"{code} {rules.NAMES[code]}", 'GeometryNodeTree')
         self.nt.use_fake_user = True
-        for name, kind in inputs:
-            self.nt.interface.new_socket(name, in_out='INPUT', socket_type='NodeSocket' + kind)
-        for name, kind in outputs:
-            self.nt.interface.new_socket(name, in_out='OUTPUT', socket_type='NodeSocket' + kind)
+        for sock, kind in inputs:
+            self.nt.interface.new_socket(sock, in_out='INPUT', socket_type='NodeSocket' + kind)
+        for sock, kind in outputs:
+            self.nt.interface.new_socket(sock, in_out='OUTPUT', socket_type='NodeSocket' + kind)
         self.wires = []
         self.levels = []
         self.selected = set()  # nodes saved selected (the others are not)
@@ -132,7 +133,7 @@ class Tree:
 
 def chain(t, nodes):
     """Link the first output of each node to the first input of the next, level."""
-    for a, b in zip(nodes, nodes[1:]):
+    for a, b in pairwise(nodes):
         t.link(a, 0, b, 0)
         t.level(a, 0, b, 0)
 
@@ -641,7 +642,8 @@ EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF003-rows": nf003_
             "NF005": nf005, "NF010": nf010, "NF011": nf011, "NF011-frame": nf011_frame,
             "NF011-zone": nf011_zone, "NF020": nf020, "NF021": nf021, "NF021-alone": nf021_alone,
             "NF022": nf022, "NF023": nf023, "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033,
-            "NF034": nf034, "NF035": nf035, "NF035-strings": nf035_strings, "NF036": nf036, "NF040": nf040, "NF041": nf041}
+            "NF034": nf034, "NF035": nf035, "NF035-strings": nf035_strings, "NF036": nf036, "NF040": nf040,
+            "NF041": nf041}
 
 
 def main():
@@ -676,7 +678,7 @@ def tick():
     code = 0
     try:
         main()
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - any error must still quit Blender
         traceback.print_exc()
         code = 1
     sys.stdout.flush()

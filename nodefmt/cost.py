@@ -77,9 +77,9 @@ class CostMixin:
         bottom = max([i.y + i.h + 20.0 for i in inner] + [i.y + i.h for i in pins])
         n = 0
         for _, p, q in route:
-            if abs(p[1] - q[1]) <= P.EPS and abs(p[0] - q[0]) > P.CLEAR_RUN:
-                if abs(p[1] - top) < P.CLEAR_OUTLINE or abs(p[1] - bottom) < P.CLEAR_OUTLINE:
-                    n += 1
+            if abs(p[1] - q[1]) <= P.EPS and abs(p[0] - q[0]) > P.CLEAR_RUN and (
+                    abs(p[1] - top) < P.CLEAR_OUTLINE or abs(p[1] - bottom) < P.CLEAR_OUTLINE):
+                n += 1
         return n
 
     def _dest_nodes(self, item):
@@ -102,7 +102,7 @@ class CostMixin:
         bends = {}  # point -> tags bending there
         multi = {}  # point -> multi-input sockets whose slot links bend there
         for s in segs:
-            tag, p, q, e, pk, qk = s
+            tag, p, q, _e, pk, qk = s
             for pt, k in ((p, pk), (q, qk)):
                 if k == 'bend':
                     key = (round(pt[0], 1), round(pt[1], 1))

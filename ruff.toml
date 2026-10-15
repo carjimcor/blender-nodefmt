@@ -1,0 +1,13 @@
+# Ruff settings for nodefmt (pure Python + bpy, run by Blender 5.2's Python 3.13).
+# The extension zip ships nodefmt/ without this file, so exceptions inside nodefmt/ are inline
+# (# noqa with the reason) and the package also passes ruff's defaults on its own.
+line-length = 120
+target-version = "py313"
+
+[lint]
+# Ruff's default rules, plus the line length.
+extend-select = ["E501"]
+
+[lint.per-file-ignores]
+# the scripts put the repository on sys.path before importing nodefmt
+"tools/*.py" = ["E402"]

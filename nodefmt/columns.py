@@ -4,7 +4,7 @@
 Entry points: assign_x() (columns, track order, satellites) and shelf() (items with no link).
 """
 from . import params as P
-from .graph import snap_up, snap_down, _name
+from .graph import _name, snap_down, snap_up
 
 
 class ColumnsMixin:
@@ -137,14 +137,14 @@ class ColumnsMixin:
             if not i.is_point and i not in hang and i not in sats:
                 colw[i.rank] = max(colw[i.rank], i.w)
         self.colw = colw
-        bends = [dict() for _ in range(self.R)]  # gap -> tag -> [(y_from, y_to, node entered)]
+        bends = [{} for _ in range(self.R)]  # gap -> tag -> [(y_from, y_to, node entered)]
         for e in self.edges:
             k = e.u.rank
             t = self._turn_y(e)
             if t is not None:  # every link that is not straight turns on a track
                 bends[k].setdefault(e.tag, []).append((self._sock_y(e.u, e.uk, True), t, _node_of(e.v)))
         self.bends = bends
-        self.track_x = [dict() for _ in range(self.R)]
+        self.track_x = [{} for _ in range(self.R)]
         col_x = [0.0] * (self.R + 1)
         # wires drawn outside a box (NF023 a stack's side wires, NF035 fans) on the right of its
         # column or in the gap before it: the tracks of a gap keep clear of them
@@ -214,8 +214,8 @@ class ColumnsMixin:
 
         def pair(a, b):
             """Crossings (weighted) when track a is left of track b."""
-            sa, oa, lo_a, hi_a, va = info[a]
-            sb, ob, lo_b, hi_b, vb = info[b]
+            _sa, oa, lo_a, hi_a, va = info[a]
+            sb, _ob, lo_b, hi_b, vb = info[b]
             w = P.TRACK_BUNDLE if (a[0] == b[0] or va & vb) else 1.0
             c = 0.0
             if lo_a + P.EPS < sb < hi_a - P.EPS:      # b's entry passes a's vertical
@@ -261,7 +261,8 @@ class ColumnsMixin:
             y0 = min(r[1] for r in occ)
             x1 = max(r[2] for r in occ)
             y1 = max(r[3] for r in occ)
-            xs = {snap_up(x0)} | {snap_up(r[2] + P.COL_GAP) for r in occ} | {snap_up(c) for c in getattr(self, 'col_x', ())}
+            xs = ({snap_up(x0)} | {snap_up(r[2] + P.COL_GAP) for r in occ}
+                  | {snap_up(c) for c in getattr(self, 'col_x', ())})
             inside = [x for x in xs if x0 <= x and x + i.w <= x1]
             xs = inside or [snap_up(x0)]
             best = None

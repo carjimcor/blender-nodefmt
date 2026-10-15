@@ -19,12 +19,23 @@ node. In a zone, the zone input heads the first column and the content hangs bel
 """
 import random
 import time
+from itertools import pairwise
 
 from . import params as P
 from .columns import ColumnsMixin
 from .cost import CostMixin
 from .force import ForceMixin
-from .graph import Cand, CycleError, Edge, Item, LayoutBase, PORT_DIRECT, Result, snap_down, snap_up
+from .graph import (
+    PORT_DIRECT,
+    Cand,
+    CycleError,
+    Edge,
+    Item,
+    LayoutBase,
+    Result,
+    snap_down,
+    snap_up,
+)
 from .graph import _name as _name_key
 from .ordering import OrderingMixin
 from .placement import PlacementMixin
@@ -33,7 +44,7 @@ from .relax import RelaxMixin
 from .search import SearchMixin
 
 GRID = P.GRID  # kept for callers (layout.py)
-__all__ = ['layout', 'snapshot_state', 'Item', 'Edge', 'CycleError', 'PORT_DIRECT', 'GRID', 'Result']
+__all__ = ['GRID', 'PORT_DIRECT', 'CycleError', 'Edge', 'Item', 'Result', 'layout', 'snapshot_state']
 
 
 def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, labels=None):
@@ -345,7 +356,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
 
 def _sample(poly, x):
     """Height of polyline `poly` (a wire as it was drawn) where it first reaches x."""
-    for a, b in zip(poly, poly[1:]):
+    for a, b in pairwise(poly):
         if min(a[0], b[0]) - 1e-6 <= x <= max(a[0], b[0]) + 1e-6:
             if abs(b[0] - a[0]) < 1e-6:
                 return a[1]

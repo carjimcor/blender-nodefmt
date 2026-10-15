@@ -43,7 +43,6 @@ GIZMOS = ("show_gizmo", "show_gizmo_active_node")
 
 class CaptureError(Exception):
     """The capture cannot be made (nothing to capture, image too large, editor too small)."""
-    pass
 
 
 class Options:
@@ -118,7 +117,7 @@ def tree_bounds(nt, selection=False, badges=False):
         x, y = n.location_absolute
         w, h = n.dimensions.x / ui, n.dimensions.y / ui
         if n.bl_idname == 'NodeReroute':
-            x, y, w, h = x - w / 2, y + h / 2, w, h  # a reroute's location is its centre
+            x, y = x - w / 2, y + h / 2  # a reroute's location is its centre
         xs += [x - pad, x + w + pad]
         ys += [y - h - pad, y + pad]
     return min(xs), min(ys), max(xs), max(ys) + (BADGES if badges else 0)
@@ -425,7 +424,7 @@ class CaptureJob:
         _set_flags(self.win, ((obj, k, v) for group, obj in (("regions", sp), ("gizmos", sp), ("overlay", sp.overlay))
                    for k, v in s["space"][group].items()))
         self._redraw()
-        x, y, zx, zy = s["view"]
+        x, y, zx, _zy = s["view"]
         self._set_zoom(zx)
         self._pan_to(x, y)
         self._redraw()
@@ -565,7 +564,7 @@ class CaptureJob:
         area = next((a for a in self.win.screen.areas if a.type == 'IMAGE_EDITOR'), None)
         win = self.win
         if area is None:
-            before = set(w.as_pointer() for w in bpy.context.window_manager.windows)
+            before = {w.as_pointer() for w in bpy.context.window_manager.windows}
             with bpy.context.temp_override(window=self.win):
                 bpy.ops.wm.window_new()
             win = next((w for w in bpy.context.window_manager.windows if w.as_pointer() not in before), None)

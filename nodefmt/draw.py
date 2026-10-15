@@ -6,6 +6,8 @@ Blender only lays out a node (its size, its socket positions) while drawing it i
 synchronous redraw; after it returns, node.dimensions and socket positions are valid. Needs a UI
 session (not `blender -b`). `close()` puts the editor back as it was, including the group path.
 """
+from itertools import pairwise
+
 import bpy
 
 
@@ -92,10 +94,10 @@ class Editor:
             return
         try:
             sp.node_tree = tree
-            for parent, child in zip(path, path[1:]):
+            for parent, child in pairwise(path):
                 node = next((n for n in parent.nodes if getattr(n, "node_tree", None) == child), None)
                 sp.path.append(child, node=node)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - restoring the editor's path is best effort
             pass
         sp.pin = pin
 

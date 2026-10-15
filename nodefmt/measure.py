@@ -51,7 +51,8 @@ def measure(g, copies=0, swaps=0):
         l["a"], l["b"] = list(R(l["a"])), list(R(l["b"]))
     rr = [{**r, "x": round(r["x"], 1), "y": round(r["y"], 1)} for r in rr]
     segs = [(tuple(l["a"]), tuple(l["b"])) for l in links]
-    bent = [l.get("multi", False) for l in links if abs(l["a"][1] - l["b"][1]) > 0.5 and abs(l["a"][0] - l["b"][0]) > 0.5]
+    bent = [l.get("multi", False) for l in links
+            if abs(l["a"][1] - l["b"][1]) > 0.5 and abs(l["a"][0] - l["b"][0]) > 0.5]
     curved, curved_multi = bent.count(False), bent.count(True)
     nonortho = len(bent)  # strict: every segment with |dx| > 0.5 and |dy| > 0.5
     backward = sum(1 for a, b in segs if b[0] < a[0] - 0.5 and abs(a[1] - b[1]) <= 0.5)
@@ -91,7 +92,8 @@ def measure(g, copies=0, swaps=0):
         ins, outs = deg_in.get(p, []), deg_out.get(p, [])
         if len(ins) == 1 and len(outs) == 1:
             a, b = ins[0], outs[0]
-            if (abs(a[1] - p[1]) < 0.5 and abs(b[1] - p[1]) < 0.5) or (abs(a[0] - p[0]) < 0.5 and abs(b[0] - p[0]) < 0.5):
+            if ((abs(a[1] - p[1]) < 0.5 and abs(b[1] - p[1]) < 0.5)
+                    or (abs(a[0] - p[0]) < 0.5 and abs(b[0] - p[0]) < 0.5)):
                 straight_rr += 1
     # source nodes: longest route (along the drawn links) to a real consumer
     far, far_node = 0.0, None
@@ -129,14 +131,16 @@ def measure(g, copies=0, swaps=0):
     ys = [n["y"] for n in nodes] + [n["y"] + n["h"] for n in nodes]
     ends = _ends(links)
     wf = wire_faults([(r["x"], r["y"]) for r in rr],
-                     [(tuple(l["a"]), tuple(l["b"]), tuple(l.get("src") or [l.get("from")]), not l["rr_a"], not l["rr_b"],
-                       ends[k], tuple(l["dst"]) if l.get("multi") else None) for k, l in enumerate(links)])
+                     [(tuple(l["a"]), tuple(l["b"]), tuple(l.get("src") or [l.get("from")]),
+                       not l["rr_a"], not l["rr_b"], ends[k], tuple(l["dst"]) if l.get("multi") else None)
+                      for k, l in enumerate(links)])
     st, tot = straight_links(links)
     wf["label_overlap"] = label_overlaps([(r["x"], r["y"], r["label"]) for r in rr if r.get("label")])
-    return {**wf, "straight": f"{st}/{tot}", "nonortho": nonortho, "curved": curved, "curved_multi": curved_multi, "behind": behind, "crossings": crossings, "overlaps": overlaps,
-            "backward": backward, "nodes_on_grid": f"{grid}/{len(nodes)}", "level": f"{level}/{len(nodes)}", "rr_on_grid": f"{rr_grid}/{len(rr)}",
-            "src_far": round(far), "src_far_node": far_node, "duplicates": copies, "swaps": swaps, "reroutes": len(rr),
-            "useless_rr": straight_rr, "links": len(links),
+    return {**wf, "straight": f"{st}/{tot}", "nonortho": nonortho, "curved": curved, "curved_multi": curved_multi,
+            "behind": behind, "crossings": crossings, "overlaps": overlaps, "backward": backward,
+            "nodes_on_grid": f"{grid}/{len(nodes)}", "level": f"{level}/{len(nodes)}",
+            "rr_on_grid": f"{rr_grid}/{len(rr)}", "src_far": round(far), "src_far_node": far_node,
+            "duplicates": copies, "swaps": swaps, "reroutes": len(rr), "useless_rr": straight_rr, "links": len(links),
             "size": f"{round(max(xs) - min(xs))}x{round(max(ys) - min(ys))}"}
 
 
@@ -182,7 +186,8 @@ def wire_faults(rr, segs):
     overlap = 0
     for i in range(len(rr)):
         for j in range(i + 1, len(rr)):
-            if abs(rr[i][0] - rr[j][0]) < RR_CLEAR and abs(rr[i][1] - rr[j][1]) < RR_CLEAR and                     ((rr[i][0] - rr[j][0]) ** 2 + (rr[i][1] - rr[j][1]) ** 2) ** 0.5 < RR_CLEAR:
+            if (abs(rr[i][0] - rr[j][0]) < RR_CLEAR and abs(rr[i][1] - rr[j][1]) < RR_CLEAR and
+                    ((rr[i][0] - rr[j][0]) ** 2 + (rr[i][1] - rr[j][1]) ** 2) ** 0.5 < RR_CLEAR):
                 overlap += 1
     multi = lambda s: s[6] if len(s) > 6 else None
     corner = {}  # reroute point -> the multi-input socket its last run enters

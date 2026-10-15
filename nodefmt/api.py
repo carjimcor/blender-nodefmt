@@ -12,7 +12,6 @@ from .layout import Formatter
 
 class LogicChanged(Exception):
     """A format would change what the tree computes; the tree was restored."""
-    pass
 
 
 TREE_TYPES = ('GeometryNodeTree', 'ShaderNodeTree', 'CompositorNodeTree')
@@ -394,7 +393,8 @@ def _comm_crossings(d, m):
                     continue
                 for s in d.tree_segments(x):
                     for o in d.tree_segments(y):
-                        p = wires.crossing(s, o) if wires.horiz(s) and wires.vert(o) else                             wires.crossing(o, s) if wires.vert(s) and wires.horiz(o) else None
+                        p = (wires.crossing(s, o) if wires.horiz(s) and wires.vert(o) else
+                             wires.crossing(o, s) if wires.vert(s) and wires.horiz(o) else None)
                         if p is not None:
                             hit = p
         if hit is not None:

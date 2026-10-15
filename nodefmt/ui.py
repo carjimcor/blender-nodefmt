@@ -164,7 +164,7 @@ def _redraw_editors():
 class SortModal:
     """Mixin for the sort operators: runs in steps with progress (modal, Esc cancels), or at
     once (execute, for scripts). One undo step either way."""
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER', 'UNDO'}  # noqa: RUF012 - the bpy idiom
 
     def trees(self, context):
         """The trees to sort."""
@@ -298,7 +298,7 @@ class NODEFMT_OT_sort_selection(bpy.types.Operator):
     bl_label = "Sort Selection"
     bl_description = ("Sort only the selected nodes and reroutes, or what is inside a selected frame; the rest "
                       "stays where it is. Ctrl+Z undoes it")
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER', 'UNDO'}  # noqa: RUF012 - the bpy idiom
 
     @classmethod
     def poll(cls, context):
@@ -363,7 +363,7 @@ class NODEFMT_OT_capture_tree(bpy.types.Operator):
     bl_label = "Capture Tree"
     bl_description = ("Save an image of the tree in this editor at the zoom set below, larger than the "
                       "screen if needed. The tree does not change. Esc cancels")
-    bl_options = {'REGISTER'}
+    bl_options = {'REGISTER'}  # noqa: RUF012 - the bpy idiom
 
     @classmethod
     def poll(cls, context):
@@ -463,12 +463,12 @@ def _capture_tick():
                     break
                 if time.perf_counter() - t0 > 0.05:
                     break
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - a timer must not crash: the editor is put back
         if not isinstance(e, capture.CaptureError):
             traceback.print_exc()
         try:
             job.cancel()
-        except Exception:
+        except Exception:  # noqa: BLE001 - keep the first error
             traceback.print_exc()
         _CAPTURE.update(state='error', error=e)
     if _CAPTURE["state"] is not None:
@@ -763,7 +763,7 @@ class NODEFMT_PT_rules(bpy.types.Panel):
     bl_category = "nodefmt"
     bl_label = "Rules"
     bl_parent_id = "NODEFMT_PT_panel"
-    bl_options = {'DEFAULT_CLOSED'}
+    bl_options = {'DEFAULT_CLOSED'}  # noqa: RUF012 - the bpy idiom
 
     @classmethod
     def poll(cls, context):
@@ -810,7 +810,7 @@ def unregister():
         bpy.app.timers.unregister(_capture_tick)
         try:
             _CAPTURE["job"].cancel()
-        except Exception:
+        except Exception:  # noqa: BLE001 - unregistering must finish
             traceback.print_exc()
     _CAPTURE.update(job=None, state=None)
     del bpy.types.WindowManager.nodefmt_capture

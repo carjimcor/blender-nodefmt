@@ -152,7 +152,7 @@ def _classes(data):
     for name, d in data["nodes"].items():
         if d.get("dupkey"):
             cls.setdefault(d["dupkey"], []).append(name)
-    linked_from = {tuple(s)[0] for s, _, _, _ in data["links"]}
+    linked_from = {s[0] for s, _, _, _ in data["links"]}
     multi = {s[0] for s, d, _, _ in data["links"]
              if data["nodes"][d[0]].get("socks", {}).get(f"i{d[2]}", {}).get("multi")}
     out = {}
@@ -169,7 +169,7 @@ def merged(data):
     put in a fixed order)."""
     data = _copy.deepcopy(data)
     rep_of = {}
-    for k, names in _classes(data).items():
+    for names in _classes(data).values():
         for n in names:
             rep_of[n] = names[0]
     data["links"] = [[[rep_of.get(s[0], s[0]), s[1], s[2]], d, mu, sid] for s, d, mu, sid in data["links"]]
@@ -196,13 +196,13 @@ def merged(data):
 def plan(data, mode='relayout'):
     """The copy plan of a tree (see the module docstring): for each class, the groups of consumer
     sockets, which member feeds each group (existing or new) and which members are removed."""
-    from .model import Model
     from .layout import Formatter
+    from .model import Model
     classes = _classes(data)
     res = {"classes": []}
     if not classes:
         return res
-    mdata, rep_of, actual = merged(data)
+    mdata, _rep_of, actual = merged(data)
     for k, names in classes.items():
         rep = names[0]
         socks = mdata["nodes"][rep]["socks"]
@@ -242,7 +242,7 @@ def plan(data, mode='relayout'):
         groups = _group(dsts)
         # the group nearest to the merged source keeps it; groups close to it share it
         ox, oy = sx + m.box[rep][2], sy
-        dist = lambda g: min(abs(t["x"] - ox) + abs(t["y"] - oy) for t in g)
+        dist = lambda g, ox=ox, oy=oy: min(abs(t["x"] - ox) + abs(t["y"] - oy) for t in g)
         groups.sort(key=dist)
         keep, own = list(groups[0]), []
         col = lambda g: (id(g[0]["home"]), g[0]["rank"])

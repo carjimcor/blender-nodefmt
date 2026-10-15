@@ -14,6 +14,8 @@ reroutes or what is inside a selected frame. Everything else stays where it is.
 5. Wires of the part are straightened, the logic is checked, and the selection is restored
    with the new reroutes added.
 """
+from itertools import pairwise
+
 from . import blend, check, model, ortho, rules
 from . import params as P
 from .layout import Formatter
@@ -216,7 +218,7 @@ class Router:
 
     def add(self, wire, path):
         """Remember the segments of a new route (a list of points)."""
-        self.segments += [(wire, p, q) for p, q in zip(path, path[1:])]
+        self.segments += [(wire, p, q) for p, q in pairwise(path)]
 
     def _clear(self, p, q, exempt, wire, strict=True, end=None):
         """True if segment p-q passes no box (those in `exempt` only shrunk by 2) and, if
@@ -239,9 +241,9 @@ class Router:
             if flat and abs(a[1] - b[1]) <= ortho.TOL:  # two horizontal runs on one line
                 if abs(a[1] - p[1]) < P.COLLINEAR and min(x1, max(a[0], b[0])) - max(x0, min(a[0], b[0])) > 1.0:
                     return False
-            elif not flat and abs(a[0] - b[0]) <= ortho.TOL:  # two vertical runs
-                if abs(a[0] - p[0]) < P.COLLINEAR and min(y1, max(a[1], b[1])) - max(y0, min(a[1], b[1])) > 1.0:
-                    return False
+            elif (not flat and abs(a[0] - b[0]) <= ortho.TOL  # two vertical runs
+                  and abs(a[0] - p[0]) < P.COLLINEAR and min(y1, max(a[1], b[1])) - max(y0, min(a[1], b[1])) > 1.0):
+                return False
             for c in (a, b):  # through a point of another wire
                 if x0 - P.ON_WIRE < c[0] < x1 + P.ON_WIRE and y0 - P.ON_WIRE < c[1] < y1 + P.ON_WIRE \
                         and (c not in (p, q)):
@@ -269,9 +271,9 @@ class Router:
         def ok(pts):
             """True if every segment of a, pts, b is clear (and none has no length)."""
             path = [a] + pts + [b]
-            if any(abs(p[0] - q[0]) + abs(p[1] - q[1]) < 1.0 for p, q in zip(path, path[1:])):
+            if any(abs(p[0] - q[0]) + abs(p[1] - q[1]) < 1.0 for p, q in pairwise(path)):
                 return False
-            return all(seg_ok(k, len(path) - 1, p, q) for k, (p, q) in enumerate(zip(path, path[1:])))
+            return all(seg_ok(k, len(path) - 1, p, q) for k, (p, q) in enumerate(pairwise(path)))
 
         if abs(a[1] - b[1]) <= ortho.TOL and a[0] < b[0] and ok([]):
             return []

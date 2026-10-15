@@ -42,7 +42,7 @@ def slot_gap(s=None):
     NODE_MULTI_INPUT_LINK_GAP, a quarter of the widget unit (20 pixels at scale 1)."""
     sp = bpy.context.preferences.system
     s = sp.ui_scale if s is None else s
-    widget = math.floor(18.0 * s + 0.5) + 2 * int(round(sp.pixel_size))
+    widget = math.floor(18.0 * s + 0.5) + 2 * round(sp.pixel_size)
     return 0.25 * widget / s
 
 

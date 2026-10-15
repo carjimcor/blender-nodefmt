@@ -16,6 +16,8 @@ bends) to heights that make the whole drawing better, and makes almost level run
   NF034 no-junction-look two wires never share a point or a line; no reroute in the middle of
                          a straight run
 """
+from itertools import pairwise
+
 from . import params as P
 from . import routes
 
@@ -161,7 +163,8 @@ def near_outline(s, poly):
     (ax, ay), (bx, by) = s[1], s[2]
     c = P.CLEAR_OUTLINE
     xs, ys = [p[0] for p in poly], [p[1] for p in poly]
-    if not poly or max(ax, bx) < min(xs) - c or min(ax, bx) > max(xs) + c             or max(ay, by) < min(ys) - c or min(ay, by) > max(ys) + c:
+    if (not poly or max(ax, bx) < min(xs) - c or min(ax, bx) > max(xs) + c
+            or max(ay, by) < min(ys) - c or min(ay, by) > max(ys) + c):
         return 0.0
     L = abs(ax - bx) + abs(ay - by)
     n = max(1, int(L // 4))
@@ -237,7 +240,7 @@ def steps(path):
             pts.append(p)
     out = []
     run = None
-    for a, b in zip(pts, pts[1:]):
+    for a, b in pairwise(pts):
         if abs(a[0] - b[0]) <= 0.5 and abs(a[1] - b[1]) > 0.5:
             out.append((1 if b[1] > a[1] else -1, run))
             run = None
@@ -260,7 +263,7 @@ def jogs(t):
     rev, land = set(), set()
     for path in paths(t):
         st = steps(path)
-        for (d1, _), (d2, run) in zip(st, st[1:]):
+        for (d1, _), (d2, run) in pairwise(st):
             if run is None:
                 continue
             (rev if d1 != d2 else land).add(run)

@@ -59,7 +59,7 @@ def tick():
     """Run main() once Blender's window is up, then quit."""
     try:
         main()
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - any error must still quit Blender
         traceback.print_exc()
     sys.stdout.flush()
     os._exit(0)

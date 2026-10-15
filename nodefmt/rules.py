@@ -20,60 +20,60 @@ RULES = [
      "A link that is not straight turns on reroutes: no link is drawn as a curve or a diagonal."),
     ("NF002", "no-links-behind-nodes", "guarantee", "No wire passes behind a node."),
     ("NF003", "orthogonal-segments", "guarantee",
-     "Every drawn wire segment is exactly horizontal or vertical (within half a unit) at the UI "
-     "scale the tree is formatted for."),
+     ("Every drawn wire segment is exactly horizontal or vertical (within half a unit) at the UI "
+      "scale the tree is formatted for.")),
     ("NF004", "no-overlapping-reroutes", "guarantee",
      "No two reroutes of different wires sit on top of each other (closer than 10 units)."),
     ("NF005", "logic-unchanged", "guarantee",
      "Formatting never changes what the tree computes; a format that would is undone."),
     ("NF010", "duplicate-input-nodes", "style",
-     "Input-like nodes (Group Input, Named Attribute, constants, ...) get a copy next to each "
-     "distant group of consumers instead of long wires from one node."),
+     ("Input-like nodes (Group Input, Named Attribute, constants, ...) get a copy next to each "
+      "distant group of consumers instead of long wires from one node.")),
     ("NF011", "commutative-swaps", "style",
-     "The two inputs of a commutative node (Add, Multiply, AND, Equal, ...) may be swapped when "
-     "that removes a crossing."),
+     ("The two inputs of a commutative node (Add, Multiply, AND, Equal, ...) may be swapped when "
+      "that removes a crossing.")),
     ("NF020", "free-zone-outputs", "style",
      "A zone's output may sit where its inputs are instead of level with the zone input."),
     ("NF021", "blocks-next-to-consumer", "style",
-     "A frame or zone with nothing linked into it sits in the column right before the node it "
-     "feeds, above or below the main flow, instead of at the far left; one with nothing linked at "
-     "all sits compactly under the tree."),
+     ("A frame or zone with nothing linked into it sits in the column right before the node it "
+      "feeds, above or below the main flow, instead of at the far left; one with nothing linked at "
+      "all sits compactly under the tree.")),
     ("NF022", "converging-shape", "style",
-     "A tree that converges on one output may take a '>' shape with the output in the middle of "
-     "its inputs. Off by default."),
+     ("A tree that converges on one output may take a '>' shape with the output in the middle of "
+      "its inputs. Off by default.")),
     ("NF023", "stacked-fields", "style",
-     "A short chain of field nodes (up to three, such as Index -> Compare) that feeds one input "
-     "of a node and nothing else sits in that node's column, stacked right above or below it, "
-     "with its wires running round the side. Off by default."),
+     ("A short chain of field nodes (up to three, such as Index -> Compare) that feeds one input "
+      "of a node and nothing else sits in that node's column, stacked right above or below it, "
+      "with its wires running round the side. Off by default.")),
     ("NF030", "staircase-bundles", "style",
-     "Wires that leave one node or enter one node are nested like stairs and never cross each "
-     "other."),
+     ("Wires that leave one node or enter one node are nested like stairs and never cross each "
+      "other.")),
     ("NF031", "no-u-jogs", "style",
-     "A route does not reverse its vertical direction unless a node is in the way, has no "
-     "landing that could merge with the level before or after it, and no step so small that "
-     "its two reroutes sit on one spot."),
+     ("A route does not reverse its vertical direction unless a node is in the way, has no "
+      "landing that could merge with the level before or after it, and no step so small that "
+      "its two reroutes sit on one spot.")),
     ("NF032", "wire-clearance", "style",
      "Wires keep clear of node edges, frame borders and zone outlines (no wire runs along them)."),
     ("NF033", "avoid-crossings", "style",
-     "A crossing that can be avoided (a lane on the other side, a wire entering a zone above its "
-     "input) is avoided."),
+     ("A crossing that can be avoided (a lane on the other side, a wire entering a zone above its "
+      "input) is avoided.")),
     ("NF034", "no-junction-look", "style",
-     "Different wires never share a point or run on one line, and no reroute sits in the middle "
-     "of a straight run: nothing looks like a junction."),
+     ("Different wires never share a point or run on one line, and no reroute sits in the middle "
+      "of a straight run: nothing looks like a junction.")),
     ("NF035", "fanned-multi-inputs", "style",
-     "The links into a multi-input socket (Join Geometry, Join Strings, ...) arrive a widget unit "
-     "apart and converge only in a short fan right before the socket, instead of running a "
-     "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
-     "Blender's noodle curving). Off by default."),
+     ("The links into a multi-input socket (Join Geometry, Join Strings, ...) arrive a widget unit "
+      "apart and converge only in a short fan right before the socket, instead of running a "
+      "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
+      "Blender's noodle curving). Off by default.")),
     ("NF036", "shared-tracks", "style",
-     "Vertical runs in one gap between columns that lie one above the other, at least 10 "
-     "units apart (as far as two reroutes must be), share one x instead of each taking its own track, so the gap reads as a "
-     "few clean lines and stays narrow."),
+     ("Vertical runs in one gap between columns that lie one above the other, at least 10 units "
+      "apart (as far as two reroutes must be), share one x instead of each taking its own track, "
+      "so the gap reads as a few clean lines and stays narrow.")),
     ("NF040", "label-first-reroute", "style",
      "The label of a labelled reroute goes on the first reroute of its wire, near the source."),
     ("NF041", "label-clearance", "style",
-     "A reroute label, and every greyed copy of it that Blender shows on the later reroutes of its "
-     "wire, overlaps no other label, no node and no wire."),
+     ("A reroute label, and every greyed copy of it that Blender shows on the later reroutes of its "
+      "wire, overlaps no other label, no node and no wire.")),
 ]
 # one-line tooltips for the add-on (the summaries above are the full text)
 SHORT = {

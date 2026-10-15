@@ -57,9 +57,10 @@ class OrderingMixin:
                 if k < self.R:
                     pos = {i: n for n, i in enumerate(layers[k + 1])}
 
-                    def key(i):
+                    def key(i, pos=pos):
                         """Initial sort key of an item in its column."""
-                        ks = [pos[e.v] + e.v.ins.get(e.vk, (0, 0))[1] / 1e4 for e in self.succ_edges[i] if e.v in pos]
+                        ks = [pos[e.v] + e.v.ins.get(e.vk, (0, 0))[1] / 1e4 for e in self.succ_edges[i]
+                              if e.v in pos]
                         jit = rng.uniform(-P.JITTER, P.JITTER) if rng is not None else 0.0
                         return (sum(ks) / len(ks) + jit if ks else 1e9, _name(i))
                 else:

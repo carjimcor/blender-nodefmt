@@ -205,7 +205,7 @@ def tick():
     except SystemExit as e:
         print(e, flush=True)
         code = 3
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - any error must still quit Blender
         traceback.print_exc()
         code = 3
     sys.stdout.flush()

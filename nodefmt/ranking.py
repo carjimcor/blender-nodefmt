@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Ranking: columns (layers) for the items of one container, and lanes (dummies) for long links."""
 from . import params as P
-from .graph import Item, Edge, CycleError, _name
+from .graph import CycleError, Edge, Item, _name
 
 
 class RankingMixin:

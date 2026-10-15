@@ -7,9 +7,10 @@ the items joined by straight links into blocks, then _compact() positions the bl
 """
 import math
 from heapq import heapify, heappop, heappush
+from itertools import pairwise
 
 from . import params as P
-from .graph import snap_up, snap_down
+from .graph import snap_down, snap_up
 
 
 class PlacementMixin:
@@ -33,7 +34,7 @@ class PlacementMixin:
         self._root = {i: i for i in items}
         self._rel = {i: 0.0 for i in items}
         # neighbours in the columns (fixed while the blocks grow): (a, b, a.h, gap below a)
-        self._pairs = [(a, b, a.h, self._gap(a, b)) for layer in self.layers for a, b in zip(layer, layer[1:])]
+        self._pairs = [(a, b, a.h, self._gap(a, b)) for layer in self.layers for a, b in pairwise(layer)]
         self._up = {b: (a, ah, gap) for a, b, ah, gap in self._pairs}  # item -> the pair above it
         self._zin = self._zone_input()
         # the block order constraints (_merge_cycle) as adjacency sets, kept in step by _try_merge
@@ -204,7 +205,7 @@ class PlacementMixin:
             its.sort(key=lambda i: i.order)
             if its[-1].order - its[0].order != len(its) - 1:
                 return False
-            for a, b in zip(its, its[1:]):
+            for a, b in pairwise(its):
                 _, ah, gap = up[b]
                 if merged[b] < merged[a] + ah + gap - 1e-6:
                     return False
@@ -319,7 +320,7 @@ class PlacementMixin:
             a = todo.pop()
             ya = Y[a]
             for b, c in succ.get(a, ()):
-                if ya + c > Y[b]:
+                if ya + c > Y[b]:  # noqa: PLR1730 - hot loop, twice as fast as max()
                     Y[b] = ya + c
                 indeg[b] -= 1
                 if indeg[b] == 0:
@@ -354,7 +355,7 @@ class PlacementMixin:
                     if p is not x:
                         yp = new[p] if p in new else Y[p]
                         c = rel[a] + u[1] + u[2] - vb
-                        if yp + c > y:
+                        if yp + c > y:  # noqa: PLR1730 - hot loop, twice as fast as max()
                             y = yp + c
             return y
 
@@ -680,7 +681,7 @@ class PlacementMixin:
                     on_grid = r in anchor
                     eo = edges_of[r]
 
-                    def score(c):
+                    def score(c, r=r, ws=ws, on_grid=on_grid, eo=eo):
                         """Cost of block r at height c (its pulls and the grid price)."""
                         off = on_grid and abs(snap_near(r, c) - c) > 1e-6
                         if off and r in strict:

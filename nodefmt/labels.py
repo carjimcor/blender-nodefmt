@@ -23,7 +23,7 @@ def text_width(text):
             import blf
             blf.size(0, FONT_SIZE)
             w = float(blf.dimensions(0, text)[0])
-        except Exception:
+        except Exception:  # noqa: BLE001 - no UI font (background mode): the estimate
             w = CHAR_W * len(text)
         _widths[text] = w
     return w

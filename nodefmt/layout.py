@@ -3,7 +3,9 @@
 positions and reroute routes. Works on a model.Model; blend.py writes the result to Blender."""
 import math
 
-from . import engine, params as P, routes, rules as _rules, wires
+from . import engine, routes, wires
+from . import params as P
+from . import rules as _rules
 from .graph import Result, snap_up
 from .model import FLOW
 
@@ -350,9 +352,7 @@ class Formatter:
             pin = None
             if c.kind == 'zone' and name == c.pair[0]:
                 pin = 'first'
-            elif c.kind == 'zone' and name == c.pair[1]:
-                pin = 'last'
-            elif m.type(name) in OUTPUTS and c.kind == 'root':
+            elif (c.kind == 'zone' and name == c.pair[1]) or (m.type(name) in OUTPUTS and c.kind == 'root'):
                 pin = 'last'
             elif m.info[name].get("pin") and c.kind == 'root':
                 pin = m.info[name]["pin"]  # a link to the rest of the tree (sort of a part)
@@ -766,7 +766,7 @@ class Formatter:
         """The real input socket a route segment ends at (None if the route continues)."""
         if dst is None:
             return None
-        item_id, key = dst
+        _item_id, key = dst
         while key[0] == PORT_D:  # a port at a socket of the block's first column
             key = key[2]
         return None if key[0] == PORT_IN else key  # PORT_IN: the route continues inside

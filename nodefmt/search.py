@@ -9,11 +9,14 @@ The slide pass runs once, on the chosen layout: it moves a group of nodes held t
 straight links up or down so that one more link becomes straight, if nothing overlaps and the
 cost drops.
 """
+from itertools import pairwise
+
 from . import params as P
 from .graph import _name as _key
 
 # the order in which _moves lists the kinds of move
-_ORDER = {'port': 0, 'sat': 1, 'lane': 2, 'bundle': 3, 'fan': 4, 'comm': 5, 'placer': 6, 'bend': 7, 'node': 8, 'swap': 9}
+_ORDER = {'port': 0, 'sat': 1, 'lane': 2, 'bundle': 3, 'fan': 4, 'comm': 5, 'placer': 6, 'bend': 7, 'node': 8,
+          'swap': 9}
 
 
 class SearchMixin:
@@ -95,7 +98,8 @@ class SearchMixin:
                         moves.append(('node', lambda cur, i=i, k=k, where=where: self._move_item(cur, i, k, where)))
         # let the end of a lane bend, so the links next to it can be straight
         for e in [e for e in getattr(self, 'aligned', []) if e.u.is_point and e.v.kind in ('node', 'compound')]:
-            moves.append(('bend', lambda cur, e=e: cur._replace(banned=cur.banned | {e}) if e not in cur.banned else None))
+            moves.append(('bend', lambda cur, e=e: cur._replace(banned=cur.banned | {e})
+                          if e not in cur.banned else None))
         # a satellite (NF021) to either end of the top or bottom group of its column
         for k in range(self.R + 1):
             for i in [i for i in cur.layers[k] if getattr(i, 'sat', False)]:
@@ -116,7 +120,8 @@ class SearchMixin:
             moves.append(('comm', flip))
         # the other placement method
         for placer in P.PLACERS:
-            moves.append(('placer', lambda cur, placer=placer: cur._replace(placer=placer) if cur.placer != placer else None))
+            moves.append(('placer', lambda cur, placer=placer: cur._replace(placer=placer)
+                          if cur.placer != placer else None))
         # moves that change a whole side first: a small budget tries them before the many swaps
         moves.sort(key=lambda m: _ORDER.get(m[0], 9))
         return moves
@@ -293,8 +298,8 @@ class SearchMixin:
             bent = [e for e in self.edges if abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)) > P.EPS
                     and not (e.u.is_point and e.v.is_point)]
             prio = self._priorities()
-            bent.sort(key=lambda e: (prio.get(e, 3), abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)),
-                                     repr(e)))
+            bent.sort(key=lambda e: (prio.get(e, 3),
+                                     abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)), repr(e)))
             done = False
             for e in bent:
                 d = self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)
@@ -349,7 +354,7 @@ class SearchMixin:
             return False
         for layer in self.layers:
             ys = [(i.y + (delta if i in g else 0.0), i) for i in layer]
-            for (ya, a), (yb, b) in zip(ys, ys[1:]):
+            for (ya, a), (yb, b) in pairwise(ys):
                 if yb < ya + a.h + self._gap(a, b) - 1e-6:
                     return False
             above = getattr(self, 'above', ())

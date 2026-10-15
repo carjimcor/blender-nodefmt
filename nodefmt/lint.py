@@ -7,6 +7,7 @@ formatted: needs a trial format) are added by api.check_tree. NF005, NF020 and N
 geometric test: a tree that breaks them shows up as NF900.
 """
 from collections import namedtuple
+from itertools import pairwise
 
 from . import params as P
 from . import routes, wires
@@ -247,7 +248,8 @@ def _loose_rise(d, name, members):
             for s in d.segments()]
     for n, poly in d.outlines:
         r = (min(p[0] for p in poly), min(p[1] for p in poly), max(p[0] for p in poly), max(p[1] for p in poly))
-        if n != name and not inside(r) and not (r[0] <= rect[0] and rect[2] <= r[2] and r[1] <= rect[1] and rect[3] <= r[3]):
+        if n != name and not inside(r) and not (r[0] <= rect[0] and rect[2] <= r[2]
+                                                and r[1] <= rect[1] and rect[3] <= r[3]):
             occ.append(r)
     occ = [r for r in occ if not inside(r)]
     if not occ:
@@ -322,7 +324,7 @@ def _tight_multi(d):
     {socket gid: (smallest distance, a point to report)}, measured where each last stretch
     starts. A collapsed node (all slots at one point) has no fan."""
     ends = {}
-    for tag, t in d.trees.items():
+    for t in d.trees.values():
         for q, k in t.dst.items():
             if len(k) == 4 and q in t.parent:
                 ends.setdefault(k[:3], []).append((k[3], t.parent[q], q))
@@ -331,7 +333,7 @@ def _tight_multi(d):
         if len(ls) < 2 or len({q for _, _, q in ls}) < 2:
             continue
         ls.sort()
-        gaps = [(abs(a[1][1] - b[1][1]), b[2]) for a, b in zip(ls, ls[1:])]
+        gaps = [(abs(a[1][1] - b[1][1]), b[2]) for a, b in pairwise(ls)]
         gap, at = min(gaps)
         if gap < P.FAN_MIN - 0.5:
             out[sock] = (gap, at)
@@ -364,7 +366,8 @@ def _jogs(d, tag):
             t.children, t.parent = old
             if f is None:
                 continue
-            if f["reversals"] + f["landings"] < base["reversals"] + base["landings"]                     and all(f[k] <= base[k] for k in keys):
+            if (f["reversals"] + f["landings"] < base["reversals"] + base["landings"]
+                    and all(f[k] <= base[k] for k in keys)):
                 out.append(("U-jog" if (a, b) in rev else "landing", (a, b), (pa[1], c[1])))
                 break
     return out

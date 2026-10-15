@@ -37,7 +37,7 @@ def _props(obj):
             continue
         try:
             d[k] = _val(getattr(obj, k))
-        except Exception:
+        except Exception:  # noqa: BLE001 - any property bpy cannot read is recorded as such
             d[k] = "err"
     return d
 
@@ -110,7 +110,8 @@ def fingerprint(nt):
         for s in n.inputs:
             if s.is_multi_input and s.links:
                 ls = sorted(s.links, key=lambda l: l.multi_input_sort_id)
-                multi[f"{name(n.name)}:{s.identifier}"] = [[(name(a), b, mu) for a, b, mu in _resolve_from(l)] for l in ls]
+                multi[f"{name(n.name)}:{s.identifier}"] = [[(name(a), b, mu) for a, b, mu in _resolve_from(l)]
+                                                          for l in ls]
     iface = [(i.item_type, getattr(i, "in_out", None), i.name, _val(getattr(i, "default_value", None)))
              for i in nt.interface.items_tree]
     return {"nodes": nodes, "links": sorted(resolved), "multi": multi, "interface": iface,
@@ -164,7 +165,7 @@ class Snapshot:
     def restore(self, nt, editor=None):
         """Put everything back. Inputs are relinked before anything is removed, so no socket is
         left unlinked on the way (the Viewer drops unlinked items)."""
-        from .dup import source_keys, _copy_node
+        from .dup import _copy_node, source_keys
         current = [n for n in nt.nodes if n.bl_idname == 'NodeReroute']
         for k, n in enumerate(current):  # free their names for the reroutes put back
             n.name = f"nodefmt_tmp_{k}"

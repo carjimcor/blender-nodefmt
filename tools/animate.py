@@ -33,9 +33,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-from nodefmt import dup, rules, wires  # noqa: E402
-from nodefmt.layout import Formatter  # noqa: E402
-from nodefmt.model import Model  # noqa: E402
+from nodefmt import dup, rules, wires
+from nodefmt.layout import Formatter
+from nodefmt.model import Model
 
 # socket colours (Blender 5, node_socket.cc)
 SOCKET = {"GEOMETRY": (0, 214, 163), "VALUE": (161, 161, 161), "INT": (89, 140, 92), "BOOLEAN": (204, 166, 214),
@@ -82,12 +82,12 @@ def mix(a, b, t):
 
 def rgb(c, k=1.0):
     """A colour (0..1 floats, times k) as an RGB tuple of 0-255 ints."""
-    return tuple(int(round(min(max(v * k, 0.0), 1.0) * 255)) for v in c[:3])
+    return tuple(round(min(max(v * k, 0.0), 1.0) * 255) for v in c[:3])
 
 
 def blend(fg, bg, a):
     """fg over bg with alpha a (both 0-255 tuples)."""
-    return tuple(int(round(bg[i] + (fg[i] - bg[i]) * a)) for i in range(3))
+    return tuple(round(bg[i] + (fg[i] - bg[i]) * a) for i in range(3))
 
 
 def pav(desired, heights):
@@ -136,7 +136,8 @@ class Demo:
     def __init__(self, path, select=None):
         """Load a dumped tree (tools/dump_tree.py), format it offline with the rules `select`
         (as in nodefmt.toml; default: the default rules) and build the states."""
-        J = json.load(open(path))
+        with open(path) as f:
+            J = json.load(f)
         self.theme, self.tag, self.ztype = J["theme"], J["color_tag"], J.get("zone_type", {})
         data = J["data"]
         self.orig = json.loads(json.dumps(data["nodes"]))  # the tree as it is (before copies)
@@ -319,7 +320,7 @@ class Timeline:
         self.d, self.fps = demo, fps
         self.frames = []
         d = demo
-        S = lambda s: int(round(s * fps))
+        S = lambda s: round(s * fps)
 
         def hold(pos, n, **kw):
             """Add n frames that keep positions `pos`."""
@@ -341,7 +342,7 @@ class Timeline:
         hold(d.start, S(1.8), curve=1.0, cap=0, w=0.0)
         # 1: curves become direct lines
         for i in range(S(1.2)):
-            self.frames.append(dict(pos=d.start, curve=1 - ease((i + 1) / S(1.2)), cap=1, w=0.0))
+            self.frames.append({"pos": d.start, "curve": 1 - ease((i + 1) / S(1.2)), "cap": 1, "w": 0.0})
         hold(d.start, S(0.6), curve=0.0, cap=1, w=0.0)
         # 2: ranking (copies of input nodes fade in at their column and take over links)
         left = d.bounds(d.ranked)[0]
@@ -354,7 +355,7 @@ class Timeline:
             for k in d.names:
                 u = ease((t - 0.3 * xr[k] / span) / 0.7)
                 pos[k] = (mix(d.start[k][0], d.ranked[k][0], u), mix(d.start[k][1], d.ranked[k][1], u))
-            self.frames.append(dict(pos=pos, curve=0.0, cap=2, w=ease(t)))
+            self.frames.append({"pos": pos, "curve": 0.0, "cap": 2, "w": ease(t)})
         hold(d.ranked, S(0.6), curve=0.0, cap=2)
         # 3: ordering, column by column, overlapping
         steps = d.sweep
@@ -374,7 +375,7 @@ class Timeline:
                             # nodes moving up pass on the left, nodes moving down on the right
                             side = 35.0 * math.sin(math.pi * u) * (1 if b[n][1] > a[n][1] else -1)
                             cur[n] = (mix(cur[n][0], b[n][0], u) + side, mix(cur[n][1], b[n][1], u))
-                self.frames.append(dict(pos=cur, curve=0.0, cap=3))
+                self.frames.append({"pos": cur, "curve": 0.0, "cap": 3})
         hold(d.ordered, S(0.6), curve=0.0, cap=3)
         # 4: placement, staggered by column
         colx = {n: ci / max(1, len(d.cols) - 1) for ci, c in enumerate(d.cols) for n in c}
@@ -385,7 +386,7 @@ class Timeline:
         n5 = S(2.6)
         for i in range(n5):
             front = mix(x0 - 40, x1 + 120, ease((i + 1) / n5))
-            self.frames.append(dict(pos=d.end, curve=0.0, cap=5, front=front))
+            self.frames.append({"pos": d.end, "curve": 0.0, "cap": 5, "front": front})
         # 6: the result
         hold(d.end, S(2.6), curve=0.0, cap=6, front=1e9)
         self.loop = S(0.6)  # cross-fade back to the first frame
@@ -430,9 +431,9 @@ class Renderer:
                 if bold:
                     try:
                         f.set_variation_by_axes([620])
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110 - not a variable font: the regular weight
                         pass
-            except Exception:
+            except Exception:  # noqa: BLE001 - no usable font file: Pillow's default font
                 f = ImageFont.load_default()
             self._fonts[key] = f
         return self._fonts[key]
@@ -738,7 +739,7 @@ def main():
         for p in s.encode():
             out.mux(p)
     ms = 1000.0 / a.fps
-    durs = [int(round((i + 1) * ms)) - int(round(i * ms)) for i in range(len(small))]
+    durs = [round((i + 1) * ms) - round(i * ms) for i in range(len(small))]
     webp = os.path.join(a.out, "nodefmt-demo.webp")
     small[0].save(webp, save_all=True, append_images=small[1:], duration=durs, loop=0,
                   quality=a.webp_quality, method=6, minimize_size=True)
@@ -752,7 +753,7 @@ def main():
     pal = sheet.quantize(colors=192, method=Image.Quantize.FASTOCTREE)
     gq = [f.quantize(palette=pal, dither=Image.Dither.NONE) for f in gif_frames]
     gif = os.path.join(a.out, "nodefmt-demo.gif")
-    gq[0].save(gif, save_all=True, append_images=gq[1:], duration=int(round(1000 * step / a.fps)), loop=0,
+    gq[0].save(gif, save_all=True, append_images=gq[1:], duration=round(1000 * step / a.fps), loop=0,
                optimize=False, disposal=1)
     for p in (mp4, webp, gif):
         print(f"{p}: {os.path.getsize(p) / 1e6:.2f} MB")

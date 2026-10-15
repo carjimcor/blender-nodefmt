@@ -35,16 +35,16 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nodefmt import dup, rules  # noqa: E402
-from nodefmt.layout import Formatter  # noqa: E402
-from nodefmt.model import Model  # noqa: E402
+from nodefmt import dup, rules
+from nodefmt.layout import Formatter
+from nodefmt.model import Model
 
 
 def load(path):
     """The model data of a JSON file of tools/dump_tree.py (or plain model data)."""
     with open(path) as f:
         j = json.load(f)
-    return j["data"] if "data" in j else j
+    return j.get("data", j)
 
 
 def format_once(data):

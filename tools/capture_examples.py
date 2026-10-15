@@ -214,8 +214,8 @@ def shoot_panel(path):
     yield 0.3
     v = region.view2d
     ui_s = bpy.context.preferences.system.ui_scale
-    x0, y0 = v.view_to_region(l * ui_s, t * ui_s, clip=False)
-    x1, y1 = v.view_to_region(r * ui_s, b * ui_s, clip=False)
+    x0, _y0 = v.view_to_region(l * ui_s, t * ui_s, clip=False)
+    _x1, y1 = v.view_to_region(r * ui_s, b * ui_s, clip=False)
     ox, oy, H = region.x - area.x, region.y - area.y, area.height
     bottom = max(H - (y1 + oy) + PAD, 460)
     box = [math.floor(x0 + ox - PAD), 0, area.width, math.ceil(bottom)]
@@ -226,6 +226,7 @@ def shoot_panel(path):
 def fingerprint_digest(nt):
     """The first 12 hex digits of a hash of the tree's logic fingerprint (check.fingerprint)."""
     import hashlib
+
     from nodefmt import check
     text = json.dumps(check.fingerprint(nt), sort_keys=True, default=repr)
     return hashlib.sha1(text.encode()).hexdigest()[:12]
@@ -293,7 +294,7 @@ def run():
             for nt, when in ((before, "before"), (after, "after")):
                 ed.show(nt)
                 if code == "NF005":  # the logic fingerprint under the tree
-                    l, b, r, t = bbox(nt)
+                    l, b, _r, _t = bbox(nt)
                     STAMP[:] = [(l, b - 20 / zoom, f"Logic fingerprint: {fingerprint_digest(nt)}")]
                 box = yield from shoot(nt, os.path.join(ARGS.out, f"{name}-{when}.png"), zoom)
                 if STAMP:
@@ -347,7 +348,7 @@ def tick():
         return next(GEN)
     except StopIteration:
         code = 0
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - any error must still quit Blender
         traceback.print_exc()
         code = 1
     sys.stdout.flush()

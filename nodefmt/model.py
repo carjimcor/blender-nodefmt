@@ -70,9 +70,9 @@ def read(nt, where=None, part=None, pins=None):
     rest; they are kept and take the first or last column."""
     where = where or {}
     pins = pins or {}
-    from .sockets import socket_location, verify
     from . import dup, ortho
     from .labels import text_width
+    from .sockets import socket_location, verify
     verify(nt)
     ui = ortho.ui_scale()
     nodes = [n for n in nt.nodes if part is None or n.name in part]
@@ -291,11 +291,10 @@ class Model:
                 continue
             a, b = (k, 'i', c[0]), (k, 'i', c[1])
             la, lb = self.linked_in(a), self.linked_in(b)
-            if (la and lb) or ((la or lb) and c[2]):
-                if all(f"i{g[2]}" in nodes[k]["socks"] for g in (a, b)):
-                    self.comm[k] = (a, b)
-                    self._add(a)
-                    self._add(b)
+            if ((la and lb) or ((la or lb) and c[2])) and all(f"i{g[2]}" in nodes[k]["socks"] for g in (a, b)):
+                self.comm[k] = (a, b)
+                self._add(a)
+                self._add(b)
         self._multi_slots()
         self.geo = {g: t in FLOW for g, t in self.sock_type.items()}
         self.main = {}

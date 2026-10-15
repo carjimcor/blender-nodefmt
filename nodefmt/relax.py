@@ -56,7 +56,8 @@ class RelaxMixin:
                     for e in self.pred_edges[i]:
                         pulls.append((self._sock_y(e.u, e.uk, True) - i.ins.get(e.vk, (0, 0))[1], self._link_weight(e)))
                     for e in self.succ_edges[i]:
-                        pulls.append((self._sock_y(e.v, e.vk, False) - i.outs.get(e.uk, (0, 0))[1], self._link_weight(e)))
+                        pulls.append((self._sock_y(e.v, e.vk, False) - i.outs.get(e.uk, (0, 0))[1],
+                                      self._link_weight(e)))
                     if zout is not None and i is zout:  # a zone's output and the zone input's line
                         if mode == 'level':
                             pulls = [(zin.y + zoff, 1000.0)]

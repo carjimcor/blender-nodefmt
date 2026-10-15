@@ -86,7 +86,6 @@ class Edge:
 
 class Result:
     """The layout of one container (attributes set by _Layout.finish and layout())."""
-    pass
 
 
 class LayoutBase:

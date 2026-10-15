@@ -203,7 +203,7 @@ def check_tests(ui):
         try:
             ui._draw_overlay()
             calls.append("ok")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - the outcome is what is tested
             calls.append(repr(e))
     handle = bpy.types.SpaceNodeEditor.draw_handler_add(probe, (), 'WINDOW', 'POST_PIXEL')
     with override():
@@ -269,6 +269,7 @@ def capture_tests(ui):
     step; Esc cancels, writes nothing and puts the editor back."""
     import shutil
     import tempfile
+
     from nodefmt import capture
     tmp = tempfile.mkdtemp(prefix="nodefmt-test-")
     s = bpy.context.window_manager.nodefmt_capture
@@ -368,7 +369,7 @@ def tick():
         return next(GEN)
     except StopIteration:
         pass
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - any error must still quit Blender
         traceback.print_exc()
         RESULTS.append(False)
     failed = RESULTS.count(False)

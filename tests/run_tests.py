@@ -348,7 +348,7 @@ def main():
         for code, path, prep in runs:
             try:
                 res = run_one(path, ed, prep)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - a failing tree fails its row, the run goes on
                 traceback.print_exc()
                 res = {"sort": (False, f"error: {e}")}
             rows.append((code, res))
@@ -378,7 +378,7 @@ def main():
             for name, nodes in SCENARIOS:
                 try:
                     res = run_selection(sel, ed, nodes)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - a failing scenario fails its row, the run goes on
                     traceback.print_exc()
                     res = {"rest": (False, f"error: {e}")}
                 bad = [c for c in SEL_COLUMNS if res.get(c, (False,))[0] is False]
@@ -395,7 +395,7 @@ def tick():
     """Run main() once Blender's window is up, then quit with its exit code."""
     try:
         code = main()
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - any error must still quit Blender
         traceback.print_exc()
         code = 1
     sys.stdout.flush()

@@ -2,17 +2,15 @@
 """Screenshot each rule example before and after sorting (the images of docs/RULES.md).
 
     blender --factory-startup --python tools/capture_examples.py -- OUT_DIR [--only NF031 ...]
+        [--width 600] [--zoom 0.8]
 
-Runs with Blender's window at UI scale 1.0 (or the scale an example asks for, see
-make_examples.py) and closes itself; the examples are appended, never saved. For each
-examples/NF0xx.blend it writes OUT_DIR/NF0xx-before.png and OUT_DIR/NF0xx-after.png at one
-zoom (see make_pair): a style rule sorted with every style rule off, then with only that rule;
-a guarantee as it is, then sorted with no style rules. Each place in the before image that
-breaks the rule is ringed in red with its code; NF005 shows the logic fingerprint of the tree
-in both. OUT_DIR/boxes.json holds the part of each screenshot that holds the tree.
-examples/selection.blend gives selection-before.png and selection-after.png (Sort Selection),
-and check-panel.png the Check panel on an example. tools/finish_images.py crops and compresses
-them.
+Runs with Blender's window at UI scale 1.0 (or the example's own, see make_examples.py) and
+closes itself; the examples are appended, never saved. For each examples/NF0xx.blend it writes
+OUT_DIR/NF0xx-before.png and NF0xx-after.png at one zoom (see make_pair), each place that breaks
+the rule ringed in red in the before image (NF005: the logic fingerprint under both). It also
+writes selection-before.png and selection-after.png (Sort Selection), check-panel.png (the Check
+panel) and boxes.json, the part of each screenshot that holds the tree, which
+tools/finish_images.py crops to. --only also takes "selection" and "panel".
 """
 import argparse
 import glob

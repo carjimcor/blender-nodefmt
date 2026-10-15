@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Relaxation: a second placement method, by springs instead of blocks.
 
-Every link is a spring that pulls the sockets it joins to one height. Column by column, sweeping
-down and up, each item moves to the weighted mean of what its links want; the column is then
-stacked again in its order with the minimum total weighted displacement (isotonic regression with
-gaps, solved by pool adjacent violators), so nothing overlaps. After P.RELAX_ITERS sweeps the
-links that are nearly straight are made straight by moving whole groups of items (straightening),
-in order of link priority, as long as no column overlaps.
+Every link is a spring that pulls the sockets it joins to one height. Sweeping the columns down
+and up, each item moves to the weighted mean of what its links want, and the column is restacked
+in its order with the least weighted displacement (isotonic regression with gaps, by pool
+adjacent violators). After P.RELAX_ITERS sweeps, nearly straight links are made straight by
+moving whole groups of items, in order of link priority, as long as no column overlaps.
 
-The search keeps whichever placement (blocks or relax) gives the cheaper layout for each order.
+The search keeps whichever placement method gives the cheaper layout for each order.
 """
 import math
 
@@ -34,11 +33,11 @@ class RelaxMixin:
         """Spring stiffness of a link: main inputs and geometry pull harder, lanes stay level."""
         w = 4.0 if e.main else (2.0 if e.geo else 1.0)
         if e.u.is_point and e.v.is_point:
-            w = 2.0  # lanes stay level
+            w = 2.0
         return w
 
     def relax_y(self):
-        """Place items by relaxation (see the module docstring)."""
+        """Place items by relaxation, then straightening (see the module docstring)."""
         self.aligned = []
         zin = self._zone_input()
         zp = self._zone_pair()
@@ -111,7 +110,8 @@ class RelaxMixin:
                 prev = i
 
     def _straighten(self):
-        """Make nearly straight links straight by moving groups of items (see module docstring)."""
+        """Straighten the links bent by at most P.STRAIGHTEN by moving groups of items (the smaller
+        group first; banned links stay bent). Sets self.aligned."""
         prio = self._priorities()
         for _ in range(2):
             group = self._straight_groups()

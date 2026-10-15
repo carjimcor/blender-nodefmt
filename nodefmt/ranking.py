@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Ranking: columns (layers) for the items of one container, and bus dummies for long links."""
+"""Ranking: columns (layers) for the items of one container, and lanes (dummies) for long links."""
 from . import params as P
 from .graph import Item, Edge, CycleError, _name
 
@@ -29,8 +29,8 @@ class RankingMixin:
         return order
 
     def rank(self):
-        """Ranks; a big block (a zone or frame of several columns) gets a column of its own:
-        nodes that would share it are kept to its right, and the block moves left instead."""
+        """Set i.rank and i.sat of every item, and self.R. A big block (a zone or frame of several
+        columns) gets a column of its own: nodes that would share it are kept to its right."""
         sats = self._satellites()
         for i in self.items:
             i.sat = i in sats
@@ -52,10 +52,9 @@ class RankingMixin:
             extra += add
 
     def _satellites(self):
-        """Blocks placed next to their consumer (rule NF021 blocks-next-to-consumer): a big block
-        (a frame or zone of several columns) with nothing linked into it, such as a frame that
-        starts from its own Group Input. It takes the column right before its first consumer,
-        at the top or bottom of that column, and reaches to the left over the columns before it
+        """Satellites (NF021): big blocks (frames or zones of several columns) with nothing linked
+        into them, such as a frame that starts from its own Group Input. Each sits at the top or
+        bottom of the column right before its consumer and reaches left over the earlier columns
         (columns.py), so its output wire is short instead of crossing the whole tree."""
         if not P.SATELLITES or self.mode == 'keep' or not getattr(self, 'use_sats', True):
             return set()
@@ -93,7 +92,6 @@ class RankingMixin:
             succs[e.u].append(e.v)
         r = {}
         if self.mode == 'keep':
-            # columns from the original x positions
             real = sorted((i for i in items if i.ox is not None), key=lambda i: i.ox)
             col, start, c = {}, None, -1
             for i in real:
@@ -123,7 +121,7 @@ class RankingMixin:
         for i in items:
             if i.pin == 'last':
                 r[i] = R
-        # pinned-last items may need everything before them; re-check constraints
+        # pinning the last items may break a constraint before them: re-check
         for i in topo:
             for p in preds[i]:
                 if r[i] <= r[p]:

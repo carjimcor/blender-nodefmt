@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Build the rule examples: one small synthetic node tree per rule that breaks it.
 
-    blender --factory-startup --python tools/make_examples.py [-- --only NF031]
+    blender --factory-startup --python tools/make_examples.py [-- --only NF031 ... --out DIR]
 
-Writes examples/NF0xx.blend, each holding one Geometry Nodes group named "NF0xx <rule name>"
-(with a fake user, no objects, no screens), a second example of a rule as NF0xx-<what>.blend
-(group "NF0xx <rule name> (<what>)"), and examples/selection.blend for Sort Selection.
-A style rule's example is saved sorted with every style rule off (see main()). An example meant
-for another UI scale stores it in the group's custom property "nodefmt_ui_scale" (NF034: 1.25).
-Runs with Blender's window: reroutes are placed from socket positions, which only exist once a
-tree is drawn. Blender closes itself.
+Writes examples/NF0xx.blend, each holding one Geometry Nodes group "NF0xx <rule name>" (fake
+user, no objects, no screens); NF0xx-<what>.blend is a second example of a rule (group "NF0xx
+<rule name> (<what>)") and selection.blend is for Sort Selection. A style rule's example is saved
+sorted with every style rule off (see main()). An example meant for another UI scale stores it
+in the group's custom property "nodefmt_ui_scale" (NF003-rows: 1.4, NF034: 1.25). Runs with
+Blender's window (reroutes are placed from socket positions, which only exist once a tree is
+drawn) and closes itself.
 """
 import argparse
 import os
@@ -168,10 +168,10 @@ def frame(t, label):
 
 
 def nf003_rows():
-    """A tall Instance on Points above y = 0, for UI scale 1.4: Multiply feeds its Scale, low
-    on the node, straight. At a fractional scale Blender draws the rows of a node above 0 a
-    pixel taller than below it; measured anywhere else, Scale was 4 units off where it is drawn,
-    and its wire got a tiny step. The Points wire is 1.5 units off its line (the rule broken)."""
+    """A tall Instance on Points above y = 0, for UI scale 1.4: Multiply feeds its Scale (low on
+    the node) straight. At a fractional scale Blender draws a node's rows above y = 0 a pixel
+    taller than below it, so Scale measured elsewhere is 4 units off and its wire gets a tiny
+    step. The Points wire is 1.5 units off its line (the rule broken)."""
     t = Tree("NF003", inputs=(("Geometry", 'Geometry'), ("Size", 'Float')), name="NF003 orthogonal-segments (rows)")
     t.nt[SCALE_KEY] = 1.4
     gi = t.node('NodeGroupInput', 0, 600)

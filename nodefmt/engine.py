@@ -2,22 +2,20 @@
 """Layered layout of one container (the tree, a zone or a frame), in pure Python.
 
 Coordinates: x to the right, y DOWN (y = -blender_y), an item's position is its top-left corner.
-The layout of a container is a Sugiyama-style layered drawing with orthogonal routing:
+The entry point is layout(); _Layout combines the steps of a Sugiyama-style layered drawing:
 
   ranking.py    columns (longest-path ranks), and lanes (dummies) for links spanning columns
   ordering.py   order of each column: barycenter sweeps, transposition, commutative swaps
-  force.py      another order: force-directed relaxation of heights, sorted
-  placement.py  heights: blocks of straight links + compaction ('blocks', 'balanced')
+  force.py      another order: force-directed relaxation of heights
+  placement.py  heights: blocks of straight links + compaction ('blocks'; 'balanced' with NF022)
   relax.py      heights: spring relaxation + straightening ('relax')
-  columns.py    x of columns and of the routing tracks in each gap (track order)
+  columns.py    x of the columns and of the routing tracks in each gap
   cost.py       routes and the weighted faults of a layout
   search.py     local search over the choices above, and the final slide pass
 
-layout() runs them for several seeds and keeps the cheapest layout. Every link that is not
-straight turns on a vertical track in the gap after its source column, so no link passes behind
-a node, and every segment is horizontal or vertical (into a multi-input socket too: the link
-turns at its slot's height). In a zone, the
-zone input heads the first column and the zone's content hangs below its top line.
+A link that is not straight turns on a vertical track in the gap after its source column (at its
+input's or slot's height), so every segment is horizontal or vertical and no link passes behind a
+node. In a zone, the zone input heads the first column and the content hangs below its top line.
 """
 import random
 import time
@@ -35,7 +33,6 @@ from .relax import RelaxMixin
 from .search import SearchMixin
 
 GRID = P.GRID  # kept for callers (layout.py)
-# what layout.py uses from here
 __all__ = ['layout', 'snapshot_state', 'Item', 'Edge', 'CycleError', 'PORT_DIRECT', 'GRID', 'Result']
 
 
@@ -43,28 +40,19 @@ def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, label
     """Lay out the items of one container. pad = (left, top, right, bottom) is reserved around
     the content (frames). Returns a Result with item positions, route segments and the box.
 
-    Steps: ranks, lanes (bus dummies) for long links, then for each seed (P.SEEDS; seed 0 is the
-    plain deterministic run, others jitter the initial order and shuffle the search moves): the
-    best orders of the crossing reduction are laid out in full with each placement method, the
-    cheapest is improved by a short local search (P.SEARCH_SEED layouts). The best result of all
-    seeds gets the full local search (P.SEARCH layouts) and the slide pass. Everything is
-    deterministic (seeded generators, budgets counted in layouts, not seconds), so formatting a
-    formatted tree changes nothing.
+    For each seed (P.SEEDS, normally one; seed 0 is the plain deterministic run), the best orders
+    are laid out with each placement method and the cheapest gets a short local search
+    (P.SEARCH_SEED layouts); the best of all seeds gets the full search (P.SEARCH) and the slide.
+    It is deterministic: generators are seeded and budgets count layouts, not seconds.
 
-    In a zone, every candidate is also tried with each zone output mode (P.ZONE_OUT). The modes
-    form two groups, searched apart in every seed: 'level' (the output on the zone input's line)
-    and 'free' ('median' or 'mean', whichever starts cheaper). Each group's best gets the full
-    search and the slide. The Result is the cheaper group; res.alts lists both groups with their
-    costs and res.realize(group) gives the other one, so the parent container can pick the group
-    that suits what follows the zone (layout.py). P.SEED_ONLY runs one seed only (tests).
+    In a zone, candidates are also tried with each zone output mode (P.ZONE_OUT), searched in two
+    groups: 'level' and 'free' ('median' or 'mean'). The Result is the cheaper group; res.alts
+    lists both and res.realize(group) gives the other, so the parent can choose (layout.py).
 
-    snapshot, if given, is called as snapshot(phase, state) with plain data of the layout after
-    each phase ('order', 'placement', 'seed <n>', 'search', 'slide'); see snapshot_state().
-    labels: {source tag: text width} of the labelled wires (NF041, cost.py and columns.py).
-
-    A child block with commutative pairs at its border (layout.py, NF011) is laid out with the
-    pairs as the block left them and with the pairs free; the cheaper of the two fresh layouts
-    decides (exchanging them can lead the search elsewhere, to a worse layout)."""
+    A block with commutative pairs at its border (NF011) is laid out with the pairs fixed and
+    free; the cheaper fresh layout decides. snapshot(phase, state), if given, gets
+    snapshot_state() after each phase ('seed <n>: order', 'seed <n>', 'search', 'slide').
+    labels: {source tag: text width} of the labelled wires (NF041)."""
     t0 = time.perf_counter()
     border = [i for i in items if i.kind == 'compound' and getattr(i, 'comm', None)] if mode == 'relayout' else []
     if not border:
@@ -87,16 +75,14 @@ def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, label
 
 
 def _choose(items, edges, mode, pad, snapshot, t0, labels, stable=True):
-    """layout() of the items as they are: with and without satellites (NF021)."""
-    # NF021: blocks with no inputs may sit next to their consumer (satellites, ranking.py); the
-    # container is laid out with and without them and the cheaper layout is kept
+    """layout() of the items as they are: with and without satellites (NF021, ranking.py), the
+    cheaper is kept."""
     sats = P.SATELLITES and mode == 'relayout' and any(
         i.kind == 'compound' and getattr(i, 'big', False) and i.pin is None
         and not any(e.v is i for e in edges) and any(e.u is i for e in edges) for i in items)
     if not sats:
         return _layout(items, edges, mode, pad, snapshot, False, t0, stable=stable, labels=labels)
-    # the choice between the two is made on fresh layouts only (no stability start), so that
-    # switching NF021 off and on again gives the same result
+    # decided on fresh layouts only (no stability start), so toggling NF021 gives the same result
     plain = _layout(items, edges, mode, pad, None, False, t0, stable=False, labels=labels)
     res = _layout(items, edges, mode, pad, None, True, t0, stable=False, labels=labels)
     return _layout(items, edges, mode, pad, snapshot, plain.cost >= res.cost - 1e-9, t0, stable=stable,
@@ -127,11 +113,10 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         if 'force' in P.ORDERS and mode == 'relayout':
             force = L.force_cands(cands[0], rng)
             cands = (cands if 'cross' in P.ORDERS else []) + force
-        if mode == 'relayout' and L._zone_pair() is not None:  # a zone: each way to place its output
+        if mode == 'relayout' and L._zone_pair() is not None:  # a zone: each zone output mode
             cands = [c._replace(zone=z) for c in cands for z in P.ZONE_OUT]
-        # the cheapest start with a level zone output and the cheapest with a free one ('median'
-        # or 'mean', whichever starts cheaper; one group outside zones): each is searched on its
-        # own, since the orders that suit one zone output height rarely suit another
+        # the cheapest start of each group ('level', 'free'; one group outside zones) is searched
+        # apart: the orders that suit one zone output height rarely suit another
         first = {}
         for c in cands:
             cost = L._evaluate(c)
@@ -144,7 +129,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         state = rng.getstate() if rng else None
         for z in sorted(first, key=_zone_rank):
             if rng:
-                rng.setstate(state)  # each mode's search as if it were the only one
+                rng.setstate(state)  # each group's search as if it were the only one
             cost, cand = L.improve(first[z][1], first[z][0], P.SEARCH_SEED, rng)
             costs.append(cost)
             if z not in best or cost < best[z][0] - 1e-9:
@@ -152,17 +137,16 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         seed_costs.append(round(min(costs), 3))
         if snapshot:
             snapshot(f'seed {seed}', snapshot_state(L))
-    # the best layout of each zone output mode gets the full search and the slide (a free zone
-    # output can slide, a level one cannot, so the modes are compared after both)
+    # the best of each group gets the full search and the slide (a free zone output can slide, a
+    # level one cannot, so the groups are compared after both)
     finals = {}
     for z in sorted(best, key=_zone_rank):
         cost, cand = L.improve(best[z][1], best[z][0], P.SEARCH)
         finals[z] = (L.slide(), cand, best[z][2])
     last = z
     if mode == 'relayout' and P.STABLE is not None and stable:
-        # stability: the layout of the current order (each column sorted by where its nodes and
-        # wires are now) replaces the fresh one when it costs at most STABLE more (0: when it is
-        # as good or better), so a small edit does not reshuffle a formatted tree
+        # stability: the layout of the current order replaces the fresh one when it costs at most
+        # STABLE more (0: as good or better), so a small edit does not reshuffle a formatted tree
         cur = {}
         for c in L.current_cands():
             cost = L._evaluate(c)
@@ -176,8 +160,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
             L.slide()
             if _as_now(L):
                 continue  # the fresh layout is the current one: a formatted tree stays as it is
-            # no search from it: the same order gives the same layout again, so a layout kept
-            # this way is kept by the next format too
+            # no search from it, so a layout kept this way is kept by the next format too
             L._evaluate(c)
             cost = L.slide()
             if cost <= finals[z][0] + P.STABLE * max(1.0, abs(finals[z][0])) + 1e-9:
@@ -204,7 +187,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         res.zone_mode = z
         res.realize = realize
         res.seconds = round(time.perf_counter() - t0, 3)
-        # the other groups, cheapest first, for the parent to compare (layout.py): their costs
+        # (cost, group) of every group, cheapest first, for the parent to compare (layout.py)
         res.alts = sorted(((round(c, 3), m) for m, (c, _, _) in finals.items()), key=lambda a: (a[0], _zone_rank(a[1])))
         return res
     win = min(finals, key=lambda z: (finals[z][0], _zone_rank(z)))
@@ -257,9 +240,9 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         self.mode = mode
 
     def current_cands(self):
-        """Candidates with the order the items have now (graph.Cand, one per placement method
-        and zone output mode): each column sorted by the items' current heights; a lane takes
-        the height where the wire it carries crosses the column now (old route, model.py)."""
+        """Candidates (one per placement method and zone output mode) with each column sorted by
+        the items' current heights; a lane takes the height where its wire crosses the column
+        now (old route, model.py)."""
         layers = [[] for _ in range(self.R + 1)]
         for i in self.items:
             layers[i.rank].append(i)
@@ -270,7 +253,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         known = [k for k, x in enumerate(colx) if x is not None]
         if not known:
             return []
-        for k in range(len(colx)):  # columns of lanes only: between their neighbours
+        for k in range(len(colx)):  # columns of lanes only: interpolated between neighbours
             if colx[k] is None:
                 lo = max((j for j in known if j < k), default=None)
                 hi = min((j for j in known if j > k), default=None)

@@ -1,20 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Sort only a part of a tree: the selected nodes and reroutes, or what is inside a selected
-frame. Everything else stays where it is.
+"""Sort Selection (sort_selection): format only part of a tree, the selected nodes and
+reroutes or what is inside a selected frame. Everything else stays where it is.
 
-1. The part: the selected nodes, every node inside a selected frame, and the selected reroutes
-   on wires that reach one of them. Frames whose nodes are all in the part come along.
-2. Each link between the part and the rest gets a pin: a reroute of the part that stands for
-   the outside end. Pins of links coming in take the first column, pins of links going out the
-   last one, so the part is laid out as one block with its links on its left and right edges.
-3. The part is laid out like a whole tree (model.read with `part`, layout.Formatter) and written
-   back, then moved so that its top-left corner is where the part's was. If it now overlaps a
-   node of the rest, it moves down or right (the smaller move) until it does not.
-4. The links to the rest are drawn orthogonally from the pins to the outside sockets (Router):
-   straight if they are level, else with one vertical run in the gap between the two ends,
-   else around what is in the way; no route passes behind a node if a clear one exists.
-5. Wires are straightened (only those of the part and its links move), the logic is checked
-   as for a whole tree, and the selection is put back: the same nodes plus the new reroutes.
+1. The part: the selected nodes, the nodes inside selected frames, the selected reroutes on
+   wires that reach them, and the frames whose nodes are all in the part.
+2. Each link to the rest gets a pin, a reroute of the part standing for the outside end; pins
+   of incoming links take the first column, outgoing ones the last, so the links to the rest
+   leave the block on its left and right edges.
+3. The part is laid out like a whole tree (model.read with `part`, layout.Formatter), written
+   back with its top-left corner where it was, then moved down or right (the smaller move)
+   off any node of the rest.
+4. Router draws the links from the pins to the outside sockets, orthogonally.
+5. Wires of the part are straightened, the logic is checked, and the selection is restored
+   with the new reroutes added.
 """
 from . import blend, check, model, ortho, rules
 from . import params as P
@@ -204,11 +202,11 @@ def _reroute(nt, x, y, made):
 
 
 class Router:
-    """Orthogonal routes between an output (the wire leaves to the right) and an input socket or
-    reroute (it arrives from the left): a straight link, a Z (one vertical run in the gap), or a
-    detour (out, up or down, across, back, in). A route keeps CLEAR_WIRE from every node box
-    (the segment that touches a socket may touch its own node), does not run on the line of
-    another wire and does not pass through its points (NF034). Boxes and points are y up."""
+    """Orthogonal routes from an output (leaving to the right) to an input socket or reroute
+    (arriving from the left): a straight link, a Z (one vertical run in the gap), an L (at a
+    reroute end), or a detour (out, up or down, across, back, in). A route keeps CLEAR_WIRE from every node box but its
+    own end nodes, and neither runs on another wire's line nor through its points (NF034).
+    Boxes and points are y up."""
 
     def __init__(self, boxes, segments=()):
         """boxes: {node name: (left, bottom, right, top)}; segments: [(wire, p, q)] of the wires
@@ -337,10 +335,9 @@ def _drawn_segments(nt, pins, part):
 
 
 def _wire(nt, router, frm, to_node, to_index, prefer, made, tree):
-    """Draw the link from output socket `frm` to input `to_index` of node `to_node` (a reroute
-    too) on reroutes along a route of `router`; returns the output to link the input from.
-    tree: {point: reroute name} of the wire so far (one output to several inputs): a route
-    reuses the reroutes it passes."""
+    """Draw the link from output `frm` to input `to_index` of node `to_node` (may be a reroute)
+    on new reroutes along a route of `router`; returns the output to link the input from.
+    tree: {point: reroute name} of this wire so far, whose reroutes a route reuses."""
     from .sockets import socket_location
     to = nt.nodes[to_node].inputs[to_index]
     a = socket_location(frm) if frm.node.bl_idname != REROUTE else tuple(frm.node.location_absolute)

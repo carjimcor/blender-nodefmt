@@ -1,10 +1,9 @@
 #!/bin/sh
 # nodefmt pre-commit hook: stop the commit if a staged .blend has node trees that are not formatted.
-# Set BLENDER to the Blender executable and NODEFMT to nodefmt_cli.py (defaults below).
-# Rules and the UI scale come from nodefmt.toml (next to the .blend or in the repository root);
-# Blender runs with your preferences, so without ui-scale the check uses your Resolution Scale.
-# NODEFMT_UI_SCALE overrides it, NODEFMT_ARGS adds options (for example --strict).
-# Fix with: blender file.blend --python nodefmt_cli.py -- --fix
+# BLENDER: the Blender executable; NODEFMT: nodefmt_cli.py (defaults below).
+# Rules and UI scale come from nodefmt.toml (found from the .blend's folder up); without ui-scale
+# the check uses your Resolution Scale. NODEFMT_UI_SCALE overrides it, NODEFMT_ARGS adds options
+# (for example --strict). Fix with: blender file.blend --python nodefmt_cli.py -- --fix
 BLENDER=${BLENDER:-blender}
 NODEFMT=${NODEFMT:-"$(git rev-parse --show-toplevel)/tools/nodefmt/nodefmt_cli.py"}
 SCALE=${NODEFMT_UI_SCALE:+--ui-scale $NODEFMT_UI_SCALE}

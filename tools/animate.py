@@ -1,26 +1,25 @@
 """Render the demo animation: how nodefmt sorts a node tree, step by step.
 
     python tools/animate.py tree.json out_dir [--fps 30] [--width 1920] [--height 800] [--font PATH]
+        [--webp-quality 70] [--gif-fps 15] [--still FRAME]
 
-tree.json comes from tools/dump_tree.py (a messy tree made by tools/scramble.py). The script
-runs nodefmt offline on it (no Blender needed) with snapshots on (Formatter(..., record=True)),
-takes the tree as dumped and the 'final' snapshot (nodes, reroutes and wires as Blender will draw
-them), and renders the steps between them as a schematic in Blender's colours:
+tree.json comes from tools/dump_tree.py (a messy tree made by tools/scramble.py). The script runs
+nodefmt on it offline (no Blender) with snapshots on and renders, as a schematic in Blender's
+colours, the steps from the tree as dumped to the 'final' snapshot (what Blender will draw):
 
 1. the tree as it is, with Blender's curved links;
-2. links become direct lines (the model: reroutes removed, nodes linked directly);
-3. ranking: every node slides into its column (the order in each column is kept);
-4. ordering: the columns are reordered, left to right, into the final order;
+2. links become direct lines (reroutes removed, nodes linked directly);
+3. ranking: every node slides into its column (keeping the order in each column);
+4. ordering: the columns take their final order, left to right;
 5. placement: nodes settle at their final heights;
 6. routing: the orthogonal wires draw in, reroutes pop in;
 7. the result.
 
-The start, the result, the columns, the copies of input nodes and the final order are
-nodefmt's; the motion between them is interpolated (eased), so steps 3 to 5 illustrate the
-phases rather than replay every search move.
-
-Writes out_dir/nodefmt-demo.mp4 (H.264, width x height), out_dir/nodefmt-demo.webp (animated,
-half size) and out_dir/nodefmt-demo.gif (half size, fewer frames). Needs Pillow, numpy and PyAV.
+The start, the result, the columns, the copies of input nodes and the final order are nodefmt's;
+the motion between them is eased, so steps 3 to 5 illustrate the phases rather than replay the
+search. Writes out_dir/nodefmt-demo.mp4 (H.264, width x height), nodefmt-demo.webp (half size)
+and nodefmt-demo.gif (half size, fewer frames); --still renders one frame to still.png instead.
+Needs Pillow, numpy and PyAV.
 """
 import argparse
 import glob
@@ -77,10 +76,12 @@ def back_out(t):
 
 
 def mix(a, b, t):
+    """Linear interpolation from a to b at t (0..1)."""
     return a + (b - a) * t
 
 
 def rgb(c, k=1.0):
+    """A colour (0..1 floats, times k) as an RGB tuple of 0-255 ints."""
     return tuple(int(round(min(max(v * k, 0.0), 1.0) * 255)) for v in c[:3])
 
 
@@ -113,6 +114,7 @@ def pav(desired, heights):
 def crossings(segs):
     """Number of proper crossings between straight segments [(a, b, source)]."""
     def orient(p, q, r):
+        """Turn direction of p, q, r: 1, -1, or 0 when collinear."""
         v = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
         return 0 if abs(v) < 1e-6 else (1 if v > 0 else -1)
     n = 0
@@ -132,6 +134,7 @@ class Demo:
     """The tree, the formatter's result and the keyframe states (node positions)."""
 
     def __init__(self, path):
+        """Load a dumped tree (tools/dump_tree.py), format it offline and build the states."""
         J = json.load(open(path))
         self.theme, self.tag, self.ztype = J["theme"], J["color_tag"], J.get("zone_type", {})
         data = J["data"]
@@ -167,6 +170,7 @@ class Demo:
         self._columns()
 
     def _inside(self, n, f):
+        """True if node n is inside frame f, at any depth."""
         p = self.m.parent(n)
         while p is not None:
             if p == f:
@@ -184,6 +188,7 @@ class Demo:
         return top, bot
 
     def height(self, n):
+        """Height of node n plus the frame padding above and below it."""
         t, b = self.ext(n)
         return self.m.box[n][3] + t + b
 
@@ -232,6 +237,8 @@ class Demo:
 
     # ------------------------------------------------------------ geometry of a state
     def box(self, n, pos):
+        """Box (x0, y0, x1, y1) of node n at positions `pos`; its height blends from
+        the original to the modelled one with self.w."""
         x, y = pos[n]
         h = self.m.box[n][3]
         if n in self.orig and self.w < 1:
@@ -264,6 +271,7 @@ class Demo:
         return out
 
     def frame_rects(self, pos):
+        """(label, box) of every frame around its nodes at positions `pos`."""
         out = []
         for f, label, kids, (pl, pt, pr, pb) in self.frames:
             bs = [self.box(n, pos) for n in kids]
@@ -272,6 +280,7 @@ class Demo:
         return out
 
     def zone_polys(self, pos):
+        """(zone type, outline polygon) of every zone at positions `pos`."""
         out = []
         for zin, zout, nodes in self.zones:
             content = [self.box(n, pos) for n in sorted(nodes) if n not in (zin, zout) and n in pos]
@@ -280,6 +289,7 @@ class Demo:
         return out
 
     def bounds(self, pos, routed=False):
+        """Bounding box of nodes, frames and zones at `pos` (routed: also the final wires)."""
         xs, ys = [], []
         for n in pos:
             b = self.box(n, pos)
@@ -303,12 +313,14 @@ class Timeline:
     """Per frame: node positions, link style, routing progress, caption."""
 
     def __init__(self, demo, fps):
+        """Build every frame of the animation of `demo` at `fps`."""
         self.d, self.fps = demo, fps
         self.frames = []
         d = demo
         S = lambda s: int(round(s * fps))
 
         def hold(pos, n, **kw):
+            """Add n frames that keep positions `pos`."""
             for _ in range(n):
                 self.frames.append(dict(pos=pos, **kw))
 
@@ -379,9 +391,9 @@ class Timeline:
 
 # ---------------------------------------------------------------- rendering
 def find_font(path=None):
-    cands = [path] if path else []
     """A font file: `path`, else Blender's own UI font (Inter, from BLENDER_DIR, the folder of the
     Blender executable, or a default install), else a common system font."""
+    cands = [path] if path else []
     for base in (os.environ.get("BLENDER_DIR"), r"C:\Program Files\Blender Foundation\Blender 5.2",
                  "/usr/share/blender", "/Applications/Blender.app/Contents/Resources"):
         if base:
@@ -395,7 +407,9 @@ def find_font(path=None):
 
 
 class Renderer:
+    """Draws one frame of the animation with Pillow, supersampled by `ss`."""
     def __init__(self, demo, W, H, font, ss=2):
+        """Renderer of `demo` for a W x H output; colours from the dumped Blender theme."""
         self.d, self.W, self.H, self.ss = demo, W, H, ss
         self.font_path = font
         self._fonts = {}
@@ -406,6 +420,7 @@ class Renderer:
         self.bar = 44 * ss  # caption band height (render pixels)
 
     def font(self, px, bold=False):
+        """The UI font at `px` pixels (cached), or Pillow's default font."""
         key = (int(px), bold)
         if key not in self._fonts:
             try:
@@ -421,10 +436,12 @@ class Renderer:
         return self._fonts[key]
 
     def header(self, n):
+        """Header colour of node n, from its colour tag and the theme."""
         key = TAG_THEME.get(self.d.tag.get(n, "NONE"), "group_socket_node")
         return rgb(self.d.theme.get(key, (0.3, 0.3, 0.3)))
 
     def frame(self, st, cam, cap_mix):
+        """Render state `st` seen through camera `cam`, with the caption band; returns an image."""
         d, ss = self.d, self.ss
         W, H = self.W * ss, self.H * ss
         im = Image.new("RGB", (W, H), self.back)
@@ -545,6 +562,7 @@ class Renderer:
             dr.line([p, q], fill=col, width=int(wi))
 
     def node(self, dr, n, pos, P, L, k):
+        """Draw node n at `pos`: body, header, label and sockets."""
         d, ss = self.d, self.ss
         x0, y0, x1, y1 = d.box(n, pos)
         a, b = P((x0, y0)), P((x1, y1))
@@ -584,6 +602,8 @@ class Renderer:
             dr.ellipse([c[0] - rr, c[1] - rr, c[0] + rr, c[1] + rr], fill=col)
 
     def caption(self, dr, st, cap_mix):
+        """Draw the caption band: the step's caption (cross-faded), the step dots and the
+        crossing count."""
         ss = self.ss
         W = self.W * ss
         dr.rectangle([0, 0, W, self.bar], fill=blend((255, 255, 255), self.back, 0.045))
@@ -632,6 +652,7 @@ def cameras(demo, tl, W, H, bar, ss):
 
 
 def main():
+    """Build the timeline and render the MP4, WebP and GIF (or one still frame)."""
     ap = argparse.ArgumentParser()
     ap.add_argument("tree")
     ap.add_argument("out")
@@ -674,6 +695,7 @@ def main():
     caps = [st["cap"] for st in tl.frames]
 
     def cap_mix(i):
+        """Caption of frame i, the previous caption and the fade between them."""
         cur = caps[i]
         j = i
         while j > 0 and caps[j - 1] == cur:
@@ -682,6 +704,7 @@ def main():
         return cur, (caps[j - 1] if j > 0 else None), (t if j > 0 else 1.0)
 
     def render(i):
+        """Frame i rendered and scaled down to the output size."""
         im = r.frame(tl.frames[i], cams[i], cap_mix(i))
         return im.resize((a.width, a.height), Image.LANCZOS)
 

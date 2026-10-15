@@ -1,23 +1,20 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The drawn wires of a whole tree (pure Python): faults, and the route tidy pass.
+"""The drawn wires of a whole tree (pure Python): their faults, and the route tidy pass.
 
-A Drawing holds one reroute tree per source socket (routes.Tree, points y down), the node boxes
-and the outlines of zones and frames. It is built from a layout (layout.Formatter, before the
-reroutes are written) or from a tree as Blender draws it (metrics.drawing), so the tidy pass and
-the checks (lint.py) see the same thing.
+A Drawing holds one reroute tree per source socket (routes.Tree, y down), the node boxes and the
+zone and frame outlines. It is built from a layout (layout.Formatter) or from a tree as Blender
+draws it (metrics.drawing), so the tidy pass and lint.py see the same thing.
 
-The tidy pass works across containers, where the layout engine cannot see: a wire that leaves a
-zone or frame, or enters one, is routed in two pieces that meet at the border. It moves single
-horizontal runs (a run between two vertical bends) to another height when that makes the whole
-drawing better, and it puts the runs that are almost level exactly level:
+The tidy pass works across containers, where the engine cannot see (a wire crossing a zone or
+frame border is routed in two pieces). It moves single horizontal runs (between two vertical
+bends) to heights that make the whole drawing better, and makes almost level runs level:
 
-  NF031 no-u-jogs        a run between two steps in the same direction (a landing) merges with
-                         the level before or after it; a route reverses its vertical direction
-                         only where a node is in the way
+  NF031 no-u-jogs        no landing between two steps the same way; a route turns back
+                         vertically only where a node is in the way
   NF032 wire-clearance   no run along a node's edge, a frame's border or a zone's outline
   NF033 avoid-crossings  a run takes the free height where it crosses the fewest wires
-  NF034 no-junction-look two wires never share a point or run on one line; no reroute sits in
-                         the middle of a straight run
+  NF034 no-junction-look two wires never share a point or a line; no reroute in the middle of
+                         a straight run
 """
 from . import params as P
 from . import routes
@@ -159,9 +156,8 @@ def _dist_seg(p, a, b):
 
 
 def near_outline(s, poly):
-    """Length of segment s that runs closer than CLEAR_OUTLINE to the border of polygon poly
-    (sampled every 4 units). A wire that crosses the border at an angle stays near it briefly;
-    one that runs along it, long."""
+    """Length of segment s closer than CLEAR_OUTLINE to the border of polygon poly (sampled
+    every 4 units): short for a wire crossing the border, long for one running along it."""
     (ax, ay), (bx, by) = s[1], s[2]
     c = P.CLEAR_OUTLINE
     xs, ys = [p[0] for p in poly], [p[1] for p in poly]
@@ -291,10 +287,9 @@ def multi_of(d, s):
 
 
 class Rest:
-    """The segments and reroutes of every tree of a drawing but one (`tag`), bucketed on a grid
-    so that tree_faults compares the tree only with what is near it. Every fault it counts
-    needs the two things within a few units of each other (COLLINEAR, ON_WIRE, RR_CLEAR), so
-    a query box a little wider than those finds everything that can count."""
+    """The segments and reroutes of every tree of a drawing but `tag`, bucketed on a grid so
+    tree_faults compares the tree only with what is near it (each fault needs the two things
+    within COLLINEAR, ON_WIRE or RR_CLEAR of each other)."""
     CELL = 200.0
 
     def __init__(self, d, tag):
@@ -337,10 +332,9 @@ class Rest:
 
 
 def tree_faults(d, tag, others=None, other_rr=None, rest=None):
-    """Faults of the wires of one tree against the rest of the drawing (and its own jogs):
-    a dict of counts. others: segments of the other trees; other_rr: their reroutes; or rest, a
-    Rest of d and tag, which gives the same counts faster (each segment and reroute of the tree
-    is compared only with what is near it)."""
+    """Faults of the wires of tree `tag` against the rest of the drawing, and its own jogs: a
+    dict of counts. others / other_rr: the other trees' segments and reroutes (found if None);
+    rest: a Rest of d and tag instead, for the same counts faster."""
     segs = d.tree_segments(tag)
     if rest is None:
         if others is None:

@@ -28,10 +28,9 @@ class Editor:
             self.space = (sp.pin, sp.node_tree, [p.node_tree for p in sp.path])
 
     def show(self, tree):
-        """Draw `tree` as the user sees it. A Geometry Nodes tree that a modifier uses, directly or
-        as a nested group, is shown through that object and the group path from the modifier's
-        tree (some nodes, like Bake, draw more rows in that context); any other tree (a group used
-        nowhere, a material, world or compositor tree) is pinned."""
+        """Draw `tree` as the user sees it. A Geometry Nodes tree that a modifier uses (directly or
+        nested) is shown through that object and modifier with its group path, since some nodes,
+        like Bake, draw more rows there; any other tree is pinned."""
         area = self.area
         if area.ui_type != tree.bl_idname:
             area.ui_type = tree.bl_idname
@@ -102,10 +101,9 @@ class Editor:
 
 
 def _modifier_path(tree):
-    """(object, modifier, path) of the first Geometry Nodes modifier (objects of the view layer by
-    name, modifiers in order) whose tree is `tree` or reaches it through group nodes. path lists
-    (parent tree, group node name) from the modifier's tree down to `tree` (empty if it is the
-    modifier's own tree), the shortest one."""
+    """(object, modifier, path) of the first Geometry Nodes modifier (objects by name, modifiers
+    in order) whose tree is `tree` or reaches it through group nodes, else None. path: the
+    shortest list of (parent tree, group node name) from the modifier's tree down to `tree`."""
     for o in sorted(bpy.context.view_layer.objects, key=lambda o: o.name):
         for m in o.modifiers:
             root = m.node_group if m.type == 'NODES' else None

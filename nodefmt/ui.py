@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Add-on: buttons in the Node Editor sidebar (nodefmt tab), the result of Check (a list by
-rule and marks in the editor), Capture Tree (capture.py) and rule toggles in the preferences.
+"""Add-on UI: the nodefmt tab of the Node Editor sidebar (sort buttons, Check with a list by rule
+and marks in the editor, Capture Tree) and the rule toggles in the preferences.
 
 The rules come from a nodefmt.toml next to the .blend file (or in a folder above it) when there
-is one and "Use nodefmt.toml" is on, else from the toggles (preferences, also shown in the
-panel). The layout is made for the UI scale Blender runs at. Every format is one undo step.
+is one and "Use nodefmt.toml" is on, else from the toggles (also shown in the panel). The layout
+is made for the UI scale Blender runs at. Every sort is one undo step.
 """
 import math
 import os
@@ -18,8 +18,8 @@ from .draw import Editor
 
 MODES = [('relayout', "Relayout", "Build a new layout from scratch: columns, order and wires"),
          ('keep', "Keep layout (experimental)", "Keep your columns and order; only straighten wires and fix reroutes")]
-# the last check, shown in the panel and the overlay: the tree (name, pointer, a key of where
-# its nodes are), the violations, where each one is, the occurrence shown last of each rule
+# the last check, for the panel and the overlay: the tree (name, pointer, _tree_key), the
+# violations and their points, the occurrence shown last per rule and overall
 _LAST = {"done": False, "tree": "", "ptr": 0, "key": None, "violations": [], "points": [], "index": {},
          "shown": None}
 
@@ -75,8 +75,8 @@ class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
 
 
 class SortJob:
-    """Sorts a list of trees one step at a time (api.format_steps), so a modal operator can
-    show progress between steps; cancel() puts every tree back as it was."""
+    """Sorts a list of trees one step at a time (api.format_steps), so a modal operator can show
+    progress; cancel() puts every tree back as it was."""
 
     def __init__(self, trees, area, mode, cfg):
         """The trees to sort, the node editor area that draws them, the mode and the rules."""
@@ -112,7 +112,7 @@ class SortJob:
             self.failed.append(str(e))
             self._next_tree()
         else:
-            # two passes is the usual: the second finds nothing to move
+            # progress assumes two passes, the usual (the second finds nothing to move)
             f = (st.npass - 1 + st.step / st.steps) / max(2, st.npass)
             self.tree_factor = min(0.99, max(self.tree_factor, f))
             self.factor = max(self.factor, (self.i + self.tree_factor) / len(self.trees))
@@ -161,8 +161,8 @@ def _redraw_editors():
 
 
 class SortModal:
-    """A sort that runs in steps with progress (modal, Esc cancels), or at once (execute, for
-    scripts). One undo step either way."""
+    """Mixin for the sort operators: runs in steps with progress (modal, Esc cancels), or at
+    once (execute, for scripts). One undo step either way."""
     bl_options = {'REGISTER', 'UNDO'}
 
     def trees(self, context):

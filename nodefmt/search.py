@@ -1,19 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Search: local search on the choices of a layout, and the final vertical slide.
 
-A layout is fully determined by a Cand (graph.Cand): the order of every column, the state of
-the commutative inputs, the links the placement must leave bent, and the placement method. The
-local search tries moves on that state and keeps one when the whole layout (placement, columns,
-routing, cost.py) costs less. With a random generator (seeds other than 0) the moves are tried
-in a shuffled order, so different seeds explore different layouts.
+A layout is fully determined by a Cand (graph.Cand). The local search (improve) tries moves on
+it and keeps one when the whole layout costs less (cost.py). Seeds other than 0 (only when
+P.SEEDS > 1) shuffle the moves, so different seeds explore different layouts.
 
 The slide pass runs once, on the chosen layout: it moves a group of nodes held together by
 straight links up or down so that one more link becomes straight, if nothing overlaps and the
-cost drops (for example a node whose second input needs a bend while the first is straight).
+cost drops.
 """
 from . import params as P
 from .graph import _name as _key
 
+# the order in which _moves lists the kinds of move
 _ORDER = {'port': 0, 'sat': 1, 'lane': 2, 'bundle': 3, 'fan': 4, 'comm': 5, 'placer': 6, 'bend': 7, 'node': 8, 'swap': 9}
 
 
@@ -30,14 +29,9 @@ class SearchMixin:
     def _trial(self, cand):
         """The cost of a candidate tried by the local search, laid out only the first time.
 
-        A layout depends on nothing but its candidate (the order of each column, the swap state,
-        the banned links, the placement method and the zone output mode; not the origin), so
-        the cost of a candidate seen before is taken from a memo instead (the searches go back
-        to many of the layouts they tried: moves that undo the last one, and the final search
-        starts where a seed's search stopped). It still counts against the budget, so the
-        search takes the same steps. The memo also gives back the links the layout aligned,
-        which the next moves are made from (the 'bend' moves of _moves); everything else of
-        the layout is only read after improve() lays out its result again."""
+        A layout depends only on its candidate (not on its origin), so a candidate seen before
+        is taken from a memo, with the links it aligned (the 'bend' moves need them). A memo hit
+        still counts against the budget, so the search takes the same steps either way."""
         key = (tuple(map(tuple, cand.layers)), tuple(cand.comm), cand.banned, cand.placer, cand.zone)
         memo = self.__dict__.setdefault('_eval_memo', {})
         hit = memo.get(key)
@@ -68,13 +62,13 @@ class SearchMixin:
                     layers[k][i], layers[k][j] = b, a
                     return cur._replace(layers=layers)
                 moves.append(('swap', swap))
-        # a whole lane (the dummies of one long link), or a node, to the top or bottom of its column
+        # a whole lane (the dummies of one long link) to the top or bottom of its columns
         sides = ('top', 'bottom') + (('top_in', 'bottom_in') if P.LANE_SIDES else ())
         for tag in sorted({i.tag for i in self.items if i.kind == 'dummy'}, key=repr):
             for where in sides:
                 moves.append(('lane', lambda cur, tag=tag, where=where: self._move_lane(cur, tag, where)))
-        # all lanes leaving one node, in the order of its sockets, to the top or the bottom of
-        # their columns: parallel buses that stay nested (the staircase of a hand-made layout)
+        # all lanes leaving one node, in socket order, to the top or bottom of their columns:
+        # parallel buses that stay nested (the staircase of a hand-made layout)
         by_node = {}
         for i in self.items:
             if i.kind == 'dummy':
@@ -84,15 +78,15 @@ class SearchMixin:
                 continue
             for where in sides:
                 moves.append(('bundle', lambda cur, tags=tags, where=where: self._move_lanes(cur, tags, where)))
-        # everything one node feeds (its lanes and its consumers in the next column) to the top
-        # or bottom of their columns: a fan of wires that leaves to one side and crosses nothing
+        # everything one node feeds (_fan) to the top or bottom of their columns: a fan of wires
+        # that leaves to one side and crosses nothing
         if not keep and P.LANE_SIDES:
             for i in sorted((i for i in self.items if not i.is_point and len(self.succ_edges[i]) >= 2), key=_key):
                 fan = self._fan(i)
                 if len(fan) >= 2:
                     for where in ('top', 'bottom'):
                         moves.append(('fan', lambda cur, fan=fan, where=where: self._move_set(cur, fan, where)))
-        if not keep:
+        if not keep:  # a node to the top or bottom of its column
             for k in range(self.R + 1):
                 for i in cur.layers[k]:
                     if i.is_point or i.pin:
@@ -123,8 +117,7 @@ class SearchMixin:
         # the other placement method
         for placer in P.PLACERS:
             moves.append(('placer', lambda cur, placer=placer: cur._replace(placer=placer) if cur.placer != placer else None))
-        # the moves that change a whole side of the layout first: with a small budget the search
-        # tries them before the many swaps of neighbours
+        # moves that change a whole side first: a small budget tries them before the many swaps
         moves.sort(key=lambda m: _ORDER.get(m[0], 9))
         return moves
 
@@ -290,9 +283,9 @@ class SearchMixin:
 
     # ------------------------------------------------------------------ slide
     def slide(self, budget=None):
-        """Move groups of nodes up or down to make more links straight (see the module
-        docstring). Groups are joined by the links that are straight now, so a move never
-        bends one of them; a move must keep every column's order and gaps. Returns the cost."""
+        """Move groups of nodes up or down to make more links straight, at most `budget` layouts
+        (P.SLIDE). Groups are joined by the links straight now, so a move never bends one, and
+        must keep every column's order and gaps. Returns the cost."""
         budget = P.SLIDE if budget is None else budget
         cur = self.cost()
         while budget > 0:
@@ -326,7 +319,7 @@ class SearchMixin:
         return self.cost()
 
     def _straight_groups(self):
-        """item -> frozenset of the items joined to it by straight links (in one column order)."""
+        """item -> frozenset of the items joined to it by straight links."""
         parent = {i: i for i in self.items}
 
         def find(i):
@@ -367,10 +360,10 @@ class SearchMixin:
 
 
 def _insert_at(rest, ds, where):
-    """Column `rest` with the lane items `ds` put at `where`: 'top' (first, after a zone input
-    that heads the column), 'bottom' (last), or next to the nodes on the inside of the other
-    lanes: 'top_in' (right above the first node) and 'bottom_in' (right below the last node),
-    so a lane can change sides without crossing the lanes already there (rule NF033)."""
+    """Column `rest` with the lane items `ds` put at `where`: 'top' (after a zone input heading
+    the column), 'bottom', 'top_in' (right above the first node) or 'bottom_in' (right below
+    the last node); the inner places let a lane change sides without crossing other lanes (NF033).
+    None if an inner place is asked for in a column without nodes."""
     if where == 'top':
         k = 1 if rest and rest[0].pin and rest[0].kind == 'node' else 0
     elif where == 'bottom':

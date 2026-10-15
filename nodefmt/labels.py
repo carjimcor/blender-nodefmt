@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Reroute labels as Blender draws them (pure Python; text widths from Blender's font if it is
-there, else an estimate).
+"""Reroute labels as Blender draws them (pure Python; text widths from Blender's font when
+available, else an estimate).
 
-Blender draws a reroute's label centred above its dot, and since Blender 5 it draws the label
-of a labelled reroute, greyed, on every reroute after it on the same wire (reroute auto labels):
-a label is shown once per reroute of its wire, not once. Rule NF041 keeps all of them clear of
-each other, of nodes and of wires. Coordinates are node units, y down.
+A label is drawn centred above its reroute's dot and, since Blender 5, repeated greyed on every
+later reroute of the same wire (reroute auto labels). Rule NF041 keeps all of them clear of each
+other, of nodes and of wires. Coordinates are node units, y down.
 """
-FONT_SIZE = 11      # Blender's widget text size (points): a label's text, in node units at any UI scale
+FONT_SIZE = 11      # Blender's widget text size: label text is this size in node units at any UI scale
 CHAR_W = 5.8        # average width of a character, when Blender's font is not available
 ABOVE = 5.0         # the text's box ends this far above the dot ...
 HEIGHT = 12.0       # ... and is this tall
@@ -48,9 +47,9 @@ def hits(b, p, q):
 
 
 def shown(t, own):
-    """The labels Blender shows on the reroutes of reroute tree t (routes.Tree): {point: (text,
-    inherited)}. own: {point: text} of its labelled reroutes; a label also shows, greyed, on every
-    reroute after it on the wire, up to the next labelled reroute."""
+    """The labels Blender shows on the reroutes of tree t (routes.Tree): {point: (text,
+    inherited)}. own: {point: text} of its labelled reroutes; each label also shows, greyed, on
+    the reroutes after it, up to the next labelled one."""
     from .routes import reroute_points
     pts = set(reroute_points(t))
     out = {}
@@ -73,11 +72,11 @@ def shown(t, own):
 
 
 def faults(labels, nodes, segments):
-    """Where shown labels collide: [(index in labels, what)], what being 'label' (another
-    label), 'node' or 'wire'. labels: [(point, text, copy)]; nodes: [(x0, y0, x1, y1)];
-    segments: [(p, q)] of the wires. For a greyed copy, a wire that leaves its dot is not
-    counted: where the wire turns upwards it runs through the copy, which Blender draws on every
-    reroute of the wire. A labelled reroute can be chosen, so there it counts."""
+    """Collisions of shown labels: [(index in labels, 'label' | 'node' | 'wire')].
+    labels: [(point, text, copy)] (copy defaults to True); nodes: [(x0, y0, x1, y1)];
+    segments: [(p, q)] of the wires. A segment that starts or ends at a greyed copy's dot is not
+    counted (a wire turning upwards there always crosses it); at a labelled reroute, which the
+    layout chooses, it is."""
     boxes = [box(l[0], text_width(l[1])) for l in labels]
     out = []
     for k, b in enumerate(boxes):

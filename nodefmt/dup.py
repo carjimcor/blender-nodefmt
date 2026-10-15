@@ -2,17 +2,14 @@
 """Copies of input-like nodes, so that each group of consumers gets a source next to it.
 
 An input-like node has nothing linked into it (Group Input, Named Attribute, Index, Position,
-Scene Time, constants, Collection Info, ...). Nodes that compute the same thing (same type,
-properties and socket values) form a class; a copy is just another member. The logic check
-treats every member of a class as the same source (see check.py).
-Never duplicated: String nodes, labelled nodes, reroutes, frames,
-zone and output nodes, and nodes that load data (Image Texture, Render Layers, Image, Mask, ...).
+constants, ...). Nodes that compute the same thing (same type, properties and socket values)
+form a class, whose members the logic check treats as one source (check.py). Never copied:
+String nodes, labelled nodes, reroutes, frames, zone and output nodes, and nodes that load data.
 
-The plan does not depend on how many members exist now: all members of a class are merged into
-one, the merged tree is laid out, its consumers are grouped by where they land, and each group
-far from the others gets its own member. Existing members are reused (the one that already
-feeds a group keeps it), new ones are copies, and members left without links are removed. So
-formatting twice gives the same result.
+plan() (pure) merges each class into one member, lays the merged tree out, groups the
+consumers by where they land and gives each distant group its own member: existing members are
+reused, new ones are copies, unlinked ones are removed. The plan does not depend on the members
+that exist now, so formatting twice gives the same result. realize() carries it out in Blender.
 """
 import copy as _copy
 import hashlib
@@ -39,10 +36,8 @@ NEAR = 360.0    # a group this close (route length) to the merged source shares 
 
 # ---------------------------------------------------------------- Blender side
 def duplicable(n):
-    """Input-like node (an allowlist, plus the field inputs 'GeometryNodeInput*': Index, Position,
-    Named Attribute, Scene Time, ...) with nothing linked into it and no label.
-    Shader and compositor nodes: only the allowlist (Texture Coordinate, Attribute, Value, RGB,
-    Geometry, Object Info, ...); never an Image Texture or anything else that loads data."""
+    """True for an input-like node with nothing linked in and no label: one of INPUTS or a
+    field input 'GeometryNodeInput*' (Index, Position, ...), never one of NEVER."""
     t = n.bl_idname
     if t in NEVER or n.label:
         return False
@@ -169,7 +164,9 @@ def _classes(data):
 
 
 def merged(data):
-    """The tree with every class merged into one member (the first by name)."""
+    """The tree with every class merged into its first member by name. Returns (data, {member:
+    kept member}, {(source, input): original input} for links of commutative pairs, which are
+    put in a fixed order)."""
     data = _copy.deepcopy(data)
     rep_of = {}
     for k, names in _classes(data).items():
@@ -216,8 +213,8 @@ def plan(data, mode='relayout'):
             _show_only(mdata["nodes"][rep], sorted({s[2] for s, _, _, _ in mdata["links"] if s[0] == rep}))
     m = Model(mdata)
     from . import params as P
-    # the plan depends on the graph only, not on positions, and runs one seed (more seeds here
-    # only give another plan, often a worse tree)
+    # the graph only, not the old positions (no STABLE), and one seed: more give another plan,
+    # often a worse tree
     stable, seeds, P.STABLE, P.SEEDS = P.STABLE, P.SEEDS, None, 1
     try:
         f = Formatter(m, mode, swaps=False).run(route=False)  # node positions are all it needs

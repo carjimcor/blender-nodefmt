@@ -5,17 +5,15 @@ tried.
 
 ## 1. Labels for long wires
 
-A wire that runs far from its source is hard to follow: at its destination you cannot see where
-it comes from. nodefmt already keeps the labels you put on reroutes (NF040, NF041). This extends
-them:
+At the end of a long wire you cannot see where it comes from. nodefmt already keeps the labels
+you put on reroutes (NF040, NF041); this would add labels of its own:
 
 - A wire counts as long when it crosses more than a set number of columns, configurable in
   `nodefmt.toml` and in the add-on.
-- Only wires that leave a frame or a custom node group get a label, since their output stands for
-  a step that has a name. The label is the group output's socket name, or the frame's label. A
-  wire from a plain node such as Map Range gets none: its socket name says nothing about what the
-  value means.
-- A label you put on a reroute always wins: nodefmt carries it along the wire as it does now.
+- Only wires that leave a frame or a custom node group get a label: the frame's label, or the
+  group output's socket name. A wire from a plain node such as Map Range gets none, since its
+  socket name says nothing about what the value means.
+- A label you put on a reroute always wins.
 - The label goes on the first reroute of the wire; Blender repeats it, greyed, on the others.
 
 It will be a style rule that can be switched off, working together with NF040 and NF041.
@@ -23,35 +21,32 @@ It will be a style rule that can be switched off, working together with NF040 an
 ## 2. Frames inside a frame
 
 A frame that only groups other frames, with nothing linked between them, is laid out as a stack
-today, and its children can change order. The children should keep the order you gave them and
-line up on a common axis, side by side or centred on one vertical line, instead of being
-reshuffled. To be explored.
+today, and its children can change order. They should keep the order you gave them and line up
+on a common axis instead. To be explored.
 
 ## 3. Capture: faint long wires
 
-Blender dims a wire whose two ends are both outside the view, and this cannot be switched off. A
-capture is made of screen-sized tiles, so a straight run longer than a tile can look faint in the
-middle of the image. It rarely shows at zoom 1.0. Possible fixes: larger tiles (full-screen window
-without the top and status bars), and a warning before capturing when some wires would be dimmed.
+Blender dims a wire whose two ends are both outside the view, and this cannot be switched off,
+so in a capture made of screen-sized tiles a long straight run can look faint in the middle. It
+rarely shows at zoom 1.0. Possible fixes: larger tiles (a full-screen window without the top and
+status bars), and a warning before capturing when some wires would be dimmed.
 
 ## 4. Lint rules for Check
 
-Linters for programming languages report more than formatting: code that works but is hard to
-read or maintain. Check could do the same for node trees, with a second family of rules that are
-only reported, never fixed by a sort. Each one has a code, can be switched off like the style
-rules, and its limits are set in `nodefmt.toml` or in the add-on.
+Linters for programming languages also report code that works but is hard to read or maintain.
+Check could do the same for node trees, with a second family of rules that are only reported,
+never fixed by a sort. Each would have a code, could be switched off like the style rules, and
+have its limits set in `nodefmt.toml` or in the add-on. They would use their own range of codes
+(for example NL001...), so `select` and `ignore` can take them as a group.
 
 First candidates:
 
-- **tree-too-complex**: the tree has more than a set number of nodes (for example 150, reroutes
-  and frames not counted). Message: "Tree is too complex (212 nodes, limit 150); consider moving
-  parts into node groups."
+- **tree-too-complex**: more than a set number of nodes (for example 150, reroutes and frames
+  not counted): "Tree is too complex (212 nodes, limit 150); consider moving parts into node
+  groups."
 - **unused-nodes**: nodes whose result reaches no output of the tree.
 - **unused-group-sockets**: group inputs that nothing reads, or outputs that nothing feeds.
 - **muted-nodes**: muted nodes or links left in the tree.
 - **unlabelled-frames**: frames without a label.
 - **repeated-subtree**: the same group of nodes, with the same links and settings, appears more
   than once; a candidate for a node group.
-
-Lint rules would use their own range of codes (for example NL001...), so `select` and `ignore`
-can take them as a group.

@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Layout cost: one number for the quality of a laid out container (lower is better).
 
-The cost is a weighted sum of faults of the routed wires (weights W_* in params.py):
+A weighted sum (weights W_* in params.py) of the faults of the routed wires:
 
-- crossings: a clean crossing (a horizontal and a vertical wire, away from bends and sockets)
-  is cheap, as in a hand-made layout where a straight wire crosses a bus at 90 degrees; a
-  crossing near a bend, a reroute or a socket, or of a diagonal wire, costs much more; so does
-  any crossing inside a bundle (two wires that leave the same node or enter the same node);
-- collinear wires (two wires on one line, or right next to each other);
-- reroute faults: two bends of different wires at (nearly) one point, or a bend lying on another
-  wire (both look like a junction);
-- bends (each costs two reroutes), small jogs, vertical run, the drop of a source node's wire,
-  height and width.
+- crossings: a clean one (a horizontal and a vertical wire, away from bends and sockets) is
+  cheap, as in a hand-made layout; one near a bend or a socket costs much more, and so does any
+  crossing inside a bundle (two wires that leave the same node or enter the same node);
+- collinear wires (on one line, or right next to each other);
+- reroute faults: bends of different wires at (nearly) one point, or a bend on another wire
+  (both look like a junction);
+- bends (each costs two reroutes), small jogs, vertical and horizontal run, the drop of a source
+  node's wire, nodes off the grid, height and width, wires on a zone's outline (NF032) and wire
+  labels in the way (NF041).
 """
 from bisect import bisect_left, bisect_right
 
@@ -28,12 +28,9 @@ class CostMixin:
     """Routes and the weighted faults of a layout."""
 
     def _route(self, detail=False):
-        """Route segments of the current placement, as (tag, (x1, y1), (x2, y2)). Every link that
-        is not straight turns on its track in the gap after its source column (see
-        LayoutBase._turn_y).
-
-        With detail=True each segment is (tag, p, q, edge, p_kind, q_kind), where a kind is
-        'sock' (a node socket), 'bend' (a corner, i.e. a reroute) or 'lane' (a point on a lane)."""
+        """Route segments of the current placement, as (tag, (x1, y1), (x2, y2)); a bent link turns
+        on its track (LayoutBase._turn_y). With detail=True each segment is (tag, p, q, edge,
+        p_kind, q_kind), a kind being 'sock' (a node socket), 'bend' (a reroute) or 'lane'."""
         xl = self.col_x[0] - P.COL_GAP / 2
         xr = self.col_x[self.R] + self.colw[self.R] + P.COL_GAP / 2
         segs = []
@@ -66,9 +63,9 @@ class CostMixin:
         return segs
 
     def _on_border(self, route):
-        """NF032 in a zone: horizontal runs on the top or bottom line of the outline Blender draws
-        around the zone (its nodes padded by a widget unit; the zone input and output nodes are
-        not padded up or down), where a wire looks like part of the border."""
+        """NF032 in a zone: the number of horizontal runs on the top or bottom line of the outline
+        Blender draws around the zone (its nodes padded by a widget unit, except the zone input
+        and output up and down), where a wire looks like part of the border."""
         if self._zone_input() is None:
             return 0
         reals = [i for i in self.items if not i.is_point]
@@ -134,8 +131,7 @@ class CostMixin:
             return False
 
         clean = bad = inbundle = 0
-        # vertical segments by x: each horizontal one looks only at those within its span (a
-        # window a little wider than the test below, which decides as before)
+        # vertical segments sorted by x: each horizontal one only looks at those within its span
         vs_x = sorted(vs, key=lambda s: s[1][0])
         xs = [s[1][0] for s in vs_x]
         for h in hs:
@@ -189,8 +185,8 @@ class CostMixin:
                 if abs(pts[b][1] - pts[a][1]) < P.RR_CLEAR:
                     clash += 1
         on_wire = 0
-        # segments by height (horizontal) and by x (vertical): each bend looks only at those
-        # within a window a little wider than ON_WIRE (the test below decides as before)
+        # segments sorted by height (horizontal) and by x (vertical): each bend only looks at
+        # those within a window a little wider than ON_WIRE
         hs_y = sorted(hs, key=lambda s: s[1][1])
         ys = [s[1][1] for s in hs_y]
         near = P.ON_WIRE + 1.0
@@ -210,9 +206,9 @@ class CostMixin:
                 "clash": clash, "on_wire": on_wire, "label": self._label_faults(bends, segs)}
 
     def _label_faults(self, bends, segs):
-        """NF041: labels that overlap another label, a node or a wire. Blender shows the label of
-        a labelled wire on every reroute after it, so every bend of a labelled wire (self.label_w:
-        source tag -> text width) counts as a label above the bend."""
+        """NF041: labels that overlap another label, a node or a wire. Blender shows a wire's label
+        on every reroute after it, so each bend of a labelled wire (self.label_w: source tag ->
+        text width) counts as a label above the bend."""
         from . import labels as L
         lw = getattr(self, 'label_w', None)
         if not lw:

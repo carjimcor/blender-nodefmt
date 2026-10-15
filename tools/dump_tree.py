@@ -31,6 +31,7 @@ THEME = ("node_backdrop", "grid", "wire", "converter_node", "color_node", "group
 
 
 def main():
+    """Read the tree as nodefmt models it and save it with the theme colours as JSON."""
     from nodefmt import api
     from nodefmt.draw import Editor
     if ARGS.ui_scale:
@@ -55,6 +56,7 @@ def main():
 
 
 def tick():
+    """Run main() once Blender's window is up, then quit."""
     try:
         main()
     except BaseException:

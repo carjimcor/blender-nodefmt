@@ -1,29 +1,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Tunable constants of the layout engine: spacing, budgets and cost weights (node units).
 
-Modules read them as params.NAME at run time, so a test (or an A/B session with the user) can
-change one number and run again. docs/ALGORITHM.md lists the cost weights with what each one does.
+Modules read them as params.NAME at run time, so a test can change one number and run again;
+rules.applied switches some of them per rule. docs/ALGORITHM.md explains the cost weights.
 """
 
 # ---------------------------------------------------------------- spacing
-GRID = 20.0         # Blender's node grid (only the frame and tree offsets use it now)
+GRID = 20.0         # Blender's node grid (only frame and tree offsets use it)
 NODE_GAP = 20.0     # vertical space between two nodes of a column
 LANE_GAP = 20.0     # vertical space around a routed lane (dummy)
-ZONE_LANE_GAP = 34.0  # NF032: in a zone, between a lane and the first or last node of its column
-                    # (the zone outline is a widget unit, 20, from the nodes: the lane runs clear of it)
+ZONE_LANE_GAP = 34.0  # NF032: in a zone, lane to first or last node of its column (clears the outline)
 COL_GAP = 60.0      # minimum horizontal space between columns
 TRACK = 20.0        # spacing of the vertical routing tracks in a gap
 EPS = 0.5           # links whose ends differ by no more than this are straight
 OVERHANG = True     # the end of a side branch may stick out of its column
-SATELLITES = True   # NF021: a big block with no inputs sits right before its consumer, reaching left
+SATELLITES = True   # NF021: a big block with no inputs sits right before its consumer
 STACK_MAX = 3       # NF023: the most nodes in a chain stacked above or below its consumer
-STACK_GAP = 40.0    # NF023: vertical space between two nodes of a stack (its wire runs in the middle)
-STACK_TRACK = 20.0  # NF023: distance of a stack's wires from the left and right edges of its nodes
-FAN = False         # NF035: the links into a multi-input socket spread out before it (rules.applied sets it)
-FAN_GAP = 20.0      # NF035: vertical space between the links of a multi-input socket before they converge
-FAN_MIN = 10.0      # NF035: the least space, where the wires into the node's other inputs leave less room
+STACK_GAP = 40.0    # NF023: vertical space between two nodes of a stack (its wire runs between)
+STACK_TRACK = 20.0  # NF023: distance of a stack's wires from the sides of its nodes
+FAN = False         # NF035: links into a multi-input socket fan out before it (set by rules.applied)
+FAN_GAP = 20.0      # NF035: vertical space between the links of a fan
+FAN_MIN = 10.0      # NF035: the least space, where wires into the node's other inputs leave less room
 FAN_CLEAR = 10.0    # NF035: room kept between the fan and the wire into another input of the node
-FAN_DEPTH = 30.0    # NF035: the shortest horizontal reach of the fan, from where it spreads to the socket
+FAN_DEPTH = 30.0    # NF035: shortest horizontal reach of the fan, from where it spreads to the socket
 FAN_SLOPE = 1.5     # NF035: the reach is at least this times the largest drop of a link in the fan
 
 # ---------------------------------------------------------------- track order (columns.py)
@@ -34,7 +33,7 @@ TRACK_SHARE = 40.0  # NF036: tracks of a gap this far apart in height share one 
 
 # ---------------------------------------------------------------- search budgets (engine.py, search.py)
 CANDIDATES = 3      # orders of the crossing reduction laid out in full (each with every placement)
-SEEDS = 1           # runs with differently seeded orders and moves (1: one deterministic pass; more: experiments)
+SEEDS = 1           # runs with differently seeded orders and moves (1: one pass; more: experiments)
 SEED_ONLY = None    # tests: run this one seed only (None: all SEEDS)
 SEARCH_SEED = 40    # layouts tried by the local search of each seed
 SEARCH = 120        # layouts tried by the final local search of the best seed
@@ -42,18 +41,17 @@ SLIDE = 40          # layouts tried by the final slide pass
 JITTER = 0.6        # seeds other than 0: random shift of an item's initial barycenter (in places)
 ORDERS = ('cross', 'force')                # order generators: crossing reduction, force-directed
 PLACERS = ('blocks', 'relax')  # placement methods tried for each order ('balanced': NF022)
-# zone output height, tried for each order and placement of a zone (the cheapest wins):
-#   'level'  level with the zone input (its top line)
-#   'median' a soft pull (ZONE_LEVEL) to that line, plus the weighted median of what its links want
+# zone output heights tried for each order and placement of a zone (the cheapest wins):
+#   'level'  level with the zone input's top line
+#   'median' a soft pull (ZONE_LEVEL) to that line plus the weighted median of what its links want
 #   'mean'   the same with the weighted mean: the output sits between its inputs
 ZONE_OUT = ('level', 'median', 'mean')
 PORTS_ABOVE = True  # NF033: a wire into a zone may enter above the zone input (over its outputs)
-LANE_SIDES = True   # NF033: the search may also put a lane right above or below the nodes of its columns
+LANE_SIDES = True   # NF033: a lane may also run right above or below the nodes of its columns
 ZONE_LEVEL = 6.0    # weight of the soft pull of a free zone output to the zone input's line
 
-# stability: a layout grown from the current order replaces the fresh one if it costs at most
-# this fraction more (0.0: only if it is as good or better, the current layout as the tie-breaker;
-# None: never, the layout depends on the graph only)
+# stability: a layout grown from the current order wins if it costs at most this fraction more
+# than the fresh one (0.0: ties go to the current layout; None: the layout depends on the graph only)
 STABLE = 0.0
 
 # ---------------------------------------------------------------- block placement (placement.py)
@@ -77,15 +75,14 @@ FORCE_REPEL = 0.3   # force-directed ordering: strength of the repulsion between
 FORCE_JITTER = 40.0  # force-directed ordering: random shift of start heights (seeds other than 0)
 
 # ---------------------------------------------------------------- layout cost (cost.py)
-W_CROSS = 4.0          # per clean crossing (a horizontal and a vertical wire, away from bends and sockets);
-                       # NF033: more than a bend
+W_CROSS = 4.0          # per clean crossing (away from bends and sockets); NF033: more than a bend
 W_CROSS_BAD = 12.0     # per crossing near a bend, a reroute or a socket, or of a diagonal wire
 W_CROSS_BUNDLE = 15.0  # extra per crossing of two wires that leave or enter the same node
 W_OVERLAP = 40.0       # per pair of wires running on one line (or closer than COLLINEAR)
 W_CLASH = 40.0         # per reroute at (nearly) the point of another, or on another wire
 W_BEND = 3.0           # per link that is not straight (two reroutes)
 W_JOG = 8.0            # extra per link that steps by less than JOG (looks like a mistake)
-JOG = 30.0
+JOG = 30.0             # see W_JOG
 W_VLEN = 0.004         # per unit of vertical run
 W_SRC = 0.01           # per unit a source node's link drops or rises
 W_GRID = 0.0           # per node off the grid (the grid does not matter: alignment comes first)
@@ -104,6 +101,6 @@ CLEAR_OUTLINE = 8.0    # NF032: a wire this close to a frame border or zone outl
 CLEAR_RUN = 40.0       # NF032: ... over more than this length (a wire crossing a border is fine)
 FAR_BLOCK = 400.0      # NF021 check: a frame with no inputs this far before its consumer is far
 FAR_RISE = 100.0       # NF021 check: a frame with nothing linked that could sit this much higher
-W_LABEL = 6.0          # NF041: per reroute label (or greyed copy of one) over another label, a node or a wire
+W_LABEL = 6.0          # NF041: per reroute label (or greyed copy) over another label, a node or a wire
 W_LABEL_BEND = 1.0     # NF041: extra per bend of a labelled wire (each bend shows the label twice more)
 LABEL_CLEAR = 6.0      # NF041: room kept between a label's text and the nodes beside its track

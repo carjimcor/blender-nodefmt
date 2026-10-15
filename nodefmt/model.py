@@ -11,7 +11,7 @@ SLOT = 5.0  # distance between the links of a multi-input socket at UI scale 1 (
 #              NODE_MULTI_INPUT_LINK_GAP, a quarter widget unit); data["slot"] has the drawn one
 REROUTE = 'NodeReroute'
 
-# commutative operations: (node type, operation) -> swappable pair (by socket names A/B or index)
+# commutative nodes: node type -> the operations whose two inputs may be swapped (None: any)
 COMMUTATIVE = {
     'ShaderNodeMath': {'ADD', 'MULTIPLY', 'MINIMUM', 'MAXIMUM'},
     'FunctionNodeIntegerMath': {'ADD', 'MULTIPLY', 'MINIMUM', 'MAXIMUM'},
@@ -61,13 +61,13 @@ def _same_default(a, b):
 
 
 def read(nt, where=None, part=None, pins=None):
-    """Plain data of a drawn tree (call draw.Editor.show(nt) first). `where` (name -> location)
-    gives the locations to record when the nodes were moved for the drawing (see
-    api.read_tree); socket offsets are always taken from where the nodes are drawn now.
+    """Plain data of a drawn tree (call draw.Editor.show(nt) first). where: {name: location} to
+    record instead of the drawn one, for nodes moved to be measured (api.read_tree); socket
+    offsets always come from where the nodes are drawn now.
 
-    part (a set of node names) reads only those nodes and the links between them (a sort of
-    the selection, see part.py); pins {reroute name: 'first' | 'last'} are reroutes of the part
-    that stand for its links to the rest: they are kept and take the first or last column."""
+    part: read only these node names and the links between them (Sort Selection, part.py).
+    pins: {reroute name: 'first' | 'last'}, reroutes of the part standing for its links to the
+    rest; they are kept and take the first or last column."""
     where = where or {}
     pins = pins or {}
     from .sockets import socket_location, verify
@@ -76,8 +76,7 @@ def read(nt, where=None, part=None, pins=None):
     verify(nt)
     ui = ortho.ui_scale()
     nodes = [n for n in nt.nodes if part is None or n.name in part]
-    # reroutes we may remove and rebuild; a labelled one is kept but treated the same way, and
-    # put back on the new route of its wire afterwards (a label names a wire, see layout.py)
+    # reroutes to remove and rebuild; labels go back on the new routes (routes.place_labels)
     removable = {n.name for n in nodes if n.bl_idname == REROUTE and n.name not in pins}
     bad = [l for l in nt.links if l.is_hidden]
     todo = [n.name for l in bad for n in (l.from_node, l.to_node) if n.name in removable]
@@ -214,16 +213,13 @@ def read(nt, where=None, part=None, pins=None):
 
 
 def _size(v):
-    """A node size in units without the float noise of the measure (it differs in the last
-    digits with where the node is drawn)."""
+    """A node size rounded to drop float noise (the last digits vary with where it is drawn)."""
     return round(v, 3)
 
 
 def with_modes(low, high):
-    """Plain data whose nodes carry both measures of model.read (api.read_tree): drawn below
-    y = 0 (low) and above it (high), as node["modes"] = {"low": (h, offsets), "high": ...} with
-    the socket offsets {key: [dx, dy]}. A socket Blender did not draw (in a closed panel) has
-    no position; it keeps its low offsets."""
+    """Plain data `low` with both measures of each node (api.read_tree): drawn below y = 0
+    (low) and above it (high), as node["modes"] = {"low": (h, {key: [dx, dy]}), "high": ...}."""
     out = dict(low, nodes={})
     for name, d in low["nodes"].items():
         d = dict(d)
@@ -236,11 +232,11 @@ def with_modes(low, high):
 
 
 def at(data, where):
-    """Plain data with each node's height and socket offsets for where it is drawn: where =
-    {node: (x, y)} with Blender's y up (the node's top). See api.read_tree: Blender rounds the
-    float height of each row towards zero, from the top down, so a stretch of a node above
-    y = 0 has the 'high' heights and below it the 'low' ones. The sockets are taken top to
-    bottom; the stretch from one to the next takes the high height if its middle is above 0."""
+    """Plain data with each node's height and socket offsets for where it is drawn now (Sort
+    Selection). where: {node: (x, y)}, Blender's y up (the node's top). Blender rounds each row
+    height towards zero from the top down, so the part of a node above y = 0 has the 'high'
+    measure and the part below the 'low' one: each stretch between two sockets, top to bottom,
+    takes the high height if its middle is above 0 (see api.read_tree)."""
     sc = data.get("scale", 1.0)
     out = dict(data, nodes={})
     for name, d in data["nodes"].items():
@@ -287,7 +283,7 @@ class Model:
         for s, d, _, _ in self.links:
             for g in (s, d):
                 self._add(g)
-        # the other socket of a commutative pair, so a swap can be priced
+        # commutative pairs that may be swapped, both sockets recorded so a swap can be priced
         self.comm = {}
         for k in self.real:
             c = nodes[k].get("comm")
@@ -315,17 +311,14 @@ class Model:
             self.pads[f] = (30.0, top, 30.0, 30.0)
 
     def _multi_slots(self):
-        """Each link into a multi-input socket (Join Geometry, Join Strings, ...) ends at its own
-        point: Blender spreads them data["slot"] units apart around the socket centre, the link
-        with the highest sort id on top. Such a link is laid out to a slot key, the socket gid plus the
-        slot index (0 = bottom), so the links arrive separately instead of meeting at one point.
-        On a collapsed node all links meet at the socket (slots with no offset); they are still
-        slots, so each arrives as its own direct link instead of sharing a final run.
+        """Give each link into a multi-input socket (Join Geometry, ...) its own slot key: the
+        socket gid plus the slot index (0 = bottom). Blender spreads such links data["slot"]
+        apart around the socket centre, highest sort id on top, so they arrive separately. On a
+        collapsed node the slots have no offset, but each link still arrives on its own.
 
-        NF035 (params.FAN): the layout lays a slot's link out to its fan point instead (_fan), a
-        widget unit from the next one and a little left of the socket; self.fan keeps the slot's
-        own offset, where the last stretch of the link, from the fan point, ends. A slot whose
-        fan point is level with it needs no fan."""
+        NF035 (params.FAN): a slot's link is laid out to its fan point (_fan), left of the
+        socket; self.fan keeps the slot's own offset, where the last stretch ends. A slot level
+        with its fan point needs no fan."""
         from . import params as P
         self.slot = {}
         self.fan = {}       # slot key -> (dx, dy) of the slot, for the slots laid out to a fan point
@@ -358,12 +351,12 @@ class Model:
                 self.slot[(s, d, sid)] = key
 
     def _fan(self, d, n, gap):
-        """NF035: the fan of multi-input socket d with n links (slots `gap` apart): (depth,
-        [offset from the socket of each slot's fan point, slot 0 = bottom]). The fan points
-        stand FAN_GAP apart, centred on the socket, `depth` to its left; the wires into the
-        node's other inputs keep FAN_CLEAR from them, by moving the fan and, if that is not
-        enough, by spreading it less (never less than FAN_MIN). depth: at least FAN_DEPTH and
-        FAN_SLOPE times the largest drop from a fan point to its slot, in steps of 10."""
+        """NF035: the fan of multi-input socket d with n links (slots `gap` apart), as (depth,
+        [dy of each slot's fan point from the socket, slot 0 = bottom]). Fan points stand
+        FAN_GAP apart, centred on the socket, `depth` to its left; to keep FAN_CLEAR from the
+        wires into the node's other inputs the fan shifts, then narrows (to FAN_MIN at least).
+        depth: at least FAN_DEPTH and FAN_SLOPE times the largest drop to a slot, rounded up to
+        a multiple of 10."""
         from . import params as P
         y = self.ins[d[0]][d][1]
         others = [self.ins[d[0]][g][1] - y for g in self.ins[d[0]]

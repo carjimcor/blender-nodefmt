@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Checks: which rules a drawn tree breaks, with the rule code and where (pure Python).
 
-lint(drawing) looks at a wires.Drawing (a formatted layout, or a tree as Blender draws it, see
-metrics.drawing) and returns Violations. NF010 and NF011 also need the tree's model data and
-NF900 (not formatted) needs a format run; api.check adds those. Rules NF005 (logic), NF020
-(zone outputs) and NF022 (shape) have no geometric test: a tree that breaks them is reported
-as NF900, like any tree that formatting would change.
+lint() looks at a wires.Drawing (a formatted layout, or a tree as Blender draws it, see
+metrics.drawing) and returns Violations. NF010, NF011 (they need model data) and NF900 (not
+formatted: needs a trial format) are added by api.check_tree. NF005, NF020 and NF022 have no
+geometric test: a tree that breaks them shows up as NF900.
 """
 from collections import namedtuple
 
@@ -13,7 +12,7 @@ from . import params as P
 from . import routes, wires
 from .rules import NAMES
 
-# nodes: the names of the nodes involved (the Check panel selects them, with the reroutes at x, y)
+# x, y: where (y up); nodes: the nodes involved (the Check panel selects them and the reroutes at x, y)
 Violation = namedtuple('Violation', 'code name msg x y nodes', defaults=((),))
 
 
@@ -201,8 +200,8 @@ def lint(d, rules=None, labels=None, groups=None):
 
 
 def _readable(d, segs, p, text):
-    """True if a label at reroute p would be clear of nodes and wires (NF041): with NF041 a
-    label may skip the reroutes before it where its text would not be."""
+    """True if a label at reroute p would be clear of nodes and wires (NF041). With NF041 a label
+    may skip earlier reroutes where its text would not be clear."""
     from . import labels as L
     b = L.box(p, L.text_width(text))
     return not any(L.overlap(b, n) for n in d.boxes.values()) and not any(L.hits(b, s[1], s[2]) for s in segs)
@@ -229,8 +228,8 @@ def _label_faults(d, segs, labels):
 
 
 def _loose_rise(d, name, members):
-    """How much higher frame `name` (nothing linked into or out of it) could sit under the tree,
-    in the free space below what is above it, within the tree's width; and a point to report."""
+    """(how much higher frame `name`, with nothing linked, could sit in the free space under the
+    tree within its width, a point to report)."""
     rect = None
     for n, poly in d.outlines:
         if n == name:
@@ -310,8 +309,8 @@ FAN_REACH = 200.0  # NF035: the longest diagonal stretch counted as part of a fa
 
 
 def _fan_stretch(d, s):
-    """True if segment s is the last stretch of a fan into a multi-input slot (rule NF035): from
-    a reroute, rightwards and not far, into a slot of a multi-input socket."""
+    """True if segment s is the last stretch of a fan (NF035): from a reroute, rightwards and
+    not far, into a slot of a multi-input socket."""
     if s[3] != 'rr' or s[4] != 'sock':
         return False
     k = d.trees[s[0]].dst.get(s[2])
@@ -320,9 +319,8 @@ def _fan_stretch(d, s):
 
 def _tight_multi(d):
     """NF035: multi-input sockets whose links arrive closer than FAN_MIN to each other, as
-    {socket gid: (smallest distance, a point to report)}. The links are taken where their last
-    stretch starts (the fan point, else the bend or the socket the last run comes from); a
-    collapsed node, where all slots meet at one point, has no fan."""
+    {socket gid: (smallest distance, a point to report)}, measured where each last stretch
+    starts. A collapsed node (all slots at one point) has no fan."""
     ends = {}
     for tag, t in d.trees.items():
         for q, k in t.dst.items():
@@ -341,7 +339,7 @@ def _tight_multi(d):
 
 
 def _jogs(d, tag):
-    """Reversals and landings of one tree that moving their run to another height removes
+    """NF031: reversals and landings of one tree that moving their run to another height removes
     without any other fault: [(kind, run, (level before, level after))]."""
     t = d.trees[tag]
     rest = wires.Rest(d, tag)
@@ -373,8 +371,8 @@ def _jogs(d, tag):
 
 
 def _avoidable(d, tag):
-    """(crossings of tree `tag` that moving one of its runs to another height removes without
-    any other fault, a point to report)."""
+    """NF033: (crossings of tree `tag` that moving one of its runs to another height removes
+    without any other fault, a point to report)."""
     t = d.trees[tag]
     rest = wires.Rest(d, tag)
     base = wires.tree_faults(d, tag, rest=rest)

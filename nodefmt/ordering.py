@@ -35,9 +35,9 @@ class OrderingMixin:
         between sockets), each with every placement method in P.PLACERS, as graph.Cand.
 
         Initial order: from the last column back, each item follows the sockets it feeds; then
-        barycenter sweeps down and up (weighted towards main inputs), neighbour transposition and
-        commutative input swaps. With a random generator (seeds other than 0) the initial order is
-        jittered and the number and direction of sweeps vary."""
+        barycenter sweeps down and up (main inputs weigh more), neighbour transposition and
+        commutative input swaps. A random generator (seeds other than 0) jitters the initial
+        order and varies the number and direction of sweeps."""
         layers = [[] for _ in range(self.R + 1)]
         for i in self.items:
             layers[i.rank].append(i)
@@ -51,8 +51,7 @@ class OrderingMixin:
                 layer.sort(key=lambda i: i.oy)
                 self._place(layer, {i: i.oy for i in layer})
         else:
-            # initial order from the graph only (so formatting twice gives the same result):
-            # from the last column back, each item follows the sockets it feeds
+            # initial order from the graph only, so formatting twice gives the same result
             for k in range(self.R, -1, -1):
                 layer = layers[k]
                 if k < self.R:
@@ -80,8 +79,7 @@ class OrderingMixin:
             e.vk = e.vk0
         comm = self._comm_units()
         self.comm_items = comm
-        # every seed starts from the commutative inputs in a canonical state (by source), so the
-        # result does not depend on how they are linked now and formatting twice changes nothing
+        # commutative pairs start in a canonical state (by source): formatting twice changes nothing
         for _, pair, es in comm:
             for e, k in zip(sorted(es, key=lambda e: repr(e.tag)), pair):
                 e.vk = k
@@ -135,7 +133,8 @@ class OrderingMixin:
         return layers
 
     def use(self, cand):
-        """Make a candidate order current: order indices, swapped inputs, provisional y."""
+        """Make a candidate current: column orders (zone pins first, satellites at the ends), order
+        indices, swapped inputs, self.above and self.outer, and provisional heights."""
         layers, comm_state, self.banned, self.placer, self.origin, self.zone = cand
         self.layers = [list(l) for l in layers]
         zin = self._zone_input()
@@ -143,8 +142,7 @@ class OrderingMixin:
         if zin is not None:  # the zone input and output head their columns
             for layer in (self.layers[0], self.layers[-1]):
                 for i in [i for i in layer if i.pin and i.kind == 'node' and getattr(i, 'zmatch', None) is not None]:
-                    # ports put above the zone input by the search (NF033) stay there: a wire from
-                    # outside may enter over the zone input instead of crossing its outputs
+                    # ports the search put above the zone input stay there (NF033)
                     lead = 0
                     if layer is self.layers[0] and P.PORTS_ABOVE:
                         while lead < len(layer) and layer[lead].kind == 'pin_in':
@@ -183,8 +181,8 @@ class OrderingMixin:
                     self.outer.add((id(layer[f - 1]), id(layer[f])))
                 if l + 1 < len(layer):
                     self.outer.add((id(layer[l]), id(layer[l + 1])))
-        # provisional y that matches the chosen order (used to rank alignments): one pass of
-        # barycenters, rounded so that tiny float differences cannot change any decision
+        # provisional y for the order (ranks alignments): one pass of barycenters, rounded so tiny
+        # float differences cannot change a decision
         for k, layer in enumerate(self.layers):
             prev = None
             for i in layer:
@@ -238,7 +236,8 @@ class OrderingMixin:
             y += i.h + self._gap(i, i)
 
     def _transpose(self, layers, fixed_real, down):
-        """Swap neighbours in a column while that removes crossings (pins stay first/last)."""
+        """Swap neighbours in a column while that removes crossings (with fixed_real, only swaps
+        that move a point item)."""
         rng = range(self.R + 1) if down else range(self.R, -1, -1)
         for k in rng:
             layer = layers[k]
@@ -264,9 +263,8 @@ class OrderingMixin:
                             i.y = y
 
     def _comm_units(self):
-        """The commutative pairs of the items, as units (item, (a, b), links into the pair): a
-        node has one pair (Add, Multiply, AND, Equal, ...); a frame or zone may have several,
-        each a pair of its ports that a swap inside it exchanges (layout.py)."""
+        """The commutative pairs, as units (item, (a, b), links into the pair): a node has one
+        (Add, Multiply, AND, Equal, ...); a frame or zone may have several (layout.py)."""
         units = []
         for i in self.items:
             c = getattr(i, 'comm', None)
@@ -291,8 +289,8 @@ class OrderingMixin:
                 self.swapped.append((i.id, a, b))
 
     def _swap_inputs(self, comm):
-        """Exchange the links of a commutative pair (Add, Multiply, AND, Equal, ...) when that
-        removes crossings in the gap before the node."""
+        """Exchange the links of each commutative pair when that removes crossings in the gap
+        before its item."""
         for i, (a, b), es in comm:
             k = i.rank - 1
             before = self._gap_crossings(k)

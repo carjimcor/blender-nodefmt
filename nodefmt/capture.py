@@ -1,23 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Capture Tree: save an image of a whole node tree at a chosen zoom, larger than the screen.
 
-The node editor is maximised, its header, toolbar and sidebar are hidden (and, as an option, the
-overlays that are not part of the tree, such as the context path), and the view is zoomed to the
-chosen number of screen pixels per node unit (view2d.zoom). The view is then panned over the
-tree in whole pixels (view2d.pan), with one screenshot of the editor per tile, taken right after
-a synchronous redraw (screen.screenshot_area). Neighbouring tiles overlap: each tile is compared
-with the tiles placed before it and moved by up to a few pixels if it lines up cleanly only there
-(a check: pans have been exact in every test). The tiles are joined with numpy (bundled with
-Blender, no Pillow), cropped to the tree plus a margin and written as a PNG by png_steps.
+The node editor is maximised, its regions (and optionally the overlays that are not part of the
+tree) are hidden, and the view is zoomed to the chosen screen pixels per node unit. The view is
+then panned over the tree in whole pixels, one screenshot per tile. Neighbouring tiles overlap,
+and a tile is moved a few pixels only if it lines up cleanly there and not where it was planned
+(a safety check: pans are exact). The tiles are joined with numpy (no Pillow), cropped to the tree plus a margin and
+written as a PNG. Blender dims a wire whose two ends are both far outside the view, so a long
+wire can look fainter in the middle of a capture than at its ends.
 
-Blender dims a wire whose two ends are both well outside the view, so a long wire can look
-fainter in the middle of a capture than at its ends.
-
-Afterwards the editor is put back as it was: maximised state, regions, overlays, zoom and pan, and
-the selection (nodes are drawn unselected while the tiles are taken). The tree is never changed
-and no undo step is added. A CaptureJob runs in steps, so the add-on can show progress and
-cancel (ui.py runs the steps in an application timer: the screen must not change while Blender
-goes through event handlers); run() does every step at once (command line).
+Afterwards the editor is put back as it was (maximised state, regions, overlays, zoom, pan and
+selection); the tree is never changed and no undo step is added. A CaptureJob runs in steps so
+the add-on can show progress and cancel (ui.py runs them in an application timer: the screen
+must not change while Blender goes through event handlers); run() does every step at once.
 """
 import math
 import os
@@ -54,10 +49,9 @@ class Options:
 
     def __init__(self, zoom=1.0, selection=False, hide_overlays=True, margin=40, path="",
                  clipboard=False, open_image=False, maximise=True):
-        """zoom: screen pixels per node unit; selection: only the selected nodes (a selected
-        frame with everything in it); margin: pixels around the tree; path: the PNG file or a
-        folder ('' for the default, see output_path); maximise: maximise the editor first (fewer
-        tiles; only outside event handlers, such as in a timer)."""
+        """zoom: screen pixels per node unit; selection: only the selected nodes (and the contents
+        of selected frames); margin: pixels around the tree; path: see output_path; maximise:
+        maximise the editor first (fewer tiles; only outside event handlers, as in a timer)."""
         self.zoom, self.selection, self.hide_overlays = zoom, selection, hide_overlays
         self.margin, self.path = margin, path
         self.clipboard, self.open_image, self.maximise = clipboard, open_image, maximise
@@ -70,8 +64,7 @@ class Options:
 
 
 def file_name(nt):
-    """A file name for tree nt: its name (see api.tree_name) without characters that file
-    systems reject."""
+    """A file name for tree nt: api.tree_name without characters that file systems reject."""
     name = "".join("_" if c in '<>:"/\\|?*' or ord(c) < 32 else c for c in api.tree_name(nt))
     return name.strip(" .") or "tree"
 
@@ -99,8 +92,7 @@ def output_path(nt, path=""):
 
 def tree_bounds(nt, selection=False, badges=False):
     """(left, bottom, right, top) in node units (y up) of what Blender draws of tree nt, or of
-    its selected nodes and the contents of its selected frames. Needs a drawn tree (node
-    dimensions)."""
+    its selected nodes and the contents of selected frames. Needs a drawn tree (dimensions)."""
     ui = bpy.context.preferences.system.ui_scale
     nodes = list(nt.nodes)
     if selection:
@@ -136,6 +128,7 @@ def png_steps(path, rgb, level=6, rows=64):
     h, w, _ = rgb.shape
 
     def chunk(tag, data):
+        """A PNG chunk: length, tag, data and CRC."""
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
     part = path + ".part"
@@ -198,10 +191,9 @@ def _mismatch(canvas, mask, tile, x, y, rects, step=1):
 
 def place(canvas, mask, tile, x, y, rects):
     """Paste `tile` on the canvas at (x, y), or up to REACH pixels away if it lines up cleanly
-    there and not at (x, y) (a pan could land a pixel or two off). A small mismatch alone does
-    not move a tile: Blender dims a wire whose two ends are both outside the view, so the same
-    wire can differ between two tiles. Returns (dx, dy, mismatch); the mismatch is None where the
-    tile overlaps nothing."""
+    only there. A small mismatch alone does not move a tile: Blender dims wires whose ends are
+    off view, so the same wire can differ between tiles. Returns (dx, dy, mismatch); mismatch is
+    None where the tile overlaps nothing."""
     best = (0, 0, _mismatch(canvas, mask, tile, x, y, rects))
     if best[2] is not None and best[2] > MATCH:
         found = None
@@ -227,9 +219,8 @@ def place(canvas, mask, tile, x, y, rects):
 
 
 def _set_flags(win, items):
-    """Set (object, attribute, value) flags that differ, in the context of window `win` without an
-    area or region (as in a timer): inside an operator's area Blender applies a region's
-    visibility late, or toggles it."""
+    """Set the (object, attribute, value) flags that differ, in window `win` with no area or
+    region (as in a timer): inside an area Blender applies a region's visibility late, or toggles it."""
     items = [(obj, k, v) for obj, k, v in items if getattr(obj, k) != v]
     if not items:
         return
@@ -336,9 +327,8 @@ class CaptureJob:
         return x0, y0, (x1 - x0) / 100000, (y1 - y0) / 100000
 
     def _set_zoom(self, z):
-        """Zoom the view about its centre to z region pixels per view unit across (view2d.zoom
-        takes view units, so a few rounds reach it), scaling the height alike so the view keeps
-        its aspect; stops where Blender limits the zoom."""
+        """Zoom about the view centre to z region pixels per view unit, both axes alike
+        (view2d.zoom takes view units, so it takes a few rounds); stops at Blender's zoom limit."""
         ps = bpy.context.preferences.system.pixel_size
         for _ in range(8):
             r = self._region()
@@ -354,8 +344,8 @@ class CaptureJob:
                 return  # at Blender's zoom limit
 
     def _pan_to(self, x, y):
-        """Pan in whole pixels until view point (0, 0) is at region pixel (x, y), as far as
-        view_to_region tells (within a pixel or two)."""
+        """Pan in whole pixels until view point (0, 0) is at region pixel (x, y) as view_to_region
+        reports it (within a pixel or two); True if reached."""
         for _ in range(4):
             cx, cy = self._view()[:2]
             if (cx, cy) == (x, y):
@@ -478,9 +468,8 @@ class CaptureJob:
             bpy.ops.view2d.pan(deltax=int(ox + rx - m - ux0), deltay=int(uy0 - (ah - oy - ry - m)))
         rx, ry = region.view2d.view_to_region(left * ui, top * ui, clip=False)
         x0, y0 = ox + rx - m, ah - oy - ry - m  # the image's top left in the first tile
-        # A pan moves the drawn view by exactly the pixels asked for, so every tile is a pan
-        # away from the first one. (view_to_region can be a pixel or two off, so it is not
-        # used to check the pans.)
+        # pans are exact, so each tile is a pan away from the first (view_to_region can be a
+        # pixel or two off, so it does not check them)
         panned = (0, 0)
 
         self.tmp = tempfile.mkdtemp(prefix="nodefmt-capture-")

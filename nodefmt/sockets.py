@@ -4,7 +4,9 @@
 """Read socket positions that Blender computes while drawing a node editor.
 
 Blender does not expose socket positions through the Python API. After a node tree has been
-drawn, each socket's runtime data holds its location in view space (node units times UI scale).
+drawn, each socket's runtime data holds its location in view space (node units times UI scale);
+the ctypes mirrors below read it. verify() checks the mirrors against a drawn tree before any
+position is read, so a Blender with another data layout stops with a clear message.
 """
 import ctypes
 import platform
@@ -88,10 +90,9 @@ class UnsupportedBlender(RuntimeError):
 
 
 def verify(nt):
-    """Check the mirrors against a drawn tree: the identifier read through ctypes must be the
-    socket's own, and its location must lie on its node. Raises UnsupportedBlender otherwise,
-    so a Blender version with another layout fails clearly instead of placing nodes from
-    garbage. Call after the tree was drawn."""
+    """Check the mirrors on the first node with visible sockets of a drawn tree: the identifier
+    read through ctypes must be the socket's own and its location must lie on the node. Raises
+    UnsupportedBlender otherwise, rather than placing nodes from garbage."""
     ui = bpy.context.preferences.system.ui_scale
     for n in nt.nodes:
         socks = [s for s in list(n.inputs) + list(n.outputs) if s.enabled and not s.hide]

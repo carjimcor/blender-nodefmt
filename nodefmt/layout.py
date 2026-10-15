@@ -52,9 +52,8 @@ def containers(m, stacks=False):
         z.pair = (n, out)
         zones.append(z)
     zones.sort(key=lambda z: len(z.all))
-    # sources used only inside one zone go into it: pure sources (nothing linked in) and the nodes
-    # that only they feed (Index -> Compare), so that their wires stay short. They also go into
-    # every zone around it, so that a nested zone stays inside its parent
+    # sources used only inside one zone (and the nodes only they feed, Index -> Compare) join it
+    # and every zone around it, so their wires stay short and nested zones stay nested
     pred = {}
     for s, d, _, _ in m.links:
         pred.setdefault(d[0], set()).add(s[0])
@@ -94,14 +93,12 @@ def containers(m, stacks=False):
 
 
 def _stacks(m):
-    """The stacks of rule NF023 stacked-fields. A chain is up to STACK_MAX field nodes (no
-    geometry socket, no zone, output or reroute) linked one after the other, the first with
-    nothing linked in, each with one link out, the last into one input of a consumer node in the
-    same frame (Index -> Compare -> Selection). A consumer with one chain gets it above when that
-    crosses fewer of its other linked inputs (on a tie: when the input is in the upper half);
-    with several, the chain into its highest input goes above and the one into its lowest goes
-    below, and the others are not stacked. Containers named after the consumer, with the chains
-    as lists from their first node: `above` and `below`."""
+    """The stacks of rule NF023 stacked-fields: Containers keyed by the consumer node, with the
+    chains `above` and `below` it (lists, first node first). A chain is up to STACK_MAX field
+    nodes in a row, the first with nothing linked in, each with one link out, the last feeding
+    one input of the consumer in the same frame (Index -> Compare -> Selection). A lone chain
+    goes above if that crosses fewer of the consumer's other inputs (tie: input in the upper
+    half); of several, the chain into the highest input goes above, the lowest below."""
     zone = set()
     for n in m.real:
         if m.paired(n):
@@ -177,7 +174,7 @@ def nest(m, conts):
     root = Container('root', None, set(m.real))
     allc = [root] + conts
 
-    def contains(a, b):  # a strictly contains b
+    def contains(a, b):
         """True if container a strictly contains container b."""
         if a is b:
             return False
@@ -207,14 +204,12 @@ def nest(m, conts):
 
 class Formatter:
     """Lays out a whole tree (model.Model): containers inside out, then absolute positions, reroute
-    trees and labels. run() does it all; the result is read by blend.apply.
+    trees and labels. run() does it all; blend.apply writes the result.
 
-    Snapshots (for animations of the algorithm, see tools/animate.py): with record=True, self.snapshots gets
-    plain-data states in order: 'direct' (the nodes where they were, every link drawn direct
-    from socket to socket, no reroutes), then for each container the engine phases (orders,
-    seeds, search, slide; see engine.snapshot_state, in the container's own coordinates), then
-    'final' (geometry(): nodes, reroutes and links as Blender will draw them). The original
-    drawing with its reroutes is not part of the model; take it from the tree (tools/dump_tree.py)."""
+    record=True fills self.snapshots (for tools/animate.py) with plain-data states: 'direct'
+    (nodes where they were, links drawn straight, no reroutes), the engine phases of each
+    container in its own coordinates (engine.snapshot_state), then 'final' (geometry()). The
+    original reroutes are not in the model (see tools/dump_tree.py)."""
 
     def __init__(self, m, mode='relayout', swaps=True, record=False, rules=None):
         """Format model m in `mode` ('relayout' or 'keep'); swaps=False keeps commutative inputs as
@@ -238,18 +233,16 @@ class Formatter:
 
     def run(self, route=True):
         """Lay out the tree (run_steps() in one go). Returns self. route=False stops at the node
-        positions (self.pos, self.home, self.node_items): no reroute trees, tidy pass or labels
-        (the copy plan of dup.py needs nothing more)."""
+        positions (self.pos, self.home, self.node_items), all the copy plan of dup.py needs."""
         for _ in self.run_steps(route):
             pass
         return self
 
     def run_steps(self, route=True):
-        """Lay out the tree, as a generator: yields ('layout', k, n) after each of the n
-        containers (zones, frames, the tree itself; again with the same k when a zone's output
-        mode is tried), then ('routing', 1, 1) once the routes are placed. A frame that would
-        form a cycle as one block is laid out as loose nodes (the count starts again).
-        route=False: see run()."""
+        """Lay out the tree as a generator of progress: ('layout', k, n) after each of the n
+        containers (again with the same k when a zone output mode is tried), then ('routing',
+        1, 1). A frame that would form a cycle as one block is laid out as loose nodes (the
+        count starts again). route=False: see run()."""
         if self.snapshots is not None:
             self.snapshots.append({"phase": "direct", **self._direct()})
         while True:
@@ -260,8 +253,8 @@ class Formatter:
             try:
                 self.res, self.node_items, self.comp_items = {}, {}, {}
                 self.ctx, self.applied = {}, {}
-                # commutative pairs at a container's border (see _border_pairs): the first column
-                # of each container, the pairs its parent may exchange, the port pairs exchanged
+                # border swaps (_border_pairs): first-column ids, pairs the parent may exchange,
+                # port pairs exchanged, and the container of each compound item
                 self.rank0, self.exposed, self.flipped, self.cont_of = {}, {}, {}, {}
                 self.swapped = []
                 self.links = list(self.m.links)
@@ -312,11 +305,10 @@ class Formatter:
         return self.comp_items[id(h)]
 
     def layout(self, c):
-        """Lay out container c (children first): build its items and edges, ports for links that
-        cross its border, run the engine, and make it one compound item of its parent. A child
-        zone may offer other heights for its output (engine: zone output modes); c tries each and
-        keeps the one that makes c and the child cheapest together, so a lowered zone output is
-        only kept when what follows the zone fits better too. A generator (see run_steps)."""
+        """Lay out container c, children first, and make it one compound item of its parent (a
+        generator, see run_steps). A child zone may offer other heights for its output (engine
+        zone output modes); c tries each and keeps the one cheapest for c and the child
+        together, so a lowered zone output stays only if what follows the zone fits better."""
         for ch in c.children:
             yield from self.layout(ch)
         self._run(c)
@@ -373,7 +365,7 @@ class Formatter:
             it.reach_l = m.fan_reach.get(name, 0.0)  # NF035: its fans, in the gap before its column
             if name in m.comm and self.swaps_on:
                 it.comm = it.comm_pair = m.comm[name]
-            if pin and c.kind == 'zone':  # zone input/output: their items, to put them on one line
+            if pin and c.kind == 'zone':  # zone input/output: sockets by identifier, to line them up
                 side = m.outs if pin == 'first' else m.ins
                 it.zmatch = {m.info[g[0]]["socks"][f"{g[1]}{g[2]}"]["id"]: g for g in side[name] if len(g) == 3}
                 it.zgeo = {k: m.geo[g] for k, g in it.zmatch.items()}
@@ -461,14 +453,12 @@ class Formatter:
         self._apply(c, res)
 
     def _run_stack(self, c):
-        """Lay out stack c (rule NF023) without the engine: one column, the chain above the
-        consumer from its first node down, the chain below it from its last node down, STACK_GAP
-        apart. Each link leaves its node to the right, turns in the gap between the two nodes,
-        runs back along the left side of the column and enters its socket from the left. Links
-        from outside reach the consumer's sockets directly; nothing in a stack is swapped.
-        The block is as wide as its nodes, which stand at its left edge like the other nodes of
-        the column; the wires round the side run outside it, in the gaps beside the column
-        (res.reach: how far they reach out on the left and on the right, see columns.py)."""
+        """Lay out stack c (rule NF023) without the engine: one column, STACK_GAP apart, the
+        chain above the consumer from its first node down, the chain below from its last node
+        down. Each link leaves its node to the right, turns in the gap between the two nodes,
+        runs back along the left of the column and enters its socket from the left. Links from
+        outside reach the sockets directly; nothing is swapped. The block is as wide as its
+        nodes; the side wires run in the gaps beside it (res.reach, see columns.py)."""
         m = self.m
         left = -P.STACK_TRACK  # the left track, in the gap before the column
         x = 0.0
@@ -516,19 +506,17 @@ class Formatter:
         self._apply(c, res)
 
     def _border_pairs(self, c, items, edges, direct_in):
-        """The commutative pairs of container c that its parent may exchange (rule NF011), as
-        {(port a, port b): (item, key a, key b, tags)}. Container c is laid out before its
-        parent and cannot see where the wires that enter it come from, so a swap that only
-        exchanges two of c's ports is left to the parent, which sees them:
+        """The commutative pairs of container c that its parent may exchange (rule NF011):
+        {(port a, port b): (item, key a, key b, tags)}. c is laid out before its parent and
+        cannot see where its incoming wires come from, so a swap that only exchanges two of its
+        ports is left to the parent:
 
-        - an item of the first column whose pair is fed from outside c: the wires reach its
-          sockets directly (PORT_DIRECT ports), and c leaves the pair to its parent (tags None);
-        - an item further right whose two links come each from a port on c's left edge that
-          feeds nothing else: exchanging the heights of the two ports, and the tags of the wires
-          from them inside c, gives the same layout with the pair swapped (tags: the sources).
+        - a first-column item whose pair is fed from outside c (PORT_DIRECT ports; tags None);
+        - an item further right whose two links each come from a left-edge port feeding nothing
+          else: exchanging the two ports' heights and wire tags swaps the pair (tags: sources).
 
-        The item can be a node, or a child block with border pairs of its own: a pair is passed
-        on up through nested frames and zones."""
+        The item may be a child block with border pairs of its own, so a pair passes up through
+        nested frames and zones."""
         out = {}
         if c.kind == 'root' or not self.swaps_on:
             return out
@@ -608,7 +596,7 @@ class Formatter:
         comp.res = res
         comp.big = res.ranks >= 3
         comp.reach_l, comp.reach_r = getattr(res, 'reach', (0.0, 0.0))  # a stack's side wires
-        # NF035: the fans of the block's first column reach out on its left, like its ports there
+        # NF035: the fans of the block's first column reach out on its left
         if m.fan:
             comp.reach_l = max([comp.reach_l] + [-dx for dx, _ in ins.values()])
         # main input: the zone input's main socket, else a geometry port, else the top port
@@ -675,9 +663,8 @@ class Formatter:
         m = self.m
         self.pos, self.segments = {}, []
         self._place(root, (0.0, 0.0))
-        # keep the tree where it was: the Group Output (else an output node such as the Material
-        # Output, else the first node by name) does not move, so formatting a formatted tree
-        # changes nothing
+        # the anchor (Group Output, else another output node, else the first node by name) stays
+        # put, so formatting a formatted tree changes nothing
         outs = sorted((n for n in self.pos if m.type(n) in OUTPUTS), key=lambda n: (OUTPUTS.index(m.type(n)), n))
         outs = outs or sorted(self.pos)
         ref = outs[0]

@@ -6,11 +6,13 @@
   blender file.blend --python nodefmt_cli.py -- --capture TREE [--out FILE.png] [--zoom 1.0]
 
 Options:
-  --select CODES     rules to apply and check (comma-separated codes, prefixes or names; default ALL)
+  --select CODES     rules to apply and check (comma-separated codes, prefixes, names or ALL;
+                     default: the config's, else all but the opt-in rules NF022, NF023, NF035)
   --ignore CODES     rules to switch off (added to the config file's ignore list)
   --config PATH      a nodefmt.toml to use (default: the first one found from the .blend's folder up)
-  --ui-scale S       the Resolution Scale to format for (default: Blender's, or the config's)
+  --ui-scale S       the Resolution Scale to format for (default: the config's, else Blender's)
   --tree NAME        only this tree (repeatable): a group name or "Material: <name>", ...
+  --mode M           relayout (default) or keep (start from the current layout)
   --no-format-check  --check: report rule violations only, without trying a format (NF900)
   --statistics       print the number of violations per rule
   --strict           --check: fail on any violation (default: only on NF900 and the guarantees)
@@ -21,20 +23,17 @@ Options:
   --zoom Z           --capture: screen pixels per node unit (default 1.0)
   --margin PX        --capture: empty pixels around the tree (default 40)
 
-Each tree gets a progress line "[3/14] sorting NAME"; on a terminal, --fix also shows the steps
-of the sort on one line ("pass 1 (of at most 6), layout 4/9 (step 6/14)").
+--check changes nothing and prints one line per violation with its rule code. It exits 1 if a
+tree is not formatted (NF900) or breaks a guarantee (NF001-NF005); a style rule that a formatted
+tree still breaks (the formatter could not do better) fails the check only with --strict.
+--fix formats and saves the file, prints what is left, and exits 2 if a tree could not be
+formatted without changing its logic (that tree is left as it was). Errors exit 3. Each tree
+gets a progress line; on a terminal --fix also shows the steps of the sort.
 
---check changes nothing and prints one line per violation with its rule code, as ruff does. It
-exits 1 if a tree is not formatted (NF900) or breaks a guarantee (NF001-NF005); a style rule
-that a formatted tree still breaks (the formatter could not do better, for example a crossing
-inside a bundle) is reported but fails the check only with --strict. --fix formats and
-saves the file, prints what is left, and exits 2 if a tree could not be formatted without
-changing its logic (that tree is left as it was). Blender must run with its window (not -b):
-node sizes and socket positions only exist after Blender draws a tree.
-
-Wires are exactly orthogonal at the UI scale the tree is formatted at (see ortho.py). Run without
---factory-startup so Blender uses your preferences (your Resolution Scale), or give the scale with
---ui-scale or ui-scale in nodefmt.toml (set for this run only; preferences are never saved).
+Blender must run with its window (not -b): node sizes and socket positions only exist once a
+tree is drawn. Wires are exactly orthogonal only at the UI scale the tree is formatted at: run
+without --factory-startup to use your Resolution Scale, or set it with --ui-scale or ui-scale in
+nodefmt.toml (for this run only; preferences are never saved).
 """
 import argparse
 import os
@@ -86,8 +85,7 @@ def config():
 
 
 def sort(api, nt, cfg, ed, prefix):
-    """Sort one tree (api.format_steps). On a terminal the steps are shown on one line that is
-    overwritten as the sort goes on."""
+    """Sort one tree (api.format_steps), showing its steps on one overwritten line on a terminal."""
     tty = sys.stdout.isatty()
     gen = api.format_steps(nt, ARGS.mode, ed, cfg=cfg)
     width = 0

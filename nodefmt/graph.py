@@ -7,11 +7,10 @@ from collections import namedtuple
 
 from . import params as P
 
-# Everything that decides a layout of one container, given its ranks: the order of each column
-# (lists of items), the link state of the commutative inputs, the links that the block placement
-# must leave bent, and the placement method ('blocks' or 'relax').
-# origin: where the order came from ('cross': crossing reduction, 'force': force-directed).
-# zone: how a zone's output finds its height ('level', 'median', 'mean'; see params.ZONE_OUT).
+# Everything that decides the layout of a ranked container: the order of each column (lists of
+# items), the input keys of the commutative pairs, the links the placement must leave bent, the
+# placement method ('blocks', 'relax'; 'balanced' with NF022), where the order came from
+# ('cross', 'force', 'current') and how a zone's output finds its height (params.ZONE_OUT).
 Cand = namedtuple('Cand', 'layers comm banned placer origin zone', defaults=('cross', 'level'))
 
 PORT_DIRECT = '<port:direct>'  # a container port that sits at a socket of its first column
@@ -28,8 +27,8 @@ SNAP_TOL = 1e-3  # sizes read from Blender carry float noise (140.00002 or 139.9
 
 
 def snap_up(v):
-    """The smallest multiple of GRID that is >= v (within SNAP_TOL: a width of 140.00002 is
-    140, so the noise of a measure never moves a column by a whole grid step)."""
+    """The smallest multiple of GRID that is >= v, within SNAP_TOL (so the float noise of a
+    measure never moves a column by a whole grid step)."""
     return -((-(v - SNAP_TOL)) // P.GRID) * P.GRID
 
 
@@ -75,7 +74,6 @@ class Edge:
 
     @property
     def main(self):
-        # a multi-input slot (socket gid + slot index) counts as its socket
         """True if this link enters the main input of a node or block (its first linked geometry
         input, else its first linked input); a multi-input slot counts as its socket."""
         return (self.v.kind in ('node', 'compound') and self.v.main_in is not None and self.vk is not None
@@ -96,8 +94,7 @@ class LayoutBase:
 
     def _gap(self, a, b):
         """Vertical space required between two neighbours of a column. In a zone, a lane above
-        the first node of its column or below the last one keeps clear of the outline Blender
-        draws around the zone (NF032): it runs outside the outline, not on it."""
+        the first node or below the last one runs outside the zone's outline, not on it (NF032)."""
         if a.is_point or b.is_point:
             if (id(a), id(b)) in getattr(self, 'outer', ()):
                 return P.ZONE_LANE_GAP
@@ -110,9 +107,8 @@ class LayoutBase:
         return i.y + d[1]
 
     def _turn_y(self, e):
-        """How a link is drawn: None if it is straight, else the height where its vertical run
-        ends, the input socket's height (for a multi-input socket, the height of its slot): the
-        link turns twice at right angles, so every segment is horizontal or vertical."""
+        """None if link e is straight, else the height where its vertical run ends: the input
+        socket's (or multi-input slot's) height. A bent link turns twice at right angles."""
         ya, yb = self._sock_y(e.u, e.uk, True), self._sock_y(e.v, e.vk, False)
         if abs(ya - yb) <= P.EPS:
             return None
@@ -120,8 +116,8 @@ class LayoutBase:
 
     def _zone_pair(self):
         """(zone input, zone output, offset) of a zone container in relayout mode, else None.
-        The output is level with the input when its top is at input top + offset: the socket they
-        share (same zone item, geometry first) at one height, else their tops."""
+        The output is level when its top is at the input's top + offset, which puts a zone item
+        they share (geometry first) at one height; with none shared, offset is 0."""
         a = self._zone_input()
         if a is None:
             return None

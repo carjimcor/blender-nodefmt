@@ -1,10 +1,10 @@
 # nodefmt
 
-A formatter for Blender node trees, in the spirit of code formatters such as [ruff](https://github.com/astral-sh/ruff) or
-[black](https://github.com/psf/black). It
-sorts a tree into columns, orders the nodes to remove crossings, lines links up and routes the
-rest as orthogonal wires on reroutes. It never changes what the tree computes, and sorting a
-sorted tree changes nothing.
+A formatter for Blender node trees, in the spirit of code formatters such as
+[ruff](https://github.com/astral-sh/ruff) or [black](https://github.com/psf/black). It sorts a
+tree into columns, orders the nodes to remove crossings, lines links up and routes the rest as
+orthogonal wires on reroutes. It never changes what the tree computes, and sorting a sorted tree
+changes nothing.
 
 <p align="center"><img src="media/nodefmt-demo.webp" alt="A messy node tree being sorted step by step: links become direct lines, nodes slide into columns, columns are reordered, heights settle and orthogonal wires are drawn" width="960"></p>
 
@@ -14,11 +14,12 @@ The animation shows the steps on a messy tree ([MP4](media/nodefmt-demo.mp4),
 
 ## Why another layout tool
 
-Blender already has tools that tidy node trees. [Node Arrange](https://extensions.blender.org/add-ons/node-arrange/)
-lays out a whole tree automatically and is fast, Node Wrangler aligns selected nodes, and relax
-brushes move nodes interactively. None of them gave the result I wanted: straight wires that only
-turn at right angles, nothing behind nodes, and a style that can be tuned rule by rule. nodefmt is
-slower, but more configurable, and in my opinion its result is more satisfying.
+Blender already has tools that tidy node trees:
+[Node Arrange](https://extensions.blender.org/add-ons/node-arrange/) lays out a whole tree quickly,
+Node Wrangler aligns selected nodes, and relax brushes move nodes by hand. None of them gave the
+result I wanted: straight wires that only turn at right angles, nothing behind nodes, and a style
+that can be tuned rule by rule. nodefmt is slower, but more configurable, and in my opinion its
+result is more satisfying.
 
 ## What it guarantees
 
@@ -30,8 +31,8 @@ slower, but more configurable, and in my opinion its result is more satisfying.
 
 ## Install
 
-Blender 5.2 or newer. Download `nodefmt-0.10.0.zip` from the
-[releases](https://github.com/carjimcor/blender-nodefmt/releases) (or build it with
+Blender 5.2 or newer. Download the `nodefmt-<version>.zip` of the latest
+[release](https://github.com/carjimcor/blender-nodefmt/releases) (or build it with
 `tools/build.sh`), then in Blender: Edit > Preferences > Get Extensions > the arrow menu > Install
 from Disk.
 
@@ -44,21 +45,20 @@ In a Geometry Nodes, Shader or Compositor editor, open the sidebar (N) and the n
 - **Sort All Trees**: every node tree in the file.
 - **Check Current Tree**: the rules the tree breaks, without changing it; click a rule to see
   where.
-- **Capture Tree** (Capture section): saves a PNG of the whole tree at a chosen zoom, larger than
-  the screen if needed, and can copy it to the clipboard.
+- **Capture Tree**: saves a PNG of the whole tree at a chosen zoom, larger than the screen if
+  needed.
 
-A sort shows its progress and Esc cancels it. Each sort is one undo step: Ctrl+Z puts the tree
-back.
+Esc cancels a sort, and each sort is one undo step.
 
 ## Documentation
 
-- [Usage](docs/USAGE.md): the panel, buttons, modes, rule toggles, Check and Capture.
-- [Rules](docs/RULES.md): every rule with its code, an example and how to switch it off.
+- [Usage](docs/USAGE.md): the panel, Sort Selection, Check and Capture.
+- [Rules](docs/RULES.md): every rule with its code, an example and what switching it off does.
 - [Configuration](docs/CONFIGURATION.md): `nodefmt.toml`.
 - [Command line](docs/CLI.md): `--check`, `--fix`, `--capture` and the git pre-commit hook.
-- [Limitations](docs/LIMITATIONS.md)
-- [Roadmap](docs/ROADMAP.md): what is planned next.
-- [A large real tree](docs/EXAMPLE.md): a 115-node tree from Blender Stack Exchange, before and after.
+- [Limitations](docs/LIMITATIONS.md) and [Roadmap](docs/ROADMAP.md).
+- [A large real tree](docs/EXAMPLE.md): a 115-node tree from Blender Stack Exchange, before and
+  after.
 - [How it works](docs/ALGORITHM.md): the layout pipeline and its references.
 
 ## Contributing

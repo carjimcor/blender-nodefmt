@@ -1,37 +1,30 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Tests from the rule examples (examples/NF0xx.blend, built by tools/make_examples.py).
 
-    blender --factory-startup --python tests/run_tests.py [-- --only NF031 ...]
+    blender --factory-startup --python tests/run_tests.py [-- --only NF031 ... --verbose]
 
-Runs with Blender's window, like the command line (node sizes only exist once a tree is
-drawn), at UI scale 1.0 (--factory-startup; an example made for another scale, NF034, at
-that scale), and closes itself. For each example:
+Runs with Blender's window (node sizes only exist once a tree is drawn) at UI scale 1.0, or the
+scale an example is made for (SCALE_KEY), and closes itself. The columns, for each example:
 
-  check    the check reports the rule on the tree as saved (a guarantee, NF020, NF022 or NF023:
-           the tree is reported as not formatted, NF900, since they have no geometric test); an
-           opt-in rule (NF023) is switched on for the check and the sorts
-  only     a copy sorted with only the example's rule (a guarantee: no style rule at all) no
-           longer breaks it nor a guarantee, computes the same and leaves no reroute leading
-           nowhere; NF020, NF022 and NF023, which have no geometric test, show their effect
-           instead
-  off      style rules: a copy sorted with every style rule off still breaks the rule (NF020,
-           NF022, NF023: does not show the effect), so the difference is the rule's own
+  check    the check reports the rule on the tree as saved (NOT_GEOMETRIC rules: NF900 instead;
+           a guarantee: NF900 too); an opt-in rule is switched on for the check and the sorts
+  only     a copy sorted with only the example's rule (a guarantee: no style rule) no longer
+           breaks it or a guarantee, computes the same and leaves no reroute leading nowhere;
+           rules with no geometric test (EFFECT) must show their effect instead
+  off      style rules: a copy sorted with every style rule off still breaks the rule (EFFECT:
+           keeps the example's value), so the difference is the rule's own
   sort     sorting with the default rules works
-  fixed    the check no longer reports the rule, a guarantee or NF900 after that sort, and no
-           reroute is left leading nowhere
+  fixed    after that sort the check reports neither the rule, a guarantee nor NF900, and no
+           reroute leads nowhere
   logic    the logic fingerprint is the same before and after the sort
   again    a second sort changes nothing
-  extra    for some examples, a test of their own (EXTRA): after the sorts above, no wire steps
-           by less than RR_CLEAR (NF003-rows)
+  extra    a test of one example (EXTRA), e.g. NF003-rows: no wire steps by less than RR_CLEAR
 
-An example file NF0xx-<what>.blend is a second example of rule NF0xx, tested the same way.
-
-VARIANTS run an example again after a change that real trees often have (a Group Input that
-shows every socket, Blender's default). examples/selection.blend tests Sort Selection: the rest
-of the tree does not move, the sorted part keeps its top-left corner (or moves just enough to
-clear the rest) and overlaps nothing, its wires and its links to the rest are orthogonal and
-pass behind no node, the logic is unchanged, the selection is kept (plus the new reroutes)
-and a second sort changes nothing. Prints the tables and exits 1 if any test fails.
+NF0xx-<what>.blend is a second example of rule NF0xx; VARIANTS run an example again after a
+change real trees often have. examples/selection.blend tests Sort Selection: the rest does not
+move, the sorted part keeps its top-left corner (or moves just enough to clear the rest) and
+overlaps nothing, its wires are orthogonal and pass behind no node, the logic and the selection
+are kept and a second sort changes nothing. Prints the tables; exits 1 if any test fails.
 """
 import argparse
 import glob
@@ -115,8 +108,8 @@ def centred(nt):
 
 
 def tiny_steps(nt):
-    """Links between two reroutes closer than RR_CLEAR: a step too small to see, which looks like
-    a blob or a slanted stub (nothing a sort should leave)."""
+    """Links between two reroutes closer than RR_CLEAR: a step too small to see (a blob or a
+    slanted stub)."""
     from nodefmt import params
     n = 0
     for l in nt.links:
@@ -155,8 +148,8 @@ def track_xs(nt):
 # tests of one example (its file name): what, measure(tree) -> number that must be 0
 EXTRA = {"NF003-rows": ("tiny steps", tiny_steps)}
 
-# rules with no geometric check: what to measure instead (the value with the rule differs
-# from the value without it, and a sort with the rule off keeps the example's value)
+# rules with no geometric check: what to measure instead (the rule must change the value, a
+# sort with the rule off must keep the example's)
 EFFECT = {
     "NF020": ("zone output above input", zone_offset),
     "NF022": ("output between its inputs", centred),

@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Columns: x positions of the columns and of the vertical routing tracks between them."""
+"""Columns: x positions of the columns and of the vertical routing tracks between them.
+
+Entry points: assign_x() (columns, track order, satellites) and shelf() (items with no link).
+"""
 from . import params as P
 from .graph import snap_up, snap_down, _name
 
@@ -24,11 +27,10 @@ class ColumnsMixin:
             self._assign_x(hang, sats)  # tracks for the links of the satellites as placed
 
     def _label_room(self, k, tags, bends, slot):
-        """NF041: room a gap needs for the labels of its labelled tracks (self.label_w), as
-        (from the column's right edge to the first track, from the first track to the next
-        column). Blender shows a labelled wire's label, centred, above each of its bends; where
-        that text would reach a node of the column before or after at that height, the gap
-        widens so the text clears it by LABEL_CLEAR."""
+        """NF041: room gap k needs for the labels of its labelled tracks (self.label_w), as (column
+        edge to first track, first track to next column). Blender centres a wire's label above
+        each of its bends; where that text would reach a node beside it, the gap widens so the
+        text clears it by LABEL_CLEAR."""
         from . import labels as L
         lw = getattr(self, 'label_w', None)
         if not lw:
@@ -135,8 +137,7 @@ class ColumnsMixin:
             if not i.is_point and i not in hang and i not in sats:
                 colw[i.rank] = max(colw[i.rank], i.w)
         self.colw = colw
-        # which source sockets bend in which gap
-        bends = [dict() for _ in range(self.R)]  # gap -> tag -> list of (y_from, y_to)
+        bends = [dict() for _ in range(self.R)]  # gap -> tag -> [(y_from, y_to, node entered)]
         for e in self.edges:
             k = e.u.rank
             t = self._turn_y(e)
@@ -145,8 +146,8 @@ class ColumnsMixin:
         self.bends = bends
         self.track_x = [dict() for _ in range(self.R)]
         col_x = [0.0] * (self.R + 1)
-        # NF023: a stack's wires run round its side, outside its box: on the right of its
-        # column, and on the left in the gap before it; the tracks of a gap keep clear of them
+        # wires drawn outside a box (NF023 a stack's side wires, NF035 fans) on the right of its
+        # column or in the gap before it: the tracks of a gap keep clear of them
         reach_r, reach_l = [0.0] * (self.R + 1), [0.0] * (self.R + 1)
         for i in self.items:
             if not i.is_point and i not in hang and i not in sats:
@@ -193,14 +194,12 @@ class ColumnsMixin:
     def _order_tracks_(self, segs):
         """Left-to-right order of the tracks of one gap with the fewest crossings.
 
-        A track carries one source socket (tag): it is entered at the source height and left at
-        one or more destination heights. With track a left of track b, b's entry crosses a's
-        vertical, and a's exits cross b's vertical, wherever those heights fall inside the other
-        vertical's span. The cost is additive over pairs, so it is a linear ordering problem:
-        solved exactly (dynamic programming over subsets) for up to EXACT_TRACKS tracks, else by
-        insertion and moves of single tracks. Crossings inside a bundle (two links leaving the
-        same node or entering the same node) and a wire running into another's corner cost more,
-        which nests the tracks of a bundle like stairs."""
+        A track (one source tag) is entered at the source height and left at its destination
+        heights. With track a left of b, b's entry and a's exits cross the other's vertical where
+        they fall inside its span. The cost is additive over pairs (a linear ordering problem):
+        solved exactly for up to EXACT_TRACKS tracks, else heuristically. Crossings inside a
+        bundle and a wire running into another's corner cost more, which nests a bundle's tracks
+        like stairs."""
         tags = sorted(segs, key=repr)
         n = len(tags)
         if n <= 1:
@@ -212,7 +211,7 @@ class ColumnsMixin:
             outs = [b for _, b, _ in ys]
             info[t] = (src, outs, min([src] + outs), max([src] + outs), {v for _, _, v in ys})
 
-        def pair(a, b):  # cost when a is left of b
+        def pair(a, b):
             """Crossings (weighted) when track a is left of track b."""
             sa, oa, lo_a, hi_a, va = info[a]
             sb, ob, lo_b, hi_b, vb = info[b]
@@ -237,14 +236,13 @@ class ColumnsMixin:
         return [tags[i] for i in order]
 
     def shelf(self, alone):
-        """Items with no link at all (a frame of notes, a block nothing uses) go under the
-        layout where they make it grow least (NF021: compactly, without a gap beside them):
-        each takes the spot right below what is already there, at a column's left edge or right
-        after an item and within the layout's width if it fits, that adds the least area to the
-        layout's box (then the highest, then the leftmost)."""
+        """Put the items with no link at all (a frame of notes, a block nothing uses) under the
+        layout (NF021), biggest first: each takes the spot right below what is there, at a column
+        edge or after an item and within the layout's width if it fits, that adds the least area
+        to the box (then the highest, then the leftmost). Without NF021: in a row underneath."""
         if not alone:
             return
-        if not P.SATELLITES:  # NF021 off: in a row under the layout, from its left edge
+        if not P.SATELLITES:  # NF021 off
             ys = [i.y + i.h for i in self.items]
             y = snap_up(max(ys, default=0.0) + P.COL_GAP)
             x = 0.0
@@ -280,11 +278,10 @@ class ColumnsMixin:
 
 
 def _slots(tags, segs):
-    """The x slot of each track of a gap, tags in their left-to-right order. Without NF036 each
-    track has its own slot. With it (TRACK_SHARE: the vertical room kept between two tracks on
-    one x), a track takes the leftmost slot right of every earlier track whose height range
-    comes within TRACK_SHARE of its own: tracks that overlap keep their order (so no crossing
-    changes), and tracks one above the other share an x."""
+    """The x slot of each track of a gap, tags in their left-to-right order. With NF036
+    (TRACK_SHARE), a track takes the leftmost slot right of every earlier track whose height
+    range comes within TRACK_SHARE of its own: overlapping tracks keep their order (no crossing
+    changes) and tracks one above the other share an x. Without it, each track has its own."""
     if not P.TRACK_SHARE:
         return {t: n for n, t in enumerate(tags)}
     span, slot = {}, {}
@@ -325,8 +322,8 @@ def _exact_order(W):
 
 
 def _heuristic_order(W, tags, info):
-    """Order for many tracks: start with tracks sorted by how far they drop, then move single
-    tracks to the best position while that lowers the cost."""
+    """Order for many tracks: sorted by how far they drop, then single tracks moved to the first
+    position that lowers the cost, while one does."""
     n = len(W)
     order = sorted(range(n), key=lambda i: (info[tags[i]][0] - sum(info[tags[i]][1]) / len(info[tags[i]][1]),
                                             repr(tags[i])))
@@ -336,9 +333,8 @@ def _heuristic_order(W, tags, info):
         return sum(W[o[x]][o[y]] for x in range(n) for y in range(x + 1, n))
 
     cur = total(order)
-    # with whole-number weights (the default ones) every partial sum is exact, so the cost of a
-    # move is the cost now minus what the moved track adds where it is plus what it adds where
-    # it goes, the same number total() gives; other weights are summed in full as before
+    # with whole-number weights (the defaults) partial sums are exact, so a move is costed
+    # incrementally (what the track adds where it goes minus where it is); else total() in full
     exact = all(float(w).is_integer() and abs(w) < 2 ** 40 for row in W for w in row)
     for _ in range(4 * n):
         improved = False

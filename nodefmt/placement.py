@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Placement: vertical positions of the items (blocks of straight links, compaction)."""
+"""Placement: vertical positions of the items (blocks of straight links, compaction).
+
+assign_y() dispatches on the placement method: 'relax' is in relax.py; 'blocks' (blocks_y) merges
+the items joined by straight links into blocks, then _compact() positions the blocks. 'balanced'
+(only with NF022) is 'blocks' without the pull to a common top line.
+"""
 import math
 
 from . import params as P
@@ -23,7 +28,7 @@ class PlacementMixin:
         items = self.items
         self.block = {i: i for i in items}       # union-find parent
         self.members = {i: {i: 0.0} for i in items}  # root -> {item: rel y}
-        # the same as a flat lookup (kept in step by _try_merge): item -> root, item -> rel y
+        # flat lookups of the same, kept in step by _try_merge: item -> root, item -> rel y
         self._root = {i: i for i in items}
         self._rel = {i: 0.0 for i in items}
         self._hs = [i.h for i in self._rel]  # heights, in the order of _rel
@@ -127,9 +132,9 @@ class PlacementMixin:
             self._try_merge(self._find(a), self._find(b), off)
 
     def _priorities(self):
-        """Which links to make straight first: the geometry flow (main geometry input of a node
-        that passes geometry on), then other main inputs, then lanes. A lane (dummy chain) gets the
-        priority of the best link it carries."""
+        """Link -> priority to be made straight (0 first): the geometry flow (main geometry input
+        of a node that passes geometry on), other main inputs, links to an output port, links
+        from lanes, the rest. A lane gets the priority of the best link it carries (at most 3)."""
         prio = {}
         for e in self.edges:
             v = e.v
@@ -162,8 +167,9 @@ class PlacementMixin:
         return self._root[i]
 
     def _try_merge(self, ra, rb, off, limit=None, cap=None):
-        """Merge block rb into ra with rel(rb item) = rel_rb + off. Rejects overlaps, cycles, and
-        merges that would make the layout taller than `limit` more than now."""
+        """Merge block rb into ra with rel(rb item) = rel_rb + off; True if merged. Rejects
+        overlaps, cycles, and merges that make the layout more than `limit` taller than now or
+        taller than `cap`."""
         mb = self.members[rb]
         merged = dict(self.members[ra])
         for i, r in mb.items():
@@ -227,10 +233,10 @@ class PlacementMixin:
         return True
 
     def _merge_cycle(self, ra, rb):
-        """True if merging blocks ra and rb would make the block order constraints cyclic (block
-        a must be above block b if a holds an item right above one of b in some column). The
-        graph has no cycle now (every merge keeps it so), so the merged one has one exactly when
-        a path leads from one block to the other through a third block."""
+        """True if merging blocks ra and rb would make the block order constraints cyclic (a is
+        above b if a holds an item right above one of b in a column). The graph is acyclic now,
+        so the merge makes a cycle exactly when a path leads from one block to the other through
+        a third block."""
         succ = self._bsucc
         for a, b in ((ra, rb), (rb, ra)):
             todo = [x for x in succ[a] if x is not b]
@@ -278,8 +284,8 @@ class PlacementMixin:
     def _compact(self):
         """Vertical positions of the blocks: separation constraints from each column's order, then
         an iterative solution that pulls each block towards the heights that make its other links
-        straight (a weighted median, VPSC-like merging of colliding blocks), with a small pull to
-        a common top line (gravity) unless the placement is 'balanced'."""
+        straight (weighted medians, VPSC-like merging of colliding blocks, coordinate descent),
+        with a small pull to a common top line (gravity) unless the placement is 'balanced'."""
         roots = list(self.members)
         rel = {}
         for r in roots:
@@ -291,8 +297,8 @@ class PlacementMixin:
         for r in roots:
             reals = [i for i in self.members[r] if not i.is_point]
             if reals:
-                # the grid phase that puts most of the block's nodes on the grid (a frame or zone
-                # block always: everything inside it is on the grid already)
+                # the grid phase that puts most of the block's nodes on the grid (frames and zones
+                # weigh most: everything inside them is on the grid already)
                 def phase(i):
                     """Grid phase of an item's relative height in its block."""
                     return round(rel[i] % P.GRID, 1) % P.GRID
@@ -401,8 +407,7 @@ class PlacementMixin:
             slope = P.SRC_SLOPE if getattr(e.u, 'src', False) else P.BEND_SLOPE
             pulls[rv].append((ru, su - sv, w, slope))   # Y_rv = Y_ru + su - sv makes it straight
             pulls[ru].append((rv, sv - su, w, slope))
-        # a zone's input and output nodes like to be level (a free zone output: a soft pull, its
-        # links pull it towards its inputs)
+        # a zone's input and output like to be level (a soft pull: a free output follows its links)
         zp = self._zone_pair()
         zout_root = None
         if zp is not None:
@@ -426,9 +431,8 @@ class PlacementMixin:
                     if not i.is_point and i.oy is not None:
                         pulls[r].append((None, i.oy - rel[i], 0.5, None))
         elif getattr(self, 'placer', 'blocks') != 'balanced':
-            # gravity: every block drifts up to a common top line unless its links hold it (the
-            # 'balanced' placement has none: blocks sit where their links want them, so a tree
-            # that converges on one output takes a ">" shape with the output at its middle)
+            # gravity: every block drifts up to a common top line unless its links hold it
+            # ('balanced', NF022, has none: a converging tree takes a ">" shape)
             top = min(Y.values(), default=0.0)
             for r in roots:
                 if r is zout_root:
@@ -476,9 +480,8 @@ class PlacementMixin:
             return [((Y[o] + d) if o is not None else d, w, sl) for o, d, w, sl in pulls[r]]
 
         def pen(dist, w, slope):
-            # a link that is not straight costs two reroutes whatever its drop: mostly a fixed price
-            """Cost of a pull that is `dist` away: a fixed price for a bent link plus a slope, or
-            linear."""
+            """Cost of a pull that is `dist` away: linear without a slope, else a fixed price for
+            a bent link (two reroutes, whatever its drop) plus the slope."""
             if slope is None:
                 return w * dist
             return 0.0 if dist <= P.EPS else w * (P.BEND + slope * dist)
@@ -533,8 +536,8 @@ class PlacementMixin:
                     C = Ca
             return feasible({r: cl[r][2] + cl[r][0][r] for r in roots})
 
-        # the blocks whose best position (local) reads the position of a block: its pulls, its
-        # separation constraints and its rows (ALIGN_BONUS)
+        # block -> the blocks whose best position (local) reads its position: through pulls,
+        # separation constraints and rows (ALIGN_BONUS)
         deps = {r: set() for r in roots}
         for r in roots:
             for o, _, _, _ in pulls[r]:
@@ -547,8 +550,8 @@ class PlacementMixin:
 
         def local(Y, rounds=10):
             """Coordinate descent: each block in turn to its best position within its constraints.
-            A block is looked at again only when something it reads has moved since it was last
-            looked at: with the same inputs it would choose the same place, which it holds."""
+            A block is looked at again only when something it reads has moved (with the same
+            inputs it would choose the same place)."""
             dirty = set(roots)
             for it in range(rounds):
                 changed = False
@@ -568,7 +571,7 @@ class PlacementMixin:
                     on_grid = r in anchor
                     eo = edges_of[r]
 
-                    def score(c):  # link cost, plus a price for leaving the grid
+                    def score(c):
                         """Cost of block r at height c (its pulls and the grid price)."""
                         off = on_grid and abs(snap_near(r, c) - c) > 1e-6
                         if off and r in strict:
@@ -590,8 +593,7 @@ class PlacementMixin:
                         opts.append(t)
                         if on_grid:
                             opts += [c for c in (snap(r, t, False), snap(r, t, True)) if lo - 1e-6 <= c <= hi + 1e-6]
-                    # the first cheapest option (as min(opts, key=score)); an option equal to
-                    # one scored before has its score and cannot be strictly cheaper
+                    # the first cheapest option, as min(opts, key=score), scoring each value once
                     t, st = opts[0], score(opts[0])
                     done = {t: st}
                     for c in opts[1:]:

@@ -3,8 +3,8 @@
 
 The fingerprint has no layout data: node properties and socket values (hidden ones too),
 parents, zone pairs, the group interface, and links resolved through reroutes (with the order
-of multi-input sockets). Two trees with equal fingerprints compute the same thing; reroute
-topology may differ. String values are hashed so no text from the file is kept.
+of multi-input sockets). Trees with equal fingerprints compute the same thing. String values
+are hashed so no text from the file is kept.
 """
 import hashlib
 
@@ -92,11 +92,10 @@ def fingerprint(nt):
         }
         p = comm_pair(n)
         if p:
-            # a commutative pair (Add, Multiply, Min, Max, AND, OR, Equal, ...): which input gets
-            # which link does not matter, as long as an unlinked input keeps the same value
+            # a commutative pair (Add, Multiply, AND, Equal, ...): which input gets which link
+            # does not matter; stored values stay in "inputs" (a swap moves links only)
             a, b = n.inputs[p[0]], n.inputs[p[1]]
             comm[(n.name, a.identifier)] = comm[(n.name, b.identifier)] = n.name
-            # (stored values stay in "inputs": a swap moves links only)
             nodes[n.name]["pair"] = sorted([repr(_state(a, name)), repr(_state(b, name))])
     resolved = set()
     for l in nt.links:
@@ -205,8 +204,7 @@ class Snapshot:
                 n.width, n.height = info["size"]
         multi = {}
         for fn, fi, tn, ti, muted, sid in self.links:
-            # sockets are looked up again for every link: Python references to sockets can go
-            # stale while links are being changed
+            # look sockets up again for every link: Python references go stale as links change
             to = nt.nodes[tn].inputs[ti]
             if to.is_multi_input:
                 multi.setdefault((tn, ti), []).append((fn, fi, muted))

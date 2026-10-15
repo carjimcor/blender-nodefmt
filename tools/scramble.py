@@ -2,18 +2,12 @@
 
     blender file.blend --python tools/scramble.py -- --tree NAME --out messy.blend [--seed 7] [--ui-scale 1.4]
 
-Runs with Blender's window (node sizes exist only once a tree is drawn) and closes itself.
-
-1. Every reroute is removed: each link that ran through reroutes is made again directly from its
-   real source (links into a multi-input socket keep their order).
-2. Every node gets a column: one more than its furthest source (longest path), so data still
-   flows left to right; a node with nothing linked in goes right before its first consumer.
-3. Columns are spaced by their widest node plus a random gap, each node is jittered in x, and
-   each column is stacked in a random order with random gaps from a random start height.
-
-The logic fingerprint of the tree (nodefmt.check) is compared before and after; the copy is only
-saved when nothing changed. With --blank-label LABEL, String nodes with that label are emptied
-in the copy (to keep private text out of the demo).
+Runs with Blender's window (node sizes exist only once a tree is drawn) and closes itself. Every
+reroute is removed (links go directly to their real source), each node gets a longest-path
+column so data still flows left to right, and each column is stacked in a random order with
+random gaps and x jitter. The copy is saved only if the logic fingerprint (nodefmt.check) is
+unchanged. --blank-label LABEL (repeatable) empties the String nodes with that label in the copy
+(to keep private text out of the demo).
 """
 import argparse
 import os
@@ -67,7 +61,7 @@ def remove_reroutes(nt):
 
 
 def columns(nt):
-    """Longest-path column of every node that is not a frame."""
+    """Longest-path column of every node that is not a frame (empty columns removed)."""
     nodes = [n for n in nt.nodes if n.bl_idname != 'NodeFrame']
     preds = {n.name: set() for n in nodes}
     for l in nt.links:
@@ -76,6 +70,7 @@ def columns(nt):
     col = {}
 
     def depth(name, seen=()):
+        """Column of node `name`: one more than its deepest source."""
         if name not in col:
             col[name] = 1 + max((depth(p, seen + (name,)) for p in preds[name] if p not in seen), default=-1)
         return col[name]
@@ -112,6 +107,7 @@ def scramble(nt, rng, boxes):
 
 
 def main():
+    """Scramble the tree, check its logic is unchanged and save a copy of the file."""
     from nodefmt import api, check
     from nodefmt.draw import Editor
     if ARGS.ui_scale:
@@ -139,6 +135,7 @@ def main():
 
 
 def tick():
+    """Run main() once Blender's window is up, then quit."""
     try:
         main()
     except BaseException:

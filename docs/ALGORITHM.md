@@ -1,243 +1,191 @@
 # How nodefmt works
 
 This page describes the layout pipeline, the guarantees behind it and the algorithms it builds
-on. For installing and using the add-on, see [Usage](USAGE.md). The core is pure Python:
-only reading a tree and writing the result need Blender (`model`, `layout`, the engine modules,
-`routes` and `measure` run without it), so the layout can be tested on trees saved as plain
-data.
+on. For using the add-on, see [Usage](USAGE.md).
 
-In the add-on, "Sort Current Tree" and "Sort All Trees" run the format described here, one step
-at a time (`api.format_steps`, `Formatter.run_steps`), so the panel can show progress between
-steps.
+The core is pure Python: only reading a tree and writing the result need Blender (`model`,
+`layout`, the engine modules, `routes` and `measure` run without it), so the layout can be tested
+on trees saved as plain data. In the add-on, a sort runs one step at a time
+(`api.format_steps`, `Formatter.run_steps`) so the panel can show progress between steps.
 
 ## The layout in short
 
-- Data flows left to right in columns. The main input of a node (its geometry input, else its
-  first linked input) is reached by a straight horizontal link wherever possible. A link that is
-  not straight turns twice at right angles on reroutes, on a vertical track in the gap between
-  two columns (NF001-NF003), into multi-input sockets too: each link into a Join Geometry or Join
-  Strings arrives on its own, level with its slot (a quarter widget unit apart), never through a
-  fork. With NF035 (off by default) these links arrive a widget unit apart, each at its fan point
-  left of the socket, and converge from there in a short diagonal fan.
-- Crossings: a crossing costs more than a bend (NF033). A lane (a wire that passes columns) may
-  run above or below the nodes of its columns, whichever crosses less; a wire from outside a
-  zone may enter above the zone input instead of crossing the wires that leave the zone input
-  downwards; crossings inside a bundle are avoided by nesting the tracks like stairs (NF030).
-- Blocks: frames and zones stay together. A big block with nothing linked into it (a frame that
-  starts from its own Group Input) is placed right before its consumer and reaches to the left
-  over the earlier columns, above or below them (NF021). A zone's content hangs below the zone
-  input's top line; only the wires that enter above the zone input run above it.
-- Wire paths: no U-jog and no landing that a free height could remove (NF031), no wire along a
-  node's edge, a frame's border or a zone's outline (NF032), no shared points, no wires on one
-  line, no reroute in the middle of a straight run (NF034). A pass over the whole drawing
-  (`wires.tidy`) moves single runs to better heights across container borders, where the layout
-  of one container cannot see.
-- Alignment with the connected nodes comes first; the 20-unit grid does not matter.
-- A zone's output (with the nodes chained right before it, such as a Join Geometry) sits where its
-  inputs are, or level with the zone input, whichever costs less (NF020); zones are found by
-  `paired_output`, so this holds for every paired zone (Repeat, Simulation, For Each Geometry
-  Element, Closure, ...).
+- **Columns.** Data flows left to right in columns. The main input of a node (its geometry input,
+  else its first linked input) is reached by a straight horizontal link wherever possible. A link
+  that is not straight turns twice at right angles on reroutes, on a vertical track in the gap
+  between two columns (NF001-NF003).
+- **Multi-input sockets.** Each link into a Join Geometry or Join Strings arrives on its own,
+  level with its slot (a quarter widget unit apart), never through a fork. With NF035 they arrive
+  a widget unit apart, each at a fan point left of the socket, and converge from there.
+- **Crossings** cost more than a bend (NF033). A lane (a wire that passes columns) may run above
+  or below the nodes of its columns, whichever crosses less; a wire from outside a zone may enter
+  above the zone input; crossings inside a bundle are avoided by nesting tracks like stairs
+  (NF030).
+- **Blocks.** Frames and zones stay together. A big block with nothing linked into it sits right
+  before its consumer and reaches left over the earlier columns (NF021). A zone's content hangs
+  below the zone input's top line.
+- **Wire paths.** No U-jog or landing that a free height could remove (NF031), no wire along a
+  node edge, frame border or zone outline (NF032), no shared points, wires on one line or reroutes
+  in the middle of a straight run (NF034). A final pass over the whole drawing (`wires.tidy`)
+  fixes what the layout of a single container cannot see.
+- **Alignment** with connected nodes comes first; the 20-unit grid does not matter.
+- **Zone outputs** (with the nodes chained right before them) sit where their inputs are, or level
+  with the zone input, whichever costs less (NF020). This holds for every paired zone (Repeat,
+  Simulation, For Each Geometry Element, Closure, ...).
 - Mix Shader is not commutative (its factor picks a side).
 
 ## Pipeline
 
 1. **Draw** (`draw.py`). Blender computes node sizes and socket positions only while drawing a
-   node editor. `Editor.show(tree)` shows the tree in a node editor and forces one redraw.
-   Socket positions are read from Blender's runtime data with `ctypes` (`sockets.py`). Shader
-   and compositor trees are pinned in a Shader or Compositor editor; a Geometry Nodes group used
-   by a modifier is shown through its object (see "Orthogonal wires").
+   node editor, so `Editor.show(tree)` shows the tree and forces one redraw. Socket positions are
+   read from Blender's runtime data with `ctypes` (`sockets.py`), after checking that the data
+   layout matches. Shader and compositor trees are pinned in their editor; a Geometry Nodes group
+   used by a modifier is shown through its object (see [Orthogonal wires](#orthogonal-wires)).
 2. **Model** (`model.py`). `read(tree)` turns the drawn tree into plain data: nodes (box, socket
-   offsets, type), links resolved through reroutes, and labelled reroutes as label records.
-   Every reroute is removed from the model, labelled ones included (only dangling reroutes stay
-   as nodes), so the layout starts from nodes linked directly; reroutes are only made after
-   placement. `Model` derives main inputs, multi-input slots, commutative pairs and frame
-   paddings.
+   offsets, type), links resolved through reroutes, and labelled reroutes as label records. Every
+   reroute is removed (only dangling ones stay), so the layout starts from direct links and
+   reroutes are only made after placement. `Model` derives main inputs, multi-input slots,
+   commutative pairs and frame paddings.
 3. **Duplicates** (`dup.py`). Input-like nodes that compute the same thing form a class. The
    class is merged into one node, the merged tree is laid out, the consumers are grouped by
-   container, column and distance, and each group far from the others gets its own copy
-   (existing copies are reused; Blender's own duplicate makes new ones). The plan does not depend
-   on the copies that exist now, so a second format changes nothing.
-4. **Containers** (`layout.py`). Zones (an input, its output and everything between) and frames
-   are laid out inside out: a child container becomes one box (a compound item) of its parent,
-   with ports where links cross its border. A zone comes with two layouts, its output level
-   with the zone input or free (step 8); the parent is laid out with each and keeps the one that
-   makes the two cheapest together, so a lowered zone output is kept only when what follows the
-   zone fits it. A commutative pair inside a block whose swap only exchanges two of its ports
-   (the node is in the block's first column, or each input comes straight from a port that
-   feeds nothing else) is left to the parent, which sees where the two wires come from: the
-   compound gets the pair of ports, and the parent is laid out with the pair as the block left
-   it and with it free, keeping the cheaper (NF011). Nested blocks pass such a pair on up.
+   container, column and distance, and each group far from the others gets its own copy. The plan
+   does not depend on the copies that exist now, so a second sort changes nothing.
+4. **Containers** (`layout.py`). Zones and frames are laid out inside out: a child becomes one box
+   (a compound item) of its parent, with ports where links cross its border. A zone comes with two
+   layouts, its output level with the zone input or free (step 8), and the parent keeps the one
+   that makes the two cheapest together. A commutative pair whose swap only exchanges two ports of
+   a block is left to the parent, which sees where both wires come from and tries the pair both
+   ways (NF011).
 5. **Ranking** (`ranking.py`). Longest-path layering: every node gets a column after all its
-   sources, as far right as its consumers allow; the Group Output and a zone's
-   output take the last column, a zone's input the first. A big block (a frame or zone of three
-   or more columns) gets a column of its own, except a satellite (NF021): a big block with
-   nothing linked into it takes the column right before its first consumer, at the top or
-   bottom of that column, and reaches to the left over the earlier columns, above or below
-   everything there (`columns.py`). A container with satellites is laid out with and without
-   them and the cheaper one is kept (decided on fresh layouts, see "Determinism and stability").
+   sources, as far right as its consumers allow. The Group Output and a zone's output take the
+   last column, a zone's input the first. A big block (three or more columns) gets columns of its
+   own, except a satellite (NF021): a big block with nothing linked into it takes the column right
+   before its first consumer and reaches left over the earlier columns (`columns.py`). A container
+   with satellites is laid out with and without them, and the cheaper is kept.
 6. **Lanes** (`ranking.py`). A link that spans several columns gets one dummy per column it
    crosses, shared by every link from the same output socket (a bus with taps).
-7. **Ordering** (`ordering.py`, `force.py`). The order inside each column is found by crossing
-   reduction: an initial order from the last column back, then barycenter sweeps down and up
-   (weighted towards main inputs), transposition of neighbours, and swaps of commutative inputs,
-   counting crossings between socket heights (a block's pairs of ports too, step 4). A second
-   order comes from a force-directed
-   relaxation: links are springs, items in a column repel each other, heights move until they
-   settle, and each column is sorted by height.
+7. **Ordering** (`ordering.py`, `force.py`). Crossing reduction: an initial order from the last
+   column back, barycenter sweeps down and up (weighted towards main inputs), transposition of
+   neighbours and swaps of commutative inputs, counting crossings between socket heights. A second
+   order comes from a force-directed relaxation: links are springs, items in a column repel each
+   other, and each column is sorted by the heights they settle at.
 8. **Placement** (`placement.py`, `relax.py`). Three ways to find heights for a given order:
-   - `blocks`: links are made straight in order of priority (geometry flow, main inputs,
-     bundles of parallel links, lanes) by merging the items they join into blocks, as long as no
-     column overlaps and the layout does not grow too tall; then the blocks are compacted
-     (separation constraints from the column order, solved by pulling each block to the
-     weighted median of what its links want and merging blocks that collide), with a weak pull
-     towards a common top line;
-   - `balanced`: the same without the pull to the top line, and the zone output free to move:
-     blocks sit where their links want them;
-   - `relax`: spring relaxation (each item moves to the weighted mean of what its links want,
-     each column restacked by isotonic regression so nothing overlaps), then nearly straight
-     links are straightened by moving groups of items.
+   - `blocks`: links are made straight in order of priority (geometry flow, main inputs, bundles,
+     lanes) by merging the items they join into blocks, as long as no column overlaps and the
+     layout does not grow too tall; then the blocks are compacted (separation constraints from
+     the column order, each block pulled to the weighted median of what its links want), with a
+     weak pull towards a common top line;
+   - `balanced` (NF022): the same without the pull to the top line;
+   - `relax`: spring relaxation (each item moves to the weighted mean of what its links want, each
+     column restacked by isotonic regression), then nearly straight links are straightened.
 
-   In a zone, each placement runs with each **zone output mode** (`ZONE_OUT`): `level` keeps the
-   zone output on the zone input's line (the socket they share, else their tops); `median` and
-   `mean` free it: a soft pull to that line (`ZONE_LEVEL`) plus the pull of its links, resolved
-   by the weighted median (blocks: the compaction itself; relax: the median of the spring
-   targets) or the weighted mean (blocks: the output block is moved to the mean within its
-   constraints after compaction; relax: the mean of the spring targets). A free zone output is
-   left out of the pull to the top line, may move in the slide pass, and drags the nodes aligned
-   with it (the chain before it). The zone frame follows by itself: Blender draws a zone around
-   its nodes.
-9. **Columns and tracks** (`columns.py`). Column x positions from the widest node, and one
+   In a zone, each placement runs with each zone output mode (`ZONE_OUT`): `level` keeps the zone
+   output on the zone input's line; `median` and `mean` free it, with a soft pull to that line
+   (`ZONE_LEVEL`) plus the pull of its links. A free zone output drags the nodes aligned with it.
+   Blender draws the zone frame around its nodes by itself.
+9. **Columns and tracks** (`columns.py`). Column x positions come from the widest node, with one
    vertical routing track per source socket in each gap. Tracks are ordered to avoid crossings:
-   exactly (dynamic programming over subsets) for up to 8 tracks, else by moves of single
-   tracks. Crossings inside a bundle and wires that run into another wire's corner cost more,
-   which nests a bundle like stairs. Then tracks one above the other (40 units apart or more)
-   share one x, while tracks that overlap in height keep their order (NF036). Where a labelled
-   wire turns next to a node, the gap widens
-   so its label, centred above the turn, clears the node (NF041). Items with no link at all go
-   under the layout where they make it grow least: right below what is above them, within its
-   width if they fit (NF021).
-10. **Cost and search** (`cost.py`, `search.py`, `engine.py`). Every candidate is laid out in
-    full and priced by the layout cost (below). The cheapest candidate is improved by a local
-    search; its moves, the ones that change a whole side first: a port of a zone above the zone
-    input or back (NF033), a satellite to either end of its column (NF021), a lane, all lanes of
-    one node, or everything one node feeds to the top or bottom of their columns or right above
-    or below their nodes (NF033), swap commutative inputs, change the placement method, let a
-    lane end bend, move a node to the top or bottom, swap two neighbours. The result gets a
-    longer search and a final slide pass, which moves a group of nodes held together by straight
-    links up or down when that makes one more link straight (and the cost drops). Then the
-    layout of the current order is tried (stability, see above). Budgets count layouts, not
-    seconds, so the result is deterministic. In a zone, the level and the free zone output modes
-    are two groups searched apart (each seed, the final search and the slide), since the orders
-    that suit one output height rarely suit the other; both go to the parent (step 4).
-11. **Routing** (`routes.py`). The route segments of all containers become one reroute tree per
-    source socket: shared points become taps, points where a route goes straight on are
-    dropped. A link into a multi-input slot turns at the slot's height, like any other link;
-    the track order nests the links of one socket so they do not cross, and the cost does not
-    count their last runs (a slot apart) as collinear wires or as reroutes on a wire.
-    With NF035, `Model` gives each such slot a fan point instead (`Model._fan`): the layout
-    routes the link to it (the node reaches out on its left by the fan's depth, `reach_l`, so
-    the tracks of the gap keep clear of the fan), and `Formatter.place` adds the last stretch,
-    from the fan point to the slot; the fan point becomes a reroute.
-    Then the whole drawing is tidied (`wires.py`): runs that are almost level are made level
-    (NF034), and single horizontal runs move to another free height when that removes a
-    crossing, a U-jog, a landing or a run along a node edge or zone outline, never onto a node
-    (NF031-NF034). Labels go back on the first reroute of their wire (a new reroute near the
-    source if the wire has none), never where their text would overlap another label or a node;
-    with NF041, on the first reroute where the text is clear of labels, nodes and wires (also the
-    greyed copies Blender shows on the later reroutes, `labels.py`), else on a new reroute on the
-    run into it.
+   exactly (dynamic programming over subsets) for up to 8 tracks, else by moves of single tracks.
+   Crossings inside a bundle and wires that run into another wire's corner cost more. Tracks one
+   above the other (40 units apart or more) then share one x (NF036). Gaps widen where a labelled
+   wire turns next to a node (NF041). Items with no link at all go under the layout where it grows
+   least (NF021).
+10. **Cost and search** (`cost.py`, `search.py`, `engine.py`). Every candidate is laid out in full
+    and priced by the [layout cost](#layout-cost). The cheapest is improved by a local search
+    whose moves change one choice: a zone port above or below the zone input, a satellite to
+    either end of its column, a lane or the wires of one node to the top or bottom, a commutative
+    swap, the placement method, a node to the top or bottom, two neighbours swapped. A final slide
+    pass moves a group of nodes held by straight links up or down when that makes one more link
+    straight. Then the current layout is tried as well ([stability](#determinism-and-stability)).
+    Budgets count layouts, not seconds, so the result is deterministic. In a zone, the level and
+    the free output modes are searched apart and both go to the parent (step 4).
+11. **Routing** (`routes.py`, `wires.py`). The route segments of all containers become one reroute
+    tree per source socket: shared points become taps, points where a route goes straight on are
+    dropped. With NF035, `Model._fan` gives each multi-input slot a fan point: the layout routes
+    the link to it, the node reaches out on its left by the fan's depth so the tracks stay clear,
+    and `Formatter.place` adds the last stretch to the slot. Then the whole drawing is tidied
+    (`wires.tidy`): almost level runs are made level (NF034), and single horizontal runs move to
+    another free height when that removes a crossing, a U-jog, a landing or a run along an edge
+    (NF031-NF034). Labels go back on the first reroute of their wire (NF040), where their text and
+    its greyed copies are clear (NF041, `labels.py`).
 12. **Write back** (`blend.py`). Node locations (on the pixel grid), new reroutes and links are
     written to Blender. New links are made before old reroutes are removed, so no input is left
-    unlinked on the way. Links into a multi-input socket are made again in their original order.
-    Then `ortho.straighten` makes every drawn segment orthogonal (see "Orthogonal wires"),
-    reroutes left in the middle of a straight run are removed, and if straighten nudged the
-    Group Output, the whole tree moves back by as much, so the tree stays where it was.
-13. **Logic check and revert** (`check.py`, `api.py`). Before formatting, a logic fingerprint of
-    the tree is taken: node properties and socket values (hidden ones too), parents, zone pairs,
-    the group interface, links resolved through reroutes, and the order of multi-input links.
-    Copies of an input node count as the same source, and the two inputs of a commutative pair
-    are compared as an unordered pair. Only the tree is compared: settings of a material, world
-    or scene outside its node tree are never touched. After formatting, the fingerprint is taken again; on any
-    difference (or any error) the tree is restored from a snapshot and the format is reported as
-    failed. Formatting repeats until nothing moves (normally two passes).
+    unlinked on the way, and links into a multi-input socket are made again in their original
+    order. Then `ortho.straighten` makes every drawn segment orthogonal, reroutes left in the
+    middle of a straight run are removed, and if straighten nudged the Group Output the whole tree
+    moves back by as much.
+13. **Logic check and revert** (`check.py`, `api.py`). A logic fingerprint is taken before and
+    after (see [NF005](RULES.md#nf005-logic-unchanged)); on any difference or error the tree is
+    restored from a snapshot and the sort reports a failure. Only the node tree is compared and
+    changed: settings of a material, world or scene outside it are never touched. The tree is
+    laid out again until a pass moves nothing (normally two passes, at most six).
 14. **Checks** (`lint.py`, `metrics.drawing`, `api.check_tree`). The tree as Blender draws it
-    becomes the same drawing the tidy pass works on, and each rule has a test on it: curves and
-    off segments, wires behind nodes, overlapping reroutes, bundle crossings, U-jogs, landings and
-    tiny steps that a free height would remove, runs along node edges and outlines, crossings
-    that moving one run would remove, shared points and collinear wires, frames far from their
-    consumer, labels. NF010 compares the copy plan, NF011 looks for crossing wires into a
-    commutative pair, and NF900 (not formatted) tries a format on a snapshot.
+    becomes the same drawing the tidy pass works on, and each rule has a test on it. NF010
+    compares the copy plan, NF011 looks for crossing wires into a commutative pair, and NF900 (not
+    formatted) tries a sort on a snapshot. Right after a sort whose last pass moved nothing, NF900
+    is known to hold as long as the tree's state (layout, node sizes, labels, rules, UI scale) is
+    unchanged, so the trial sort is skipped.
 
 ### Snapshots
 
 `Formatter(model, record=True)` keeps plain-data snapshots of the phases in
-`formatter.snapshots`: the tree with direct links ('direct'), the orders, seeds, search and
-slide of each container ('seed n: order', 'seed n', 'search', 'slide'), and the final drawing
-('final'). `tools/animate.py` uses them for the demo animation.
+`formatter.snapshots`: the tree with direct links ('direct'), the orders, seeds, search and slide
+of each container, and the final drawing ('final'). `tools/animate.py` uses them for the demo
+animation.
 
 ## Orthogonal wires
 
-"Straight" means 100% horizontal or vertical as Blender draws the wire: a segment counts as
-orthogonal when its ends differ by at most 0.5 node units in x or in y. The formatter guarantees
-this for every drawn segment, at the UI scale it ran at.
+A segment counts as orthogonal when its ends differ by at most 0.5 node units in x or in y. The
+formatter guarantees this for every drawn segment, at the UI scale it ran at.
 
-Why the UI scale matters: Blender draws a node at its location rounded to whole pixels (location
-times the UI scale) and its sockets whole pixels below that; a reroute's dot sits exactly at its
-location. At UI scale 1 a pixel is a node unit and everything lines up on whole units. At another
-scale (Resolution Scale 1.25, 1.5, ..., or a display set to 150%) the socket offsets, in node
-units, are not the scale-1 ones divided evenly: a layout made at scale 1 is a few units off at
-1.5, and at
-fractional scales Blender rounds the float height of each row of a node towards zero, row after
-row from its top, so the rows of a node above y = 0 are a pixel taller than below it: a tall node
-is several units taller above 0. No layout is exact at two scales at once, so:
+**Why the UI scale matters.** Blender draws a node at its location rounded to whole pixels
+(location times the UI scale) and its sockets whole pixels below that; a reroute's dot sits
+exactly at its location. At UI scale 1 a pixel is a node unit and everything lines up. At another
+scale (Resolution Scale 1.25, 1.5, ..., or a display set to 150%):
 
-1. The layout is made at the UI scale of the session, which is the scale the user sees in the
-   add-on. The command line uses the preferences Blender starts with: run it without
-   `--factory-startup` so it uses yours, or give the scale with `--ui-scale`.
+- socket offsets in node units are not the scale-1 ones divided evenly, so a layout made at scale
+  1 is a few units off at 1.5;
+- at fractional scales Blender rounds the height of each row of a node towards zero, row after
+  row from its top, so the rows of a node above y = 0 are a pixel taller than below it, and a tall
+  node is several units taller above 0.
+
+No layout is exact at two scales at once, so:
+
+1. The layout is made at the UI scale of the session. The command line uses the preferences
+   Blender starts with: run it without `--factory-startup`, or give `--ui-scale`.
 2. Node locations go on that scale's pixel grid (`ortho.to_px`). Every node is measured drawn
    below y = 0 (`api.read_tree`), and the sort puts the whole tree below 0, moving it down the
-   first time if it reached above (`Formatter.place`; once there it stays put). So the measures
-   hold wherever the nodes were and whatever the layout does: one layout per pass, and a sort
-   settles in two passes as at scale 1. Measured on the wrong side, a link the layout made
-   straight into a low socket of a tall node could be off by more than straighten may nudge,
-   and got a step too small to see. Sort Selection cannot move the tree: it measures the nodes
-   of the part both ways and `model.at` gives each its offsets for where it is (a node across 0
-   takes, for each stretch between two sockets, the heights of the side its middle is on).
-3. After writing, `ortho.straighten` reads back what Blender drew and removes what rounding
-   left, until nothing is off: each reroute takes the exact height of the socket its horizontal
-   wire runs to (the source first) and reroutes joined by a wire share one height or x; a
-   straight link between two nodes that is a little off moves its destination node (else its
-   source) onto the line, left to right so a chain lines up in one round, at most 4 units and 3
-   times per node; what is still off gets an extra bend (two reroutes). At scale 1 this pass
-   mostly places the reroutes of multi-input slots (half units); at 1.5 it also moves a few
-   nodes by a pixel or two. With NF035, the stretch of a fan into a multi-input slot is left as
-   it is (`ortho.fanned`): it is meant to be diagonal, and its reroute keeps the height of the
-   wire that runs into it.
-4. `--check` (and the Check Current Tree button) counts every drawn segment that is not orthogonal before
-   anything else, so a file formatted at another scale is reported.
+   first time if it reached above (`Formatter.place`). So the measures hold wherever the layout
+   puts a node, and a sort settles in two passes as at scale 1. Sort Selection cannot move the
+   tree: it measures the nodes of the part both ways and `model.at` gives each the offsets of
+   where it is.
+3. After writing, `ortho.straighten` reads back what Blender drew and removes what rounding left,
+   until nothing is off: reroutes take the exact height of the socket their wire runs to, and
+   reroutes joined by a wire share one height or x; a straight link a little off moves its
+   destination node (else its source) onto the line, at most 4 units and 3 times per node; what
+   is still off gets an extra bend. The diagonal stretch of an NF035 fan is left as it is
+   (`ortho.fanned`).
+4. Check and `--check` test every drawn segment, so a file sorted at another scale is reported.
 
-A Geometry Nodes group that a modifier uses, directly or nested, is drawn through that object and
-the group path from the modifier's tree, as the user sees it: some nodes (Bake) draw more rows
-there than in a pinned editor.
+A Geometry Nodes group that a modifier uses, directly or nested, is drawn through that object, as
+the user sees it: some nodes (Bake) draw more rows there than in a pinned editor.
 
 ## Determinism and stability
 
-- **One deterministic pass.** The search runs one seed: the same input gives the same layout,
-  every time. Several seeds (`params.SEEDS`, for experiments) lower the layout cost by about 3%
-  on the test trees, a difference hard to see, for about 3 times the time.
-- **Idempotent.** Formatting a formatted tree changes nothing (`--check` passes right after
-  `--fix`): tested on 106 trees at UI scale 1 and 1.4.
+- **One deterministic pass.** The search runs one seed, so the same input always gives the same
+  layout. More seeds (`params.SEEDS`, for experiments) lower the layout cost by about 3% on the
+  test trees, a difference hard to see, for about 3 times the time.
+- **Idempotent.** Sorting a sorted tree changes nothing (`--check` passes right after `--fix`):
+  tested on 106 trees at UI scale 1 and 1.4.
 - **The current layout is the tie-breaker.** Besides the fresh layout (which depends on the graph
-  only), each container is also laid out in the order its nodes and wires have now (each column
-  sorted by height; a lane by where its wire crosses the column), without search. That one is
-  kept when it costs no more than the fresh one (`params.STABLE`, 0 by default; None turns it
-  off). On a formatted tree the fresh layout is the current one and stays. The copy plan of
-  input nodes and the choice of satellite blocks (NF021) depend on the graph only.
+  only), each container is also laid out in the order its nodes and wires have now, without
+  search. That one is kept when it costs no more than the fresh one (`params.STABLE`, 0 by
+  default; None turns it off). On a sorted tree the fresh layout is the current one. The copy plan
+  of input nodes and the choice of satellite blocks (NF021) depend on the graph only.
 - **Stability after a small edit.** Inserting a node usually adds a column, which shifts what is
-  before it; the tie-breaker keeps more of the order: over 16 small edits of the test trees, 729
-  pairs of nodes changed their left/right or above/below order with it and 835 without (of 5172
-  pairs). Two different starting layouts of one graph can therefore format differently when both
-  results cost the same.
+  before it; the tie-breaker keeps more of the order. Over 16 small edits of the test trees, 729
+  of 5172 pairs of nodes changed their relative order with it and 835 without. Two starting
+  layouts of one graph can therefore sort differently when both results cost the same.
 
 ## Layout cost
 
@@ -259,12 +207,11 @@ The cost of a container's layout is a weighted sum (`params.py`, section "layout
 | `W_W` | 0.005 | each unit of width |
 | `W_HLEN` | 0.002 | each unit of horizontal wire (NF021: wires across the whole tree cost) |
 | `W_BORDER` | 2 | each horizontal run on the top or bottom line of a zone's outline (NF032) |
-| `W_LABEL` | 6 | each label (or greyed copy, above every turn of a labelled wire) over another label, a node or a wire (NF041) |
+| `W_LABEL` | 6 | each label (or greyed copy) over another label, a node or a wire (NF041) |
 | `W_LABEL_BEND` | 1 | extra for each labelled link that is not straight: its turns show the label twice more (NF041) |
 
-The other constants in `params.py` set spacing (gaps between nodes, columns and tracks), the
-search budgets (seeds, candidates, layouts per search), the placement methods, the zone output
-modes (`ZONE_OUT`, `ZONE_LEVEL`) and `SEED_ONLY` (run a single seed: tests).
+The other constants in `params.py` set spacing, search budgets, placement methods and zone output
+modes.
 
 ## Algorithms and references
 
@@ -274,8 +221,8 @@ modes (`ZONE_OUT`, `ZONE_LEVEL`) and `SEED_ONLY` (run a single seed: tests).
 - Barycenter and median crossing reduction: Sugiyama et al. 1981; P. Eades, N. Wormald, "Edge
   crossings in drawings of bipartite graphs", Algorithmica 11, 1994.
 - Transposition of neighbours and long edges as chains of dummies: E. R. Gansner, E. Koutsofios,
-  S. C. North, K.-P. Vo, "A technique for drawing directed graphs", IEEE Transactions on
-  Software Engineering 19(3), 1993.
+  S. C. North, K.-P. Vo, "A technique for drawing directed graphs", IEEE Transactions on Software
+  Engineering 19(3), 1993.
 - Blocks of aligned links and their compaction, and the balanced variant: U. Brandes, B. Köpf,
   "Fast and simple horizontal coordinate assignment", Graph Drawing 2001. nodefmt aligns by link
   priority instead of medians and compacts with its own constraint solver.
@@ -285,35 +232,35 @@ modes (`ZONE_OUT`, `ZONE_LEVEL`) and `SEED_ONLY` (run a single seed: tests).
   "Drawing layered graphs with port constraints", Journal of Visual Languages and Computing 25(2),
   2014 (Eclipse Layout Kernel, ELK Layered).
 - Force-directed placement: T. M. J. Fruchterman, E. M. Reingold, "Graph drawing by
-  force-directed placement", Software: Practice and Experience 21(11), 1991 (the graph view of
-  Obsidian uses d3-force, the same idea).
-- Restacking a column with the least weighted displacement: pool adjacent violators for
-  isotonic regression, M. Ayer et al., Annals of Mathematical Statistics 26(4), 1955.
+  force-directed placement", Software: Practice and Experience 21(11), 1991.
+- Restacking a column with the least weighted displacement: pool adjacent violators for isotonic
+  regression, M. Ayer et al., Annals of Mathematical Statistics 26(4), 1955.
 - Track order: an instance of linear ordering, solved by dynamic programming over subsets
   (Held-Karp style) for small gaps and by local search otherwise.
-- Search: multi-start (seeded) local search over the discrete choices of the layout.
+- Search: local search over the discrete choices of the layout.
 
 ## Files
 
 ```
 nodefmt/  (the extension)
   __init__.py   add-on entry (register)
-  blender_manifest.toml  extension manifest (Blender 4.2+ extensions)
-  ui.py         add-on: sidebar panel, buttons, progress, Check results and marks, rule toggles
+  blender_manifest.toml  extension manifest
+  ui.py         sidebar panel, buttons, progress, Check results and marks, rule toggles
+  capture.py    Capture Tree: tiled screenshots of a tree joined into one PNG
   rules.py      rule codes and names, nodefmt.toml, --select/--ignore, parameters per rule
   lint.py       checks: the rules a drawn tree breaks, with codes
   wires.py      the drawn wires of a whole tree: faults, tidy pass, zone outlines
-  api.py        format a tree with logic check and revert; is_formatted; the trees of a file
+  api.py        sort a tree with logic check and revert; checks; the trees of a file
   draw.py       make Blender draw a tree (node sizes, socket positions)
   sockets.py    socket positions from Blender's runtime data (ctypes; from Node Arrange)
   ortho.py      UI scale, pixel grid, multi-input slots; read back and straighten drawn wires
   model.py      read a tree as plain data; the Model the layout works on
   dup.py        copies of input-like nodes: plan (pure) and realize (Blender)
-  part.py       Sort Selection: a part of the tree with pins for its links, placement, routing
+  part.py       Sort Selection: a part of the tree with pins for its links
   layout.py     containers, nesting, absolute positions, routes, labels, geometry()
-  engine.py     layout of one container: the driver (seeds, search, slide) and finish
+  engine.py     layout of one container: the driver (seeds, search, slide)
   graph.py      items, edges, candidates and shared helpers of the engine
-  params.py     all tunable constants and cost weights
+  params.py     tunable constants and cost weights
   ranking.py    columns and lanes
   ordering.py   crossing reduction
   force.py      force-directed ordering
@@ -328,7 +275,7 @@ nodefmt/  (the extension)
   check.py      logic fingerprint, snapshot and restore
   measure.py    layout metrics of plain geometry (tests)
   metrics.py    layout metrics of a drawn tree in Blender (tests), and its wires.Drawing
-nodefmt_cli.py  command line (check / fix)
+nodefmt_cli.py  command line (check, fix, capture)
 hooks/pre-commit  git hook that checks staged .blend files
 tools/
   build.sh      build and validate the extension zip (dist/)
@@ -340,9 +287,9 @@ tools/
   make_examples.py     the rule examples (examples/NF0xx.blend, NF0xx-<what>.blend)
   capture_examples.py  screenshots of the examples before and after a sort
   finish_images.py     crop and compress them into docs/rules/
-examples/       one small tree per rule that breaks it (NF0xx.blend; a second one: NF0xx-<what>.blend)
+examples/       one small tree per rule that breaks it
 tests/
   run_tests.py  tests from the examples (check, sort, logic, idempotency, rule off)
-  test_operators.py  the add-on operators: progress, Esc, undo, Sort Selection, Check
+  test_operators.py  the add-on operators: progress, Esc, undo, Sort Selection, Check, Capture
 docs/           usage, rules, configuration, command line, limitations, this page
 ```

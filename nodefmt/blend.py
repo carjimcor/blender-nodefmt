@@ -8,10 +8,9 @@ REROUTE = 'NodeReroute'
 
 
 def pixel_snap(nt, s, part=None):
-    """Put every node (of `part`, a set of names, if given) on the pixel grid of UI scale s (see
-    ortho.py), so that its sockets are exactly where the model measures them. Moves nodes by
-    less than a pixel. Reroutes stay: their dot sits exactly at their location, which
-    ortho.straighten sets to the height of the socket their wire runs to (often off the grid)."""
+    """Put every node (of `part`, a set of names, if given) on the pixel grid of UI scale s
+    (ortho.py), so its sockets are exactly where the model measures them; moves are under a
+    pixel. Reroutes stay: ortho.straighten puts them at a socket's exact height, often off grid."""
     for n in nt.nodes:
         if n.bl_idname in ('NodeFrame', 'NodeReroute') or (part is not None and n.name not in part):
             continue
@@ -31,9 +30,9 @@ def socket_of(nt, g):
 
 
 def apply(nt, f):
-    """New links are made before old reroutes are removed, so an input socket is never left
-    unlinked on the way (some nodes, like the Viewer, drop unlinked items). Returns the number
-    of reroutes made."""
+    """Write layout f (layout.Formatter) to tree nt: node locations, reroutes and links. New
+    links are made before old reroutes are removed, so no input is left unlinked on the way
+    (some nodes, like the Viewer, drop unlinked items). Returns the number of reroutes made."""
     m = f.m
     trees = f.trees
     muted = {(s, d): mu for s, d, mu, _ in f.links}
@@ -82,14 +81,13 @@ def apply(nt, f):
                         raise RuntimeError(f"could not link reroutes of {s}")
 
     def from_socket(s, p):
-        """The output a link to a destination starts from: the source socket itself, or the reroute
-        at point p."""
+        """The output a link starts from: source socket s itself, or the reroute at point p."""
         return socket_of(nt, s) if p == trees[s].root else nodes_of[s][p].outputs[0]
 
     for d, srcs in sorted(final.items()):
         to = socket_of(nt, d)
         if to.is_multi_input:
-            # links are made again bottom slot first: Blender gives each new link the next sort id
+            # relink bottom slot first: Blender gives each new link the next sort id
             rank = {src: k for k, (sid, src) in enumerate(sorted(order[d], key=lambda x: x[0]))}
             for l in [l for l in to.links if not l.is_hidden]:
                 nt.links.remove(l)
@@ -108,7 +106,7 @@ def apply(nt, f):
         if l is None:
             raise RuntimeError(f"could not link {s} -> {d}")
         l.is_muted = muted.get((s, d), False)
-    # an input that lost its link to a swap
+    # unlink the inputs that lost their link to a swap
     for _, a, b in f.swapped:
         for g in (a, b):
             if g not in final:

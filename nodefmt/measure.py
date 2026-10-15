@@ -166,17 +166,17 @@ def _intersection(a, b, c, d):
 def wire_faults(rr, segs):
     """Faults of the drawn wires, shared by the offline and the Blender metrics.
 
-    rr: reroute points [(x, y)]. segs: drawn links [(a, b, src, a_is_socket, b_is_socket, ends, multi)],
-    where src names the source socket (links of one source may share points), ends, optional, is
-    (source node, set of destination nodes the link leads to) and multi, optional, names the
-    multi-input socket the link enters (its links run a slot apart, which is not a fault).
-    Returns a dict:
+    rr: reroute points [(x, y)]. segs: drawn links [(a, b, src, a_is_socket, b_is_socket, ends, multi)]:
+    src names the source socket (links of one source may share points); ends (optional) is
+    (source node, destination nodes the link leads to); multi (optional) names the multi-input
+    socket the link enters (its links run a slot apart, which is not a fault). Returns a dict:
       rr_overlap  pairs of reroutes closer than RR_CLEAR
-      rr_on_wire  reroutes lying on a link they do not end (a dot on a wire or on a crossing)
+      rr_on_wire  reroutes lying on a link they do not end
       cross_clean crossings of a horizontal and a vertical link away from bends and sockets
-      cross_other every other crossing (diagonal, or near a reroute, a bend or a socket)
-      collinear   pairs of links of different sources running on (or right next to) one line
-      cross_bundle crossings between links that leave the same node or enter the same node
+      cross_other every other crossing
+      collinear   pairs of links of different sources on (or right next to) one line
+      cross_bundle crossings of links that leave or enter the same node
+      marks       fault positions, for debugging pictures
     """
     rr = [(round(p[0], 1), round(p[1], 1)) for p in rr]
     overlap = 0
@@ -201,7 +201,7 @@ def wire_faults(rr, segs):
                 on_wire += 1
                 break
     clean = other = bundle = 0
-    marks = []  # fault positions, for debugging pictures
+    marks = []
     for i in range(len(segs)):
         a, b, sa, ka, kb = segs[i][:5]
         for j in range(i + 1, len(segs)):

@@ -1,26 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Exactly orthogonal wires, as Blender draws them.
 
-Blender draws a node at its location rounded to whole pixels (location times the UI scale), and
-its sockets whole pixels away from that corner; a reroute dot sits exactly at its location. At
-UI scale 1 a pixel is a node unit, so whole-unit locations line everything up. At another scale
-(1.25, 1.5, ...) a pixel is a fraction of a unit and the socket offsets, in units, change with
-the scale (they are rounded in pixels): a layout made at one scale is a few units off at another.
-So the formatter lays a tree out at the UI scale of the session (the scale the user sees), puts
-nodes on that scale's pixel grid (`to_px`), and finishes with `straighten`, which reads back what
-Blender drew and removes what rounding left:
+Blender draws a node at its location rounded to whole pixels (location times UI scale) and its
+sockets whole pixels from that corner; a reroute dot sits exactly at its location. At UI scale 1
+a pixel is a node unit. At a fractional scale (1.25, 1.5, ...) the socket offsets in units change
+with the scale, so a layout made at one scale is a few units off at another. The formatter
+therefore lays a tree out at the session's UI scale, puts nodes on its pixel grid (`to_px`), and
+finishes with `straighten`, which reads back what Blender drew and fixes what rounding left:
 
-1. every reroute takes the exact height of the socket its horizontal wire runs to (and the exact
-   x of a vertical one); reroutes joined by a horizontal (vertical) wire share one height (x);
-2. a straight link between two node sockets that is a little off moves its destination node (or
-   its source) onto the other socket's line;
+1. reroutes take the exact height (x) of the socket their horizontal (vertical) wire runs to;
+   reroutes joined by such a wire share it;
+2. a straight link between two sockets that is a little off moves its destination node (or its
+   source) onto the other socket's line;
 3. what is still off gets an extra bend: two reroutes, so the change of height is vertical.
 
-A drawn segment counts as orthogonal when |dx| <= TOL or |dy| <= TOL (TOL = 0.5 units).
-
-With rule NF035 (fan=True), the last stretch of a link into a multi-input socket, from a reroute
-on its left, is a fan stretch: it may be diagonal, it is never mended, and its reroute takes the
-height of the wire that runs into it, not the slot's (`fanned`).
+A drawn segment is orthogonal when |dx| <= TOL or |dy| <= TOL. With NF035 (fan=True), the last
+stretch of a link from a reroute into a multi-input socket may be diagonal: it is never mended,
+and its reroute keeps the height of the wire into it, not the slot's (`fanned`).
 """
 import math
 
@@ -80,8 +76,8 @@ def bad(a, b):
 
 
 def fanned(l, a, b):
-    """True if drawn link l (from a to b) may be the stretch of a fan into a multi-input slot
-    (rule NF035): from a reroute on the left of the slot of a multi-input socket of an open node."""
+    """True if drawn link l (from a to b) may be a fan stretch (NF035): from a reroute on the
+    left into a multi-input socket of an open node."""
     s = l.to_socket
     return (s.is_multi_input and not l.to_node.hide and l.from_node.bl_idname == REROUTE
             and a[0] < b[0] - TOL)
@@ -100,10 +96,9 @@ def count(nt):
 
 def straighten(nt, editor, movable=None, fan=False):
     """Make every drawn link segment of `nt` horizontal or vertical (see the module docstring).
-    movable (a set of node names): only these nodes and reroutes may move, and only links that
-    touch them are mended (a sort of a part of the tree). fan: rule NF035 is on (the stretches
-    of fans into multi-input sockets stay as they are). Returns stats: reroutes snapped, nodes
-    nudged, bends added, segments left."""
+    movable (node names): only these nodes and reroutes move, and only links touching them are
+    mended (Sort Selection). fan: NF035 is on (fan stretches stay). Returns stats: reroutes
+    snapped, nodes nudged, bends added, segments left."""
     s = ui_scale()
     gap = slot_gap(s)
     st = {"snapped": 0, "nudged": 0, "bends": 0, "left": 0}
@@ -138,11 +133,10 @@ def _axis(a, b):
 
 
 def _snap_reroutes(nt, segs, st, movable=None, fan=False):
-    """Reroutes joined by horizontal (vertical) wires share one height (x): the exact height (x)
-    of the socket that wire runs to, the source socket first. Only reroutes in `movable` move
-    (default all; a fixed reroute counts as a socket). With fan (NF035), the stretch of a fan
-    (more than a unit off its slot's height) does not pull its reroute to the slot. Returns the
-    number moved."""
+    """Give reroutes joined by horizontal (vertical) wires one height (x): that of the socket the
+    wire runs to, the source socket first. Only reroutes in `movable` move (default all; a fixed
+    one counts as a socket). With fan (NF035), a fan stretch does not pull its reroute to the
+    slot. Returns the number moved."""
     rr = {n.name: n for n in nt.nodes if n.bl_idname == REROUTE and (movable is None or n.name in movable)}
     parent = {}
 
@@ -198,15 +192,14 @@ def _snap_reroutes(nt, segs, st, movable=None, fan=False):
 
 def _nudge(nt, segs, moves, s, st, movable=None):
     """Move nodes onto the lines of straight links that are a little off: the destination node,
-    else the source node, by at most NUDGE, each node at most MOVES times in all and once per
-    round. Links are taken left to right; a node moved in this round shifts the ends of its
-    other links, so a chain of straight links is lined up in one round (the next round measures
-    again). Returns True if anything moved."""
+    else the source, by at most NUDGE, each node at most MOVES times in all and once per round.
+    Links go left to right and count the moves made this round, so a chain of straight links
+    lines up in one round. Returns True if anything moved."""
     shift = {}  # node name -> (dx, dy) of its move in this round
     for l, a, b in sorted(segs, key=lambda x: (x[2][0], x[1][0], x[0].to_node.name, x[0].from_node.name)):
         fa, tb = l.from_node, l.to_node
         if tb.bl_idname == REROUTE:
-            continue  # a reroute is snapped to its source by _snap_reroutes
+            continue  # _snap_reroutes lines reroutes up
         c = 1 if _axis(a, b) == 'h' else 0
         delta = (a[c] + shift.get(fa.name, (0.0, 0.0))[c]) - (b[c] + shift.get(tb.name, (0.0, 0.0))[c])
         if abs(delta) <= TOL or abs(delta) > NUDGE:
@@ -215,7 +208,7 @@ def _nudge(nt, segs, moves, s, st, movable=None):
             if node.bl_idname in ('NodeFrame', REROUTE) or node.name in shift or moves.get(node.name, 0) >= MOVES:
                 continue
             if movable is not None and node.name not in movable:
-                continue  # (a reroute source holds the line of its wire: only the destination moves)
+                continue  # a node outside the part holds its line: the other end moves
             loc = list(node.location_absolute)
             new = to_px(loc[c] + sign * delta, s)
             d = [0.0, 0.0]
@@ -242,8 +235,7 @@ def _bend(nt, left, s, st):
         names.add(f"Reroute.{k:03d}")
         return f"Reroute.{k:03d}"
 
-    # sockets are looked up by index for every link: Python references to links and sockets can go
-    # stale while links are being changed
+    # sockets by index, looked up per link: Python references go stale as links change
     todo = [(l.from_node.name, list(l.from_node.outputs).index(l.from_socket), l.to_node.name,
              list(l.to_node.inputs).index(l.to_socket), l.is_muted, a, b)
             for l, a, b in left if not l.to_socket.is_multi_input]
@@ -267,11 +259,9 @@ def _bend(nt, left, s, st):
 
 
 def drop_straight(nt, movable=None):
-    """Remove reroutes that sit in the middle of a straight run (rule NF034): an unlabelled
-    reroute with one link in and one out, all three points on one horizontal or vertical line.
-    Rounding to the pixel grid can leave one after straighten. Links into multi-input sockets
-    are left alone (their order would change). movable: only these reroutes (default all).
-    Returns the number removed."""
+    """Remove unlabelled reroutes in the middle of a straight run (NF034), which rounding can
+    leave after straighten. Links into multi-input sockets are left alone (their order would
+    change). movable: only these reroutes (default all). Returns the number removed."""
     gap = slot_gap()
     out = 0
     for r in [n for n in nt.nodes if n.bl_idname == REROUTE and not n.label

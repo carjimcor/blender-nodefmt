@@ -183,8 +183,7 @@ def measure(nt):
     allb = [b for _, b in boxes]
     return {
         **wires(nt, links),
-        # strict: every drawn segment (collapsed nodes and multi-input sockets too) with
-        # |dx| > 0.5 and |dy| > 0.5 units
+        # strict: every drawn segment neither horizontal nor vertical (ortho.TOL), fans included
         "nonortho": ortho.count(nt),
         "links": len(links),
         "straight": horiz,
@@ -219,9 +218,9 @@ def _straight_through(r):
 
 
 def drawing(nt, data=None):
-    """The tree as Blender draws it, as a wires.Drawing (for the checks of lint.py), with the
-    labels of labelled reroutes {(source, point): text} and the frames {frame: nodes}.
-    data: model.read(nt) if the caller has it (for zones and frames). Call Editor.show first."""
+    """(wires.Drawing of the tree as Blender draws it, for lint.py; reroute labels {(source,
+    point): text}; frames {frame: nodes}). data: model.read(nt) if the caller has it. Call
+    Editor.show first."""
     from . import model, routes, wires
     from .layout import containers
     ui = bpy.context.preferences.system.ui_scale

@@ -3,24 +3,23 @@
 Runs without Blender, with any Python 3 (Blender's bundled one works):
 
     python tools/bench.py CORPUS [--runs 3] [--slow 10] [--only TEXT] [--jobs 4]
-                          [--save base.json | --compare base.json] [--profile [--top 30]]
+                          [--save base.json] [--compare base.json] [--profile [--top 30]]
 
-For every *.json in CORPUS (the files of tools/dump_tree.py: {"data": model data, ...}) it runs
-what one pass of a sort runs on plain data: the copy plan of input nodes (dup.plan, which lays
-out the merged tree), the plan carried out on the data (dup.apply_model) and the layout of the
-whole tree (layout.Formatter), with the default rules (rules.Config()). It prints one row per
-tree: node count, time (median of --runs runs; a tree whose first run takes longer than --slow
-seconds runs once), the share of the copy plan in it, and an output fingerprint: a hash of the
-copy plan, every node position, every reroute and link of the result (layout.Formatter.geometry)
-and the label positions, rounded to 0.001 units, so two runs can be compared exactly.
+For each *.json in CORPUS it runs what one pass of a sort runs on plain data, with the default
+rules: the copy plan of input nodes (dup.plan), the plan applied (dup.apply_model) and the layout
+(layout.Formatter). It prints one row per tree: node count, time (median of --runs runs; a tree
+whose first run takes over --slow seconds runs once), the copy plan's share of it, and an output
+fingerprint (a hash of the plan, the drawn geometry and the label positions, rounded to 0.001
+units) so two runs can be compared exactly.
 
+  --only TEXT     only the files whose name contains TEXT
   --save FILE     keep the rows (time and fingerprint per tree) as a baseline
   --compare FILE  print old time, new time, speedup and "same" / "DIFFERENT" output per tree
                   against a saved baseline, and the totals; exits 1 if any output differs
   --profile       run each tree once under cProfile and print the top functions by cumulative
-                  time and by own time (--top N rows); no timing table
-  --jobs N        run the trees in N processes (faster, for checking fingerprints; the times
-                  are less reliable, as the processes share the machine)
+                  and by own time (--top N rows); no timing table
+  --jobs N        run the trees in N processes (for checking fingerprints: times are less
+                  reliable)
 
 The layout is deterministic and its search budgets are counted in layouts, not seconds, so a
 change that only makes the code faster must keep every fingerprint.

@@ -134,26 +134,22 @@ CLEAR = 10.0      # a new label reroute keeps this far from other reroutes and w
 
 
 def place_labels(trees, labels, boxes=(), first=True, clear=True):
-    """Put labelled reroutes back on the new routes.
+    """Put labelled reroutes back on the new routes (every reroute was removed for the layout).
+    Returns {(source, point): (name, label)}.
 
-    Every reroute, labelled ones included, is removed before the layout, so placement and
-    routing see direct links. A label names a wire; Blender 5 shows the label of a reroute,
-    greyed, on every reroute downstream of it on the same wire (reroute auto labels), so one
-    label near the start of the wire is enough. The labels of one source with the same text form
-    a group (the destinations they led to); the group's label goes on the FIRST reroute of its
-    path, nearest the source: the first reroute after the point where the wire splits away from
-    destinations outside the group, else the first reroute of the wire. If that part of the wire
-    has no reroute (a straight link), a new one is put near its start (MARGIN along the first
-    horizontal run) to keep the label. The rest of a group's labelled reroutes are dropped (they
-    would only repeat the label); blend.apply removes them.
+    A label names a wire, and Blender 5 repeats it greyed on every later reroute of the wire, so
+    one label near the start is enough. Labels of one source with the same text form a group;
+    its label goes on the first reroute of the group's own part of the wire (after it splits
+    from destinations outside the group), else of the whole wire (NF040, first=True; else the
+    reroute nearest where the label was). With no reroute there, a new one goes MARGIN along
+    the first horizontal run. The group's other labelled reroutes are dropped (blend.apply).
 
-    A new reroute is never put where its text would overlap another label or a node, or where
-    its dot would touch another wire or reroute. With clear (NF041), a label does not go on a
-    reroute where its text would overlap another label or a node or be crossed by a wire (its
-    own, for a wire that turns upwards there): it goes on a new reroute on the run before it.
+    A new reroute never puts its text over another label or a node, nor its dot near another
+    wire or reroute. With clear (NF041), a label whose text would overlap a label or a node or
+    be crossed by a wire (its own too) goes on a new reroute on the run before instead.
 
     trees: {source: Tree}; labels: label records from model.read; boxes: node boxes
-    (x0, y0, x1, y1) that label text must not cover. Returns {(source, point): (name, label)}."""
+    (x0, y0, x1, y1) that label text must not cover."""
     from . import labels as L
     out = {}
     texts = []  # boxes of the labels placed so far
@@ -238,7 +234,7 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
 
         p = None
         if own and clear:  # NF041: the first reroute where the text is clear, or a new reroute
-            for q in own:  # on the run into it, before it
+            for q in own:  # on the run into it
                 if clean(q, text):
                     p = q
                 elif q in t.parent:

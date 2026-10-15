@@ -12,7 +12,7 @@ blend=$1
 tree=$2
 seed=${3:-3}
 tmp=$(mktemp -d)
-"$BLENDER" "$blend" --python tools/scramble.py -- --tree "$tree" --seed "$seed" --ui-scale 1.4 --out "$tmp/messy.blend"
-"$BLENDER" "$tmp/messy.blend" --python tools/dump_tree.py -- --tree "$tree" --ui-scale 1.4 --out "$tmp/tree.json"
+"$BLENDER" "$blend" --no-window-focus --python tools/scramble.py -- --tree "$tree" --seed "$seed" --ui-scale 1.4 --out "$tmp/messy.blend"
+"$BLENDER" "$tmp/messy.blend" --no-window-focus --python tools/dump_tree.py -- --tree "$tree" --ui-scale 1.4 --out "$tmp/tree.json"
 BLENDER_DIR=$(dirname "$(command -v "$BLENDER")") "$PYTHON" tools/animate.py "$tmp/tree.json" media --select ALL
 echo "messy tree kept in $tmp/messy.blend"

@@ -11,6 +11,7 @@ tags = ["Node"]
 blender_version_min = "5.2.0"
 
 license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 Carlos Jimeno Cordero", "2024-2026 Leonardo Pike-Excell (sockets.py, from Node Arrange)"]
 website = "https://github.com/carjimcor/blender-nodefmt"
 
 [permissions]

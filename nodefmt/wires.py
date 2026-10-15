@@ -16,6 +16,7 @@ bends) to heights that make the whole drawing better, and makes almost level run
   NF034 no-junction-look two wires never share a point or a line; no reroute in the middle of
                          a straight run
 """
+
 from itertools import pairwise
 
 from . import params as P
@@ -45,10 +46,19 @@ class Drawing:
         out = []
         for p, cs in t.children.items():
             for q in cs:
-                pk = 'sock' if p == t.root else 'rr'
-                qk = 'sock' if q in t.dst else 'rr'
-                out.append((tag, p, q, pk, qk, self.src_node(tag) if pk == 'sock' else None,
-                            self.dst_node(t.dst[q]) if qk == 'sock' else None))
+                pk = "sock" if p == t.root else "rr"
+                qk = "sock" if q in t.dst else "rr"
+                out.append(
+                    (
+                        tag,
+                        p,
+                        q,
+                        pk,
+                        qk,
+                        self.src_node(tag) if pk == "sock" else None,
+                        self.dst_node(t.dst[q]) if qk == "sock" else None,
+                    )
+                )
         return out
 
     def segments(self):
@@ -91,7 +101,7 @@ def _near(p, q, d):
 def dirty(x, s):
     """True if crossing point x is near an end of segment s (a socket or a bend)."""
     for pt, k in ((s[1], s[3]), (s[2], s[4])):
-        if _near(pt, x, P.NEAR_SOCK if k == 'sock' else P.NEAR_RR):
+        if _near(pt, x, P.NEAR_SOCK if k == "sock" else P.NEAR_RR):
             return True
     return False
 
@@ -163,8 +173,13 @@ def near_outline(s, poly):
     (ax, ay), (bx, by) = s[1], s[2]
     c = P.CLEAR_OUTLINE
     xs, ys = [p[0] for p in poly], [p[1] for p in poly]
-    if (not poly or max(ax, bx) < min(xs) - c or min(ax, bx) > max(xs) + c
-            or max(ay, by) < min(ys) - c or min(ay, by) > max(ys) + c):
+    if (
+        not poly
+        or max(ax, bx) < min(xs) - c
+        or min(ax, bx) > max(xs) + c
+        or max(ay, by) < min(ys) - c
+        or min(ay, by) > max(ys) + c
+    ):
         return 0.0
     L = abs(ax - bx) + abs(ay - by)
     n = max(1, int(L // 4))
@@ -187,6 +202,7 @@ def hull(points):
     def cross(o, a, b):
         """z of (a - o) x (b - o)."""
         return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
     lower, upper = [], []
     for p in pts:
         while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
@@ -283,7 +299,7 @@ def multi_at(d, tag, p):
 
 def multi_of(d, s):
     """The multi-input socket a segment ends at, else None."""
-    if s[4] != 'sock':
+    if s[4] != "sock":
         return None
     k = d.trees[s[0]].dst.get(s[2])
     return k[:3] if k is not None and len(k) == 4 else None
@@ -293,14 +309,19 @@ class Rest:
     """The segments and reroutes of every tree of a drawing but `tag`, bucketed on a grid so
     tree_faults compares the tree only with what is near it (each fault needs the two things
     within COLLINEAR, ON_WIRE or RR_CLEAR of each other)."""
+
     CELL = 200.0
 
     def __init__(self, d, tag):
         """Index the segments and reroutes of the trees of d other than `tag`."""
         self.segs = [s for s in d.segments() if s[0] != tag]
         self.rr = [(g, p) for g, p in d.reroutes() if g != tag]
-        self._sg = self._grid([(min(s[1][0], s[2][0]), min(s[1][1], s[2][1]),
-                                max(s[1][0], s[2][0]), max(s[1][1], s[2][1])) for s in self.segs])
+        self._sg = self._grid(
+            [
+                (min(s[1][0], s[2][0]), min(s[1][1], s[2][1]), max(s[1][0], s[2][0]), max(s[1][1], s[2][1]))
+                for s in self.segs
+            ]
+        )
         self._rg = self._grid([(p[0], p[1], p[0], p[1]) for _, p in self.rr])
 
     def _cells(self, x0, y0, x1, y1):
@@ -325,13 +346,25 @@ class Rest:
 
     def segs_near(self, s, m):
         """Other segments whose box comes within m of segment (or point pair) s."""
-        return self._query(self._sg, self.segs, min(s[1][0], s[2][0]) - m, min(s[1][1], s[2][1]) - m,
-                           max(s[1][0], s[2][0]) + m, max(s[1][1], s[2][1]) + m)
+        return self._query(
+            self._sg,
+            self.segs,
+            min(s[1][0], s[2][0]) - m,
+            min(s[1][1], s[2][1]) - m,
+            max(s[1][0], s[2][0]) + m,
+            max(s[1][1], s[2][1]) + m,
+        )
 
     def rr_near(self, s, m):
         """Other reroutes within m of the box of segment (or point pair) s."""
-        return self._query(self._rg, self.rr, min(s[1][0], s[2][0]) - m, min(s[1][1], s[2][1]) - m,
-                           max(s[1][0], s[2][0]) + m, max(s[1][1], s[2][1]) + m)
+        return self._query(
+            self._rg,
+            self.rr,
+            min(s[1][0], s[2][0]) - m,
+            min(s[1][1], s[2][1]) - m,
+            max(s[1][0], s[2][0]) + m,
+            max(s[1][1], s[2][1]) + m,
+        )
 
 
 def tree_faults(d, tag, others=None, other_rr=None, rest=None):
@@ -348,12 +381,25 @@ def tree_faults(d, tag, others=None, other_rr=None, rest=None):
     m_seg = max(P.COLLINEAR, P.ON_WIRE) + 2.0
     m_rr = P.RR_CLEAR + 2.0
     mine_rr = routes.reroute_points(d.trees[tag])
-    f = {"cross": 0, "cross_bad": 0, "collinear": 0, "on_wire": 0, "clash": 0, "behind": 0, "touch": 0,
-         "near_node": 0, "near_outline": 0, "reversals": 0, "landings": 0, "vlen": 0.0, "reroutes": len(mine_rr)}
+    f = {
+        "cross": 0,
+        "cross_bad": 0,
+        "collinear": 0,
+        "on_wire": 0,
+        "clash": 0,
+        "behind": 0,
+        "touch": 0,
+        "near_node": 0,
+        "near_outline": 0,
+        "reversals": 0,
+        "landings": 0,
+        "vlen": 0.0,
+        "reroutes": len(mine_rr),
+    }
     for s in segs:
         if vert(s):
             f["vlen"] += abs(s[1][1] - s[2][1])
-        for o in (others if rest is None else rest.segs_near(s, m_seg)):
+        for o in others if rest is None else rest.segs_near(s, m_seg):
             x = None
             if horiz(s) and vert(o):
                 x = crossing(s, o)
@@ -367,7 +413,7 @@ def tree_faults(d, tag, others=None, other_rr=None, rest=None):
             elif collinear(s, o):
                 f["collinear"] += 1
         ms = multi_of(d, s)
-        for g, p in (other_rr if rest is None else rest.rr_near(s, m_seg)):
+        for g, p in other_rr if rest is None else rest.rr_near(s, m_seg):
             if on_segment(p, s, P.ON_WIRE) and (ms is None or multi_at(d, g, p) != ms):
                 f["on_wire"] += 1
         for name, box in d.boxes.items():
@@ -383,15 +429,15 @@ def tree_faults(d, tag, others=None, other_rr=None, rest=None):
             if near_outline(s, poly) > P.CLEAR_RUN:
                 f["near_outline"] += 1
     for k, p in enumerate(mine_rr):
-        for q in mine_rr[k + 1:]:
+        for q in mine_rr[k + 1 :]:
             if _near(p, q, P.RR_CLEAR):
                 f["clash"] += 1  # two bends of one wire this close look like one blob
         mp = multi_at(d, tag, p)
         pp = (None, p, p)
-        for o in (others if rest is None else rest.segs_near(pp, m_seg)):
+        for o in others if rest is None else rest.segs_near(pp, m_seg):
             if on_segment(p, o, P.ON_WIRE) and (mp is None or multi_of(d, o) != mp):
                 f["on_wire"] += 1
-        for _, q in (other_rr if rest is None else rest.rr_near(pp, m_rr)):
+        for _, q in other_rr if rest is None else rest.rr_near(pp, m_rr):
             if _near(p, q, P.RR_CLEAR):
                 f["clash"] += 1
     rev, land = jogs(d.trees[tag])
@@ -405,13 +451,13 @@ FAULTS = ("cross", "cross_bad", "collinear", "on_wire", "clash", "near_node", "n
 def score(f, rules):
     """One number for the faults of a tree (lower is better); rules switch parts off."""
     s = 1000.0 * (f["behind"] + f["touch"]) + 1.0 * f["reroutes"] + 0.005 * f["vlen"]
-    if 'NF033' in rules:
+    if "NF033" in rules:
         s += 10.0 * f["cross"] + 15.0 * f["cross_bad"]
-    if 'NF034' in rules:
+    if "NF034" in rules:
         s += 40.0 * (f["collinear"] + f["on_wire"] + f["clash"])
-    if 'NF032' in rules:
+    if "NF032" in rules:
         s += 12.0 * f["near_node"] + 8.0 * f["near_outline"]
-    if 'NF031' in rules:
+    if "NF031" in rules:
         s += 4.0 * f["reversals"] + 4.0 * f["landings"]
     return s
 
@@ -531,7 +577,7 @@ def _levels(d, pa, a, b, c):
 def tidy(d, rules, passes=4):
     """Move runs to better heights (see the module docstring) until nothing improves. Returns
     the number of moves. Deterministic: trees and runs in sorted order."""
-    if not ({'NF031', 'NF032', 'NF033', 'NF034'} & set(rules)):
+    if not ({"NF031", "NF032", "NF033", "NF034"} & set(rules)):
         return 0  # no wire rule on: the drawing stays as the layout made it
     moves = 0
     for _ in range(passes):

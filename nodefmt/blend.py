@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Write a layout (layout.Formatter) back to a Blender node tree: node locations, reroutes,
 links, and the links of swapped commutative inputs."""
+
 from . import routes
 from .ortho import to_px
 
-REROUTE = 'NodeReroute'
+REROUTE = "NodeReroute"
 
 
 def pixel_snap(nt, s, part=None):
@@ -12,7 +13,7 @@ def pixel_snap(nt, s, part=None):
     (ortho.py), so its sockets are exactly where the model measures them; moves are under a
     pixel. Reroutes stay: ortho.straighten puts them at a socket's exact height, often off grid."""
     for n in nt.nodes:
-        if n.bl_idname in ('NodeFrame', 'NodeReroute') or (part is not None and n.name not in part):
+        if n.bl_idname in ("NodeFrame", "NodeReroute") or (part is not None and n.name not in part):
             continue
         x, y = n.location_absolute
         px, py = to_px(x, s), to_px(y, s)
@@ -23,7 +24,7 @@ def pixel_snap(nt, s, part=None):
 def socket_of(nt, g):
     """The Blender socket of a gid (node name, 'i' | 'o', index)."""
     n = nt.nodes[g[0]]
-    socks = n.outputs if g[1] == 'o' else n.inputs
+    socks = n.outputs if g[1] == "o" else n.inputs
     if g[2] >= len(socks):
         raise IndexError(f"{g} not found: node {n.name!r} ({n.bl_idname}) has {len(socks)}")
     return socks[g[2]]
@@ -89,30 +90,30 @@ def apply(nt, f):
         if to.is_multi_input:
             # relink bottom slot first: Blender gives each new link the next sort id
             rank = {src: k for k, (sid, src) in enumerate(sorted(order[d], key=lambda x: x[0]))}
-            for l in [l for l in to.links if not l.is_hidden]:
-                nt.links.remove(l)
+            for lk in [lk for lk in to.links if not lk.is_hidden]:
+                nt.links.remove(lk)
             for s, p, key in sorted(srcs, key=lambda x: x[2][3] if len(x[2]) > 3 else rank.get(x[0], 0)):
-                l = nt.links.new(from_socket(s, p), socket_of(nt, d))
-                if l is None:
+                lk = nt.links.new(from_socket(s, p), socket_of(nt, d))
+                if lk is None:
                     raise RuntimeError(f"could not link {s} -> {d}")
-                l.is_muted = muted.get((s, d), False)
+                lk.is_muted = muted.get((s, d), False)
             continue
-        (s, p, _), = srcs
+        ((s, p, _),) = srcs
         frm = from_socket(s, p)
         old = to.links[0] if to.is_linked else None
         if old is not None and old.from_socket.as_pointer() == frm.as_pointer():
             continue  # unchanged direct link
-        l = nt.links.new(frm, socket_of(nt, d))  # replaces the old link in place
-        if l is None:
+        lk = nt.links.new(frm, socket_of(nt, d))  # replaces the old link in place
+        if lk is None:
             raise RuntimeError(f"could not link {s} -> {d}")
-        l.is_muted = muted.get((s, d), False)
+        lk.is_muted = muted.get((s, d), False)
     # unlink the inputs that lost their link to a swap
     for _, a, b in f.swapped:
         for g in (a, b):
             if g not in final:
                 to = socket_of(nt, g)
-                for l in [l for l in to.links if not l.is_hidden]:
-                    nt.links.remove(l)
+                for lk in [lk for lk in to.links if not lk.is_hidden]:
+                    nt.links.remove(lk)
     placed = {v[0] for v in f.label_pts.values()}
     for name in m.data["removable"]:
         n = nt.nodes.get(name)

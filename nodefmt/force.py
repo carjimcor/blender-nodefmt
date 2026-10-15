@@ -7,6 +7,7 @@ apart. Only heights move; the columns stay as ranked. After P.FORCE_STEPS coolin
 column is sorted by the relaxed heights, cleaned up by neighbour transposition, and handed to the
 placement methods like an order from the crossing reduction.
 """
+
 from . import params as P
 from .graph import Cand
 
@@ -22,7 +23,7 @@ class ForceMixin:
         if rng is not None:
             for i in ys:
                 ys[i] += rng.uniform(-P.FORCE_JITTER, P.FORCE_JITTER)
-        cols = [list(l) for l in self.layers]
+        cols = [list(ly) for ly in self.layers]
         step = 0.5
         for it in range(P.FORCE_STEPS):
             f = {i: 0.0 for i in self.items}
@@ -35,7 +36,7 @@ class ForceMixin:
             for k, col in enumerate(cols):  # repulsion in a column, and (weaker) from the next one
                 others = cols[k + 1] if k + 1 < len(cols) else []
                 for n, a in enumerate(col):
-                    for b in col[n + 1:] + others:
+                    for b in col[n + 1 :] + others:
                         d = ys[b] - ys[a]
                         need = (a.h + b.h) / 2 + self._gap(a, b)
                         same = b in col
@@ -48,7 +49,7 @@ class ForceMixin:
                         f[a] -= sgn * push
                         f[b] += sgn * push
             for i in self.items:
-                if i.pin == 'first' and i.kind == 'node' and getattr(i, 'zmatch', None) is not None:
+                if i.pin == "first" and i.kind == "node" and getattr(i, "zmatch", None) is not None:
                     continue  # a zone input heads its column anyway
                 ys[i] += step * max(-60.0, min(60.0, f[i]))
             step *= P.FORCE_COOL
@@ -59,5 +60,5 @@ class ForceMixin:
             for i in layer:
                 i.y = y
                 y += i.h + self._gap(i, i)
-        self._transpose(layers, self.mode == 'keep', True)
-        return [Cand([list(l) for l in layers], start.comm, frozenset(), placer, 'force') for placer in P.PLACERS]
+        self._transpose(layers, self.mode == "keep", True)
+        return [Cand([list(ly) for ly in layers], start.comm, frozenset(), placer, "force") for placer in P.PLACERS]

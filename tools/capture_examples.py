@@ -12,6 +12,7 @@ writes selection-before.png and selection-after.png (Sort Selection), check-pane
 panel) and boxes.json, the part of each screenshot that holds the tree, which
 tools/finish_images.py crops to. --only also takes "selection" and "panel".
 """
+
 import argparse
 import glob
 import json
@@ -25,7 +26,7 @@ import bpy
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 ap = argparse.ArgumentParser(prog="capture_examples.py")
 ap.add_argument("out")
 ap.add_argument("--only", action="append", default=[])
@@ -42,8 +43,8 @@ MARKS = []  # (x, y, text) in node units, drawn by draw_marks()
 def area_region():
     """The node editor area of the window and its main region."""
     win = bpy.context.window_manager.windows[0]
-    area = next(a for a in win.screen.areas if a.type == 'NODE_EDITOR')
-    return win, area, next(r for r in area.regions if r.type == 'WINDOW')
+    area = next(a for a in win.screen.areas if a.type == "NODE_EDITOR")
+    return win, area, next(r for r in area.regions if r.type == "WINDOW")
 
 
 def draw_marks():
@@ -51,6 +52,7 @@ def draw_marks():
     import blf
     import gpu
     from gpu_extras.batch import batch_for_shader
+
     if STAMP:
         x, y, text = STAMP[0]
         ui = bpy.context.preferences.system.ui_scale
@@ -64,17 +66,17 @@ def draw_marks():
     region = bpy.context.region
     v2d = region.view2d
     ui = bpy.context.preferences.system.ui_scale
-    shader = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR')
+    shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
     shader.uniform_float("viewportSize", (region.width, region.height))
     shader.uniform_float("lineWidth", 2.0)
     shader.uniform_float("color", (1.0, 0.25, 0.2, 1.0))
-    gpu.state.blend_set('ALPHA')
+    gpu.state.blend_set("ALPHA")
     done = []
     for x, y, text in MARKS:
         cx, cy = v2d.view_to_region(x * ui, y * ui, clip=False)
         r = 13.0
         pts = [(cx + r * math.cos(k * math.pi / 16), cy + r * math.sin(k * math.pi / 16)) for k in range(33)]
-        batch_for_shader(shader, 'LINE_STRIP', {"pos": pts}).draw(shader)
+        batch_for_shader(shader, "LINE_STRIP", {"pos": pts}).draw(shader)
         if any(abs(cx - a) < 60 and abs(cy - b) < 30 for a, b in done):
             continue  # one text for marks close together
         done.append((cx, cy))
@@ -82,7 +84,7 @@ def draw_marks():
         blf.color(0, 1.0, 0.35, 0.3, 1.0)
         blf.position(0, cx + r + 3, cy + r - 4, 0)
         blf.draw(0, text)
-    gpu.state.blend_set('NONE')
+    gpu.state.blend_set("NONE")
 
 
 def append(path):
@@ -98,7 +100,7 @@ def bbox(nt):
     xs, ys = [], []
     for n in nt.nodes:
         x, y = n.location_absolute
-        w, h = (n.dimensions.x / ui, n.dimensions.y / ui) if n.bl_idname != 'NodeReroute' else (0, 0)
+        w, h = (n.dimensions.x / ui, n.dimensions.y / ui) if n.bl_idname != "NodeReroute" else (0, 0)
         xs += [x - 6, x + w + 6]
         ys += [y - h - 6, y + 6]
     return min(xs), min(ys), max(xs), max(ys)
@@ -110,7 +112,7 @@ def fit(nt, cx, cy, zoom):
     win, area, region = area_region()
     half_w, half_h = region.width / zoom / 2, region.height / zoom / 2
     for _ in range(5):
-        corners = [nt.nodes.new('NodeReroute') for _ in range(2)]
+        corners = [nt.nodes.new("NodeReroute") for _ in range(2)]
         corners[0].location_absolute = (cx - half_w, cy - half_h)
         corners[1].location_absolute = (cx + half_w, cy + half_h)
         yield 0.3
@@ -135,8 +137,8 @@ def fit(nt, cx, cy, zoom):
 def shoot(nt, path, zoom, selected=()):
     """Screenshot the tree at `zoom`, with the nodes `selected` selected; returns the crop box
     (pixels from the top left)."""
-    l, b, r, t = bbox(nt)
-    yield from fit(nt, (l + r) / 2, (b + t) / 2, zoom)
+    x_min, y_min, x_max, y_max = bbox(nt)
+    yield from fit(nt, (x_min + x_max) / 2, (y_min + y_max) / 2, zoom)
     for n in nt.nodes:
         n.select = n.name in selected
     yield 0.3
@@ -146,12 +148,16 @@ def shoot(nt, path, zoom, selected=()):
     yield 0.3
     ui = bpy.context.preferences.system.ui_scale
     v = region.view2d
-    x0, y0 = v.view_to_region(l * ui, t * ui, clip=False)
-    x1, y1 = v.view_to_region(r * ui, b * ui, clip=False)
+    x0, y0 = v.view_to_region(x_min * ui, y_max * ui, clip=False)
+    x1, y1 = v.view_to_region(x_max * ui, y_min * ui, clip=False)
     ox, oy = region.x - area.x, region.y - area.y
     H = area.height
-    return [math.floor(x0 + ox - PAD), math.floor(H - (y0 + oy) - PAD),
-            math.ceil(x1 + ox + PAD), math.ceil(H - (y1 + oy) + PAD)]
+    return [
+        math.floor(x0 + ox - PAD),
+        math.floor(H - (y0 + oy) - PAD),
+        math.ceil(x1 + ox + PAD),
+        math.ceil(H - (y1 + oy) + PAD),
+    ]
 
 
 PANEL = ("NF032", "NF032")  # the example of the Check panel image, and the rule clicked in it
@@ -163,10 +169,15 @@ def shoot_panel(path):
     other tabs of the sidebar are removed (in memory only), so the nodefmt tab shows."""
     from nodefmt import ui
     from nodefmt.draw import Editor
+
     ui.register()
     for c in list(bpy.types.Panel.__subclasses__()):
-        if getattr(c, "bl_space_type", "") == 'NODE_EDITOR' and getattr(c, "bl_region_type", "") == 'UI' \
-                and getattr(c, "bl_category", "") != "nodefmt" and not getattr(c, "bl_parent_id", ""):
+        if (
+            getattr(c, "bl_space_type", "") == "NODE_EDITOR"
+            and getattr(c, "bl_region_type", "") == "UI"
+            and getattr(c, "bl_category", "") != "nodefmt"
+            and not getattr(c, "bl_parent_id", "")
+        ):
             try:
                 bpy.utils.unregister_class(c)
             except RuntimeError:
@@ -195,14 +206,14 @@ def shoot_panel(path):
         bpy.ops.node.nodefmt_check()
         bpy.ops.node.nodefmt_show_violation(code=PANEL[1])
     chosen = {n.name for n in nt.nodes if n.select}
-    side = next(r for r in area.regions if r.type == 'UI')
-    l, b, r, t = bbox(nt)
+    side = next(r for r in area.regions if r.type == "UI")
+    x_min, y_min, x_max, y_max = bbox(nt)
     zoom = 0.8
     overlap = region.width >= area.width - 2  # the sidebar is drawn over the editor
     # the tree's top right corner 60 pixels from the top and 40 from the sidebar
     right = region.width - (side.width if overlap else 0) - 40
-    cx = r - (right - region.width / 2) / zoom
-    cy = t - (region.height - 60 - region.height / 2) / zoom
+    cx = x_max - (right - region.width / 2) / zoom
+    cy = y_max - (region.height - 60 - region.height / 2) / zoom
     yield from fit(nt, cx, cy, zoom)
     for n in nt.nodes:
         n.select = n.name in chosen
@@ -214,8 +225,8 @@ def shoot_panel(path):
     yield 0.3
     v = region.view2d
     ui_s = bpy.context.preferences.system.ui_scale
-    x0, _y0 = v.view_to_region(l * ui_s, t * ui_s, clip=False)
-    _x1, y1 = v.view_to_region(r * ui_s, b * ui_s, clip=False)
+    x0, _y0 = v.view_to_region(x_min * ui_s, y_max * ui_s, clip=False)
+    _x1, y1 = v.view_to_region(x_max * ui_s, y_min * ui_s, clip=False)
     ox, oy, H = region.x - area.x, region.y - area.y, area.height
     bottom = max(H - (y1 + oy) + PAD, 460)
     box = [math.floor(x0 + ox - PAD), 0, area.width, math.ceil(bottom)]
@@ -228,6 +239,7 @@ def fingerprint_digest(nt):
     import hashlib
 
     from nodefmt import check
+
     text = json.dumps(check.fingerprint(nt), sort_keys=True, default=repr)
     return hashlib.sha1(text.encode()).hexdigest()[:12]
 
@@ -237,25 +249,27 @@ def make_pair(code, before, after, ed):
     after a sort with no style rules; a style rule after a sort with every style rule off and
     after a sort with only that rule. Returns the violations of the rule in the before tree."""
     from nodefmt import api, rules
+
     guarantees = frozenset(rules.GUARANTEES)
     if code in rules.STYLE:
-        api.format_tree(before, 'relayout', ed, cfg=rules.Config(guarantees))
-        api.format_tree(after, 'relayout', ed, cfg=rules.Config(guarantees | {code}))
+        api.format_tree(before, "relayout", ed, cfg=rules.Config(guarantees))
+        api.format_tree(after, "relayout", ed, cfg=rules.Config(guarantees | {code}))
     else:
-        api.format_tree(after, 'relayout', ed, cfg=rules.Config(guarantees))
+        api.format_tree(after, "relayout", ed, cfg=rules.Config(guarantees))
     ed.show(before)
     own = rules.Config(guarantees | {code})
-    return api.check_tree(before, 'relayout', ed, own, formatted=False)
+    return api.check_tree(before, "relayout", ed, own, formatted=False)
 
 
 def run():
     """Capture every example (a generator: the timer waits between steps)."""
     from nodefmt.draw import Editor
+
     bpy.context.preferences.view.ui_scale = 1.0  # in memory only
     bpy.context.preferences.view.smooth_view = 0
     win = bpy.context.window_manager.windows[0]
     big = max(win.screen.areas, key=lambda a: a.width * a.height)
-    big.ui_type = 'GeometryNodeTree'
+    big.ui_type = "GeometryNodeTree"
     yield 0.5
     win, area, region = area_region()
     with bpy.context.temp_override(window=win, area=area, region=region):
@@ -267,7 +281,7 @@ def run():
     sp.show_region_toolbar = False
     sp.show_region_ui = False
     sp.overlay.show_context_path = False
-    handle = bpy.types.SpaceNodeEditor.draw_handler_add(draw_marks, (), 'WINDOW', 'POST_PIXEL')
+    handle = bpy.types.SpaceNodeEditor.draw_handler_add(draw_marks, (), "WINDOW", "POST_PIXEL")
     os.makedirs(ARGS.out, exist_ok=True)
     boxes = {}
     files = sorted(glob.glob(os.path.join(ARGS.examples, "NF*.blend")))
@@ -294,8 +308,8 @@ def run():
             for nt, when in ((before, "before"), (after, "after")):
                 ed.show(nt)
                 if code == "NF005":  # the logic fingerprint under the tree
-                    l, b, _r, _t = bbox(nt)
-                    STAMP[:] = [(l, b - 20 / zoom, f"Logic fingerprint: {fingerprint_digest(nt)}")]
+                    x_min, y_min, _x_max, _y_max = bbox(nt)
+                    STAMP[:] = [(x_min, y_min - 20 / zoom, f"Logic fingerprint: {fingerprint_digest(nt)}")]
                 box = yield from shoot(nt, os.path.join(ARGS.out, f"{name}-{when}.png"), zoom)
                 if STAMP:
                     box[3] += 28
@@ -311,6 +325,7 @@ def run():
         sel = os.path.join(ARGS.examples, "selection.blend")
         if os.path.exists(sel) and (not ARGS.only or "selection" in ARGS.only):
             from nodefmt import part
+
             ed = Editor(area_region()[1])
             before, after = append(sel), append(sel)
             chosen = {n.name for n in before.nodes if n.select}
@@ -322,18 +337,20 @@ def run():
             ed.show(before)
             wb = bbox(before)
             zoom = min(ARGS.zoom, 1.5 * ARGS.width / max(wb[2] - wb[0], wa[2] - wa[0]))  # a wider tree
-            boxes["selection-before"] = yield from shoot(before, os.path.join(ARGS.out, "selection-before.png"),
-                                                         zoom, chosen)
+            boxes["selection-before"] = yield from shoot(
+                before, os.path.join(ARGS.out, "selection-before.png"), zoom, chosen
+            )
             ed.show(after)
-            boxes["selection-after"] = yield from shoot(after, os.path.join(ARGS.out, "selection-after.png"),
-                                                        zoom, kept)
+            boxes["selection-after"] = yield from shoot(
+                after, os.path.join(ARGS.out, "selection-after.png"), zoom, kept
+            )
             print(f"captured selection at zoom {zoom:.2f}", flush=True)
         panel = os.path.join(ARGS.examples, PANEL[0] + ".blend")
         if os.path.exists(panel) and (not ARGS.only or "panel" in ARGS.only):
             boxes["check-panel"] = yield from shoot_panel(panel)
             print("captured the Check panel", flush=True)
     finally:
-        bpy.types.SpaceNodeEditor.draw_handler_remove(handle, 'WINDOW')
+        bpy.types.SpaceNodeEditor.draw_handler_remove(handle, "WINDOW")
     with open(os.path.join(ARGS.out, "boxes.json"), "w", encoding="utf-8") as fh:
         json.dump(boxes, fh, indent=1)
     print("done", flush=True)

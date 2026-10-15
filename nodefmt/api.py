@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Format or check node trees. Used by the add-on buttons and by the command line."""
+
 import time
 from collections import namedtuple
 
@@ -14,7 +15,7 @@ class LogicChanged(Exception):
     """A format would change what the tree computes; the tree was restored."""
 
 
-TREE_TYPES = ('GeometryNodeTree', 'ShaderNodeTree', 'CompositorNodeTree')
+TREE_TYPES = ("GeometryNodeTree", "ShaderNodeTree", "CompositorNodeTree")
 # data-blocks that embed a node tree (shown in the Shader Editor): label, collection name
 OWNERS = (("Material", "materials"), ("World", "worlds"), ("Light", "lights"))
 
@@ -49,7 +50,7 @@ def find_tree(name):
     for label, coll in OWNERS:
         prefix = label + ": "
         if name.startswith(prefix):
-            idb = getattr(bpy.data, coll).get(name[len(prefix):])
+            idb = getattr(bpy.data, coll).get(name[len(prefix) :])
             if idb is not None and idb.node_tree is not None:
                 return idb.node_tree
     raise KeyError(f"no node tree {name!r}")
@@ -57,13 +58,22 @@ def find_tree(name):
 
 def _signature(nt):
     """Layout of a tree as plain data: node and reroute positions, and links by position."""
-    pos = {n.name: (round(n.location_absolute.x, 1), round(n.location_absolute.y, 1))
-           for n in nt.nodes if n.bl_idname != 'NodeFrame'}
-    real = sorted((v, nt.nodes[k].bl_idname) for k, v in pos.items()
-                  if nt.nodes[k].bl_idname != 'NodeReroute' or nt.nodes[k].label)
-    rr = sorted(v for k, v in pos.items() if nt.nodes[k].bl_idname == 'NodeReroute' and not nt.nodes[k].label)
-    links = sorted((pos[l.from_node.name], pos[l.to_node.name], l.from_socket.identifier, l.to_socket.identifier)
-                   for l in nt.links if l.from_node.name in pos and l.to_node.name in pos)
+    pos = {
+        n.name: (round(n.location_absolute.x, 1), round(n.location_absolute.y, 1))
+        for n in nt.nodes
+        if n.bl_idname != "NodeFrame"
+    }
+    real = sorted(
+        (v, nt.nodes[k].bl_idname)
+        for k, v in pos.items()
+        if nt.nodes[k].bl_idname != "NodeReroute" or nt.nodes[k].label
+    )
+    rr = sorted(v for k, v in pos.items() if nt.nodes[k].bl_idname == "NodeReroute" and not nt.nodes[k].label)
+    links = sorted(
+        (pos[lk.from_node.name], pos[lk.to_node.name], lk.from_socket.identifier, lk.to_socket.identifier)
+        for lk in nt.links
+        if lk.from_node.name in pos and lk.to_node.name in pos
+    )
     return real, rr, links
 
 
@@ -76,7 +86,7 @@ def same_layout(a, b, tol=None):
     def flat(v):
         """The numbers and the other values of a signature entry."""
         nums, rest = [], []
-        for x in (v if isinstance(v, tuple) else (v,)):
+        for x in v if isinstance(v, tuple) else (v,):
             if isinstance(x, tuple):
                 n, r = flat(x)
                 nums += n
@@ -115,11 +125,14 @@ def read_tree(nt, editor, part=None, pins=None):
     if abs(s - 1.0) < 1e-6:
         editor.redraw()
         return model.read(nt, part=part, pins=pins)
-    where = {n.name: tuple(n.location_absolute) for n in nt.nodes
-             if n.bl_idname != 'NodeFrame' and (part is None or n.name in part)}
+    where = {
+        n.name: tuple(n.location_absolute)
+        for n in nt.nodes
+        if n.bl_idname != "NodeFrame" and (part is None or n.name in part)
+    }
     try:
         measures = []
-        for y in ((0.0,) if part is None else (0.0, BIG)):  # below y = 0 (a part: and above it)
+        for y in (0.0,) if part is None else (0.0, BIG):  # below y = 0 (a part: and above it)
             for name in where:
                 nt.nodes[name].location_absolute = (0.0, y)
             editor.redraw()
@@ -133,7 +146,7 @@ def read_tree(nt, editor, part=None, pins=None):
     return model.at(model.with_modes(*measures), where)
 
 
-class Step(namedtuple('Step', 'npass phase k n step steps')):
+class Step(namedtuple("Step", "npass phase k n step steps")):
     """Progress of a sort (format_steps): pass `npass`, `phase` (reading, copies, layout, ...),
     k of n for the layout (one per container), and step `step` of `steps` in this pass."""
 
@@ -152,6 +165,7 @@ def format_once(nt, mode, editor, duplicates=True, swaps=True, cfg=None):
 def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, npass=1):
     """format_once as a generator of Steps; returns what format_once returns."""
     from .layout import containers
+
     cfg = cfg or rules.Config()
     data = read_tree(nt, editor)
     n = len(containers(model.Model(data))) + 1
@@ -159,7 +173,7 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     step = Step(npass, "reading", 1, 1, 1, steps + 1)
     yield step
     copies = 0
-    if duplicates and cfg.on('NF010'):
+    if duplicates and cfg.on("NF010"):
         plan = dup.plan(data, mode)
         if dup.changes(plan, data):
             copies = dup.realize(nt, editor, plan)
@@ -167,13 +181,13 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     yield step._replace(phase="copies", step=2)
     f = Formatter(model.Model(data), mode, swaps, rules=cfg.rules)
     for phase, k, m in f.run_steps():
-        yield step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == 'layout' else n + 3)
+        yield step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == "layout" else n + 3)
     made = blend.apply(nt, f)
     yield step._replace(phase="writing", step=n + 4)
     anchor = tuple(nt.nodes[f.anchor].location_absolute)
     editor.show(nt)
-    st = ortho.straighten(nt, editor, fan=cfg.on('NF035'))
-    if cfg.on('NF034'):
+    st = ortho.straighten(nt, editor, fan=cfg.on("NF035"))
+    if cfg.on("NF034"):
         editor.redraw()
         st["dropped"] = ortho.drop_straight(nt)
     # straighten may have nudged the anchor (Group Output): shift everything back so the tree
@@ -182,7 +196,7 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     dx, dy = a[0] - anchor[0], a[1] - anchor[1]
     if abs(dx) > 1e-6 or abs(dy) > 1e-6:
         for nd in nt.nodes:
-            if nd.bl_idname != 'NodeFrame':
+            if nd.bl_idname != "NodeFrame":
                 x, y = nd.location_absolute
                 nd.location_absolute = (x - dx, y - dy)
         editor.redraw()
@@ -201,8 +215,18 @@ def _state_key(nt, mode, cfg):
     """What a format of tree nt depends on: its layout, each node's size, collapse state, label
     and frame, the mode, the rules and the UI scale. Equal keys format the same way. Call after
     the tree was drawn (node sizes)."""
-    nodes = sorted((n.name, n.bl_idname, round(n.dimensions.x, 2), round(n.dimensions.y, 2), n.hide, n.label,
-                    n.parent.name if n.parent else None) for n in nt.nodes)
+    nodes = sorted(
+        (
+            n.name,
+            n.bl_idname,
+            round(n.dimensions.x, 2),
+            round(n.dimensions.y, 2),
+            n.hide,
+            n.label,
+            n.parent.name if n.parent else None,
+        )
+        for n in nt.nodes
+    )
     return repr((_signature(nt), nodes, mode, sorted(cfg.rules), round(ortho.ui_scale(), 4)))
 
 
@@ -215,13 +239,13 @@ def _drain(gen):
             return e.value
 
 
-def format_tree(nt, mode='relayout', editor=None, duplicates=True, swaps=True, cfg=None):
+def format_tree(nt, mode="relayout", editor=None, duplicates=True, swaps=True, cfg=None):
     """Format one tree in place with the rules of cfg (rules.Config; default: the default rules).
     On any logic difference the tree is restored and LogicChanged raised. Returns a dict of stats."""
     return _drain(format_steps(nt, mode, editor, duplicates, swaps, cfg))
 
 
-def format_steps(nt, mode='relayout', editor=None, duplicates=True, swaps=True, cfg=None):
+def format_steps(nt, mode="relayout", editor=None, duplicates=True, swaps=True, cfg=None):
     """format_tree as a generator that yields a Step after each step, for progress, and returns
     the stats. Closing it early leaves the tree half sorted: restore it from a check.Snapshot."""
     cfg = cfg or rules.Config()
@@ -258,41 +282,52 @@ def _format_steps(nt, mode, editor, duplicates, swaps, cfg):
             except Exception as e:
                 snap.restore(nt, editor)
                 again = check.diff(before, check.fingerprint(nt))
-                raise LogicChanged(f"{tree_name(nt)}: format failed ({e}), reverted "
-                                   f"({'restore OK' if not again else 'RESTORE FAILED'})") from e
+                raise LogicChanged(
+                    f"{tree_name(nt)}: format failed ({e}), reverted "
+                    f"({'restore OK' if not again else 'RESTORE FAILED'})"
+                ) from e
             d = check.diff(before, check.fingerprint(nt))
             if d:
                 snap.restore(nt, editor)
                 again = check.diff(before, check.fingerprint(nt))
-                raise LogicChanged(f"{tree_name(nt)}: format changed the logic, reverted "
-                                   f"({'restore OK' if not again else 'RESTORE FAILED'}): {d[:3]}")
+                raise LogicChanged(
+                    f"{tree_name(nt)}: format changed the logic, reverted "
+                    f"({'restore OK' if not again else 'RESTORE FAILED'}): {d[:3]}"
+                )
             yield last._replace(phase="logic check", k=1, n=1, step=last.steps)
             editor.show(nt)
             if k and same_layout(_signature(nt), sig):
                 _SETTLED[nt.as_pointer()] = _state_key(nt, mode, cfg)  # see unformatted
                 break
         editor.redraw()
-        return {"tree": tree_name(nt), "seconds": round(time.perf_counter() - t0, 3),
-                "reroutes": made, "copies": copies, "swaps": swapped,
-                "loose_frames": sorted(f.loose_frames), "passes": k + 1,
-                # stats of the last pass's straighten, and the UI scale the layout was made for
-                "ortho": ost, "ui_scale": round(ortho.ui_scale(), 4),
-                # last pass: layout cost (sum over containers) and how each container was placed
-                "cost": round(sum(r.cost for _, r in f.res.values()), 3),
-                "tidy": dict(getattr(f, "tidy", {})),
-                "placers": sorted(str(r.placer) for _, r in f.res.values())}
+        return {
+            "tree": tree_name(nt),
+            "seconds": round(time.perf_counter() - t0, 3),
+            "reroutes": made,
+            "copies": copies,
+            "swaps": swapped,
+            "loose_frames": sorted(f.loose_frames),
+            "passes": k + 1,
+            # stats of the last pass's straighten, and the UI scale the layout was made for
+            "ortho": ost,
+            "ui_scale": round(ortho.ui_scale(), 4),
+            # last pass: layout cost (sum over containers) and how each container was placed
+            "cost": round(sum(r.cost for _, r in f.res.values()), 3),
+            "tidy": dict(getattr(f, "tidy", {})),
+            "placers": sorted(str(r.placer) for _, r in f.res.values()),
+        }
     finally:
         if own:
             editor.close()
 
 
-def is_formatted(nt, mode='relayout', editor=None, cfg=None):
+def is_formatted(nt, mode="relayout", editor=None, cfg=None):
     """True if every drawn wire segment is horizontal or vertical (at the session's UI scale) and
     formatting would not move anything. The tree is left unchanged."""
     return unformatted(nt, mode, editor, cfg) is None
 
 
-def unformatted(nt, mode='relayout', editor=None, cfg=None):
+def unformatted(nt, mode="relayout", editor=None, cfg=None):
     """None if the tree is formatted (see is_formatted), else the names of the nodes a format
     would move (if none, the nodes whose wires would change). Tries a format on a snapshot,
     undone, unless a sort just left the tree settled (_SETTLED). The tree is left unchanged."""
@@ -301,28 +336,32 @@ def unformatted(nt, mode='relayout', editor=None, cfg=None):
     try:
         editor.show(nt)
         cfg = cfg or rules.Config()
-        bad = ortho.faults(nt, fan=cfg.on('NF035'))
+        bad = ortho.faults(nt, fan=cfg.on("NF035"))
         if bad:
-            return sorted({n for l, _, _ in bad for n in (l.from_node.name, l.to_node.name)})
+            return sorted({n for lk, _, _ in bad for n in (lk.from_node.name, lk.to_node.name)})
         if _SETTLED.get(nt.as_pointer()) == _state_key(nt, mode, cfg):
             return None  # a sort left it like this and its last pass moved nothing
         snap = check.Snapshot(nt)
         sig = _signature(nt)
-        where = {n.name: tuple(n.location_absolute) for n in nt.nodes
-                 if n.bl_idname not in ('NodeFrame', 'NodeReroute')}
+        where = {
+            n.name: tuple(n.location_absolute) for n in nt.nodes if n.bl_idname not in ("NodeFrame", "NodeReroute")
+        }
         try:
             format_tree(nt, mode, editor, cfg=cfg)
             editor.show(nt)
             new = _signature(nt)
             tol = 1.0 / ortho.ui_scale() + 0.05
-            moved = sorted(k for k, p in where.items() if nt.nodes.get(k) is None
-                           or max(abs(a - b) for a, b in zip(nt.nodes[k].location_absolute, p)) > tol)
+            moved = sorted(
+                k
+                for k, p in where.items()
+                if nt.nodes.get(k) is None or max(abs(a - b) for a, b in zip(nt.nodes[k].location_absolute, p)) > tol
+            )
             if not moved:
                 ends = {}
-                for l in nt.links:
-                    if l.from_node.bl_idname == 'NodeReroute' or l.to_node.bl_idname == 'NodeReroute':
-                        ends.setdefault(l.from_node.name, 0)
-                        ends.setdefault(l.to_node.name, 0)
+                for lk in nt.links:
+                    if lk.from_node.bl_idname == "NodeReroute" or lk.to_node.bl_idname == "NodeReroute":
+                        ends.setdefault(lk.from_node.name, 0)
+                        ends.setdefault(lk.to_node.name, 0)
                 moved = sorted(k for k in ends if k in where)
         finally:
             snap.restore(nt, editor)
@@ -338,16 +377,16 @@ def all_trees():
     supported type, then the trees of materials, worlds and lights."""
     trees = [nt for nt in bpy.data.node_groups if formattable(nt) and not nt.library]
     for _, coll in OWNERS:
-        trees += [idb.node_tree for idb in getattr(bpy.data, coll)
-                  if not idb.library and formattable(idb.node_tree)]
+        trees += [idb.node_tree for idb in getattr(bpy.data, coll) if not idb.library and formattable(idb.node_tree)]
     return trees
 
 
-def check_tree(nt, mode='relayout', editor=None, cfg=None, formatted=True):
+def check_tree(nt, mode="relayout", editor=None, cfg=None, formatted=True):
     """The lint.Violations (y up) of tree nt for the enabled rules of cfg, NF010 and NF011
     included. formatted=True also adds NF900 not-formatted, with the nodes a format would move
     (see unformatted). The tree is left unchanged."""
     from . import metrics
+
     cfg = cfg or rules.Config()
     own = editor is None
     editor = editor or Editor()
@@ -357,22 +396,37 @@ def check_tree(nt, mode='relayout', editor=None, cfg=None, formatted=True):
         editor.show(nt)
         d, labels, groups = metrics.drawing(nt, data)
         out = lint.lint(d, cfg.rules, labels, groups)
-        if cfg.on('NF010') and mode == 'relayout':
+        if cfg.on("NF010") and mode == "relayout":
             with rules.applied(cfg):
                 plan = dup.plan(data, mode)
             if dup.changes(plan, data):
-                names = sorted({n for c in plan["classes"] for n in [c["rep"]] + list(c["remove"])
-                                + [g["node"] for g in c["groups"] if g["node"]]})
-                out.append(lint.Violation('NF010', rules.NAMES['NF010'],
-                                          "input nodes would get copies next to their distant consumers", 0.0, 0.0,
-                                          tuple(names)))
-        if cfg.on('NF011'):
+                names = sorted(
+                    {
+                        n
+                        for c in plan["classes"]
+                        for n in [c["rep"]] + list(c["remove"]) + [g["node"] for g in c["groups"] if g["node"]]
+                    }
+                )
+                out.append(
+                    lint.Violation(
+                        "NF010",
+                        rules.NAMES["NF010"],
+                        "input nodes would get copies next to their distant consumers",
+                        0.0,
+                        0.0,
+                        tuple(names),
+                    )
+                )
+        if cfg.on("NF011"):
             out += _comm_crossings(d, model.Model(data))
         if formatted:
             moved = unformatted(nt, mode, editor, cfg)
             if moved is not None:
-                out.append(lint.Violation('NF900', 'not-formatted', "formatting would change the layout",
-                                          0.0, 0.0, tuple(moved)))
+                out.append(
+                    lint.Violation(
+                        "NF900", "not-formatted", "formatting would change the layout", 0.0, 0.0, tuple(moved)
+                    )
+                )
         return out
     finally:
         if own:
@@ -382,6 +436,7 @@ def check_tree(nt, mode='relayout', editor=None, cfg=None, formatted=True):
 def _comm_crossings(d, m):
     """NF011: the wires into the two inputs of a commutative node cross each other."""
     from . import wires
+
     out = []
     for node, (a, b) in sorted(m.comm.items()):
         ta = [tag for tag, t in d.trees.items() if any(k[:3] == a for k in t.dst.values())]
@@ -393,12 +448,24 @@ def _comm_crossings(d, m):
                     continue
                 for s in d.tree_segments(x):
                     for o in d.tree_segments(y):
-                        p = (wires.crossing(s, o) if wires.horiz(s) and wires.vert(o) else
-                             wires.crossing(o, s) if wires.vert(s) and wires.horiz(o) else None)
+                        p = (
+                            wires.crossing(s, o)
+                            if wires.horiz(s) and wires.vert(o)
+                            else wires.crossing(o, s)
+                            if wires.vert(s) and wires.horiz(o)
+                            else None
+                        )
                         if p is not None:
                             hit = p
         if hit is not None:
-            out.append(lint.Violation('NF011', rules.NAMES['NF011'],
-                                      f"the wires into the inputs of {node!r} cross; swapping them would not",
-                                      round(hit[0], 1), round(-hit[1], 1), (node,)))
+            out.append(
+                lint.Violation(
+                    "NF011",
+                    rules.NAMES["NF011"],
+                    f"the wires into the inputs of {node!r} cross; swapping them would not",
+                    round(hit[0], 1),
+                    round(-hit[1], 1),
+                    (node,),
+                )
+            )
     return out

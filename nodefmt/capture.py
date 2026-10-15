@@ -15,6 +15,7 @@ selection); the tree is never changed and no undo step is added. A CaptureJob ru
 the add-on can show progress and cancel (ui.py runs them in an application timer: the screen
 must not change while Blender goes through event handlers); run() does every step at once.
 """
+
 import math
 import os
 import struct
@@ -27,14 +28,14 @@ import numpy as np
 
 from . import api
 
-CROP = 40          # pixels dropped from every tile edge (scrollbars, region arrows)
+CROP = 40  # pixels dropped from every tile edge (scrollbars, region arrows)
 THEME_KEYS = ("node_selected", "node_active", "wire_select")  # theme colours set while capturing
-OVERLAP = 96       # pixels shared by neighbouring tiles, to check how they line up
-REACH = 4          # how far (pixels) a tile may be moved to line up with the tiles before it
-MATCH = 0.002      # share of overlapping pixels that may differ for a tile to count as lined up
-EDGE = 8           # node units around every node (outline, shadow, collapsed nodes)
-ZONE_EDGE = 30     # node units around every node of a tree with zones (the zone outline)
-BADGES = 30        # node units above a Geometry Nodes tree for timing and attribute badges
+OVERLAP = 96  # pixels shared by neighbouring tiles, to check how they line up
+REACH = 4  # how far (pixels) a tile may be moved to line up with the tiles before it
+MATCH = 0.002  # share of overlapping pixels that may differ for a tile to count as lined up
+EDGE = 8  # node units around every node (outline, shadow, collapsed nodes)
+ZONE_EDGE = 30  # node units around every node of a tree with zones (the zone outline)
+BADGES = 30  # node units above a Geometry Nodes tree for timing and attribute badges
 MAX_PIXELS = 200_000_000  # the largest image: about 800 MB while it is built
 REGIONS = ("show_region_header", "show_region_toolbar", "show_region_ui")
 OVERLAYS = ("show_context_path",)  # overlays of the editor that are not part of the tree
@@ -48,8 +49,17 @@ class CaptureError(Exception):
 class Options:
     """What to capture and where to save it (the panel's settings, or the command line's)."""
 
-    def __init__(self, zoom=1.0, selection=False, hide_overlays=True, margin=40, path="",
-                 clipboard=False, open_image=False, maximise=True):
+    def __init__(
+        self,
+        zoom=1.0,
+        selection=False,
+        hide_overlays=True,
+        margin=40,
+        path="",
+        clipboard=False,
+        open_image=False,
+        maximise=True,
+    ):
         """zoom: screen pixels per node unit; selection: only the selected nodes (and the contents
         of selected frames); margin: pixels around the tree; path: see output_path; maximise:
         maximise the editor first (fewer tiles; only outside event handlers, as in a timer)."""
@@ -60,8 +70,7 @@ class Options:
     @classmethod
     def from_settings(cls, s):
         """Options from the panel's settings (a NODEFMT_CaptureSettings)."""
-        return cls(s.zoom, s.scope == 'SELECTION', s.hide_overlays, s.margin, s.filepath,
-                   s.clipboard, s.open_image)
+        return cls(s.zoom, s.scope == "SELECTION", s.hide_overlays, s.margin, s.filepath, s.clipboard, s.open_image)
 
 
 def file_name(nt):
@@ -116,7 +125,7 @@ def tree_bounds(nt, selection=False, badges=False):
     for n in nodes:
         x, y = n.location_absolute
         w, h = n.dimensions.x / ui, n.dimensions.y / ui
-        if n.bl_idname == 'NodeReroute':
+        if n.bl_idname == "NodeReroute":
             x, y = x - w / 2, y + h / 2  # a reroute's location is its centre
         xs += [x - pad, x + w + pad]
         ys += [y - h - pad, y + pad]
@@ -139,16 +148,16 @@ def png_steps(path, rgb, level=6, rows=64):
             fh.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)))
             prev = np.zeros((1, w * 3), np.int16)
             for y in range(0, h, rows):
-                x = rgb[y:y + rows].reshape(-1, w * 3).astype(np.int16)
+                x = rgb[y : y + rows].reshape(-1, w * 3).astype(np.int16)
                 b = np.concatenate([prev, x[:-1]])  # the row above
                 a = np.zeros_like(x)
-                a[:, 3:] = x[:, :-3]                 # the pixel to the left
+                a[:, 3:] = x[:, :-3]  # the pixel to the left
                 c = np.zeros_like(x)
-                c[:, 3:] = b[:, :-3]                 # above left
+                c[:, 3:] = b[:, :-3]  # above left
                 pa, pb, pc = np.abs(b - c), np.abs(a - c), np.abs(a + b - 2 * c)
                 pred = np.where((pa <= pb) & (pa <= pc), a, np.where(pb <= pc, b, c))
                 raw = np.empty((x.shape[0], w * 3 + 1), np.uint8)
-                raw[:, 0] = 4                        # filter type: Paeth
+                raw[:, 0] = 4  # filter type: Paeth
                 raw[:, 1:] = (x - pred) & 0xFF
                 data = comp.compress(raw.tobytes())
                 if data:
@@ -184,7 +193,7 @@ def _mismatch(canvas, mask, tile, x, y, rects, step=1):
         if not n:
             continue
         a = canvas[ya:yb:step, xa:xb:step].astype(np.int16)
-        b = tile[ya - y:yb - y:step, xa - x:xb - x:step].astype(np.int16)
+        b = tile[ya - y : yb - y : step, xa - x : xb - x : step].astype(np.int16)
         bad += int((np.abs(a - b).sum(axis=2)[m] > 12).sum())
         total += n
     return bad / total if total >= 400 // (step * step) else None
@@ -198,8 +207,10 @@ def place(canvas, mask, tile, x, y, rects):
     best = (0, 0, _mismatch(canvas, mask, tile, x, y, rects))
     if best[2] is not None and best[2] > MATCH:
         found = None
-        offsets = sorted(((dx, dy) for dx in range(-REACH, REACH + 1) for dy in range(-REACH, REACH + 1)),
-                         key=lambda d: abs(d[0]) + abs(d[1]))
+        offsets = sorted(
+            ((dx, dy) for dx in range(-REACH, REACH + 1) for dy in range(-REACH, REACH + 1)),
+            key=lambda d: abs(d[0]) + abs(d[1]),
+        )
         for dx, dy in offsets:  # a coarse look at every offset, nearest first
             m = _mismatch(canvas, mask, tile, x + dx, y + dy, rects, step=2)
             if m is not None and (found is None or m < found[2]):
@@ -214,7 +225,7 @@ def place(canvas, mask, tile, x, y, rects):
     ya, yb = max(y + dy, 0), min(y + dy + th, H)
     xa, xb = max(x + dx, 0), min(x + dx + tw, W)
     if ya < yb and xa < xb:
-        canvas[ya:yb, xa:xb] = tile[ya - y - dy:yb - y - dy, xa - x - dx:xb - x - dx]
+        canvas[ya:yb, xa:xb] = tile[ya - y - dy : yb - y - dy, xa - x - dx : xb - x - dx]
         mask[ya:yb, xa:xb] = True
     return best
 
@@ -243,26 +254,31 @@ class CaptureJob:
         self.name = api.tree_name(self.tree)
         self.path = output_path(self.tree, options.path)
         sp = area.spaces.active
-        badges = (self.tree.bl_idname == 'GeometryNodeTree' and sp.overlay.show_overlays
-                  and (sp.overlay.show_timing or sp.overlay.show_named_attributes))
+        badges = (
+            self.tree.bl_idname == "GeometryNodeTree"
+            and sp.overlay.show_overlays
+            and (sp.overlay.show_timing or sp.overlay.show_named_attributes)
+        )
         self.bounds = tree_bounds(self.tree, options.selection, badges)
         left, bottom, right, top = self.bounds
         w = math.ceil((right - left) * options.zoom) + 2 * options.margin
         h = math.ceil((top - bottom) * options.zoom) + 2 * options.margin
         if w * h > MAX_PIXELS:
-            raise CaptureError(f"the image would be {w} x {h} pixels ({w * h / 1e6:.0f} megapixels, "
-                               f"at most {MAX_PIXELS / 1e6:.0f}): lower the zoom")
+            raise CaptureError(
+                f"the image would be {w} x {h} pixels ({w * h / 1e6:.0f} megapixels, "
+                f"at most {MAX_PIXELS / 1e6:.0f}): lower the zoom"
+            )
         self.text, self.factor = "Starting", 0.0
         self.t0 = time.perf_counter()
-        self.size = None       # (width, height) of the image
-        self.tiles = 0         # how many tiles
-        self.matches = []      # (dx, dy, mismatch) of every tile placed
-        self.zoom = None       # the zoom reached (pixels per node unit)
+        self.size = None  # (width, height) of the image
+        self.tiles = 0  # how many tiles
+        self.matches = []  # (dx, dy, mismatch) of every tile placed
+        self.zoom = None  # the zoom reached (pixels per node unit)
         self.warnings = []
-        self.saved = None      # the editor state to put back
-        self.done = False      # the file is written
-        self.image = None      # the image loaded for the clipboard or the Image Editor
-        self.copied = False    # the image is on the clipboard
+        self.saved = None  # the editor state to put back
+        self.done = False  # the file is written
+        self.image = None  # the image loaded for the clipboard or the Image Editor
+        self.copied = False  # the image is on the clipboard
         self.own_image = False  # the image data-block was added by the capture
         self.tmp = None
         self.gen = self._steps()
@@ -308,7 +324,7 @@ class CaptureJob:
 
     def _region(self):
         """The main region of the capture area."""
-        return next(r for r in self.area.regions if r.type == 'WINDOW')
+        return next(r for r in self.area.regions if r.type == "WINDOW")
 
     def _override(self):
         """A context override for the capture area."""
@@ -317,7 +333,7 @@ class CaptureJob:
     def _redraw(self):
         """Draw the window now and show it (swap), so the screenshot reads the current view."""
         with self._override():
-            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+            bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
 
     def _view(self):
         """(x, y, zoom x, zoom y): where view point (0, 0) is in the region, and region pixels
@@ -357,9 +373,11 @@ class CaptureJob:
 
     def _space_state(self, sp):
         """The settings of node editor space sp that a capture changes."""
-        state = {"regions": {k: getattr(sp, k) for k in REGIONS if hasattr(sp, k)},
-                 "gizmos": {k: getattr(sp, k) for k in GIZMOS if hasattr(sp, k)},
-                 "overlay": {k: getattr(sp.overlay, k) for k in OVERLAYS if hasattr(sp.overlay, k)}}
+        state = {
+            "regions": {k: getattr(sp, k) for k in REGIONS if hasattr(sp, k)},
+            "gizmos": {k: getattr(sp, k) for k in GIZMOS if hasattr(sp, k)},
+            "overlay": {k: getattr(sp.overlay, k) for k in OVERLAYS if hasattr(sp.overlay, k)},
+        }
         return state
 
     def _setup(self):
@@ -370,8 +388,11 @@ class CaptureJob:
         sp = self.area.spaces.active
         x, y, zx, zy = self._view()
         self.saved = {
-            "screen": screen, "index": list(screen.areas).index(self.area),
-            "maximised": False, "view": (x, y, zx, zy), "space": self._space_state(sp),
+            "screen": screen,
+            "index": list(screen.areas).index(self.area),
+            "maximised": False,
+            "view": (x, y, zx, zy),
+            "space": self._space_state(sp),
             "marks": getattr(wm, "nodefmt_overlay", None),
             "select": {n.name: n.select for n in self.tree.nodes},
         }
@@ -379,7 +400,7 @@ class CaptureJob:
             with self._override():
                 bpy.ops.screen.screen_full_area(use_hide_panels=False)
             self.saved["maximised"] = True
-            self.area = next(a for a in self.win.screen.areas if a.type == 'NODE_EDITOR')
+            self.area = next(a for a in self.win.screen.areas if a.type == "NODE_EDITOR")
         sp = self.area.spaces.active
         hide = [(sp, k) for k in self.saved["space"]["regions"]]
         if self.opt.hide_overlays:
@@ -418,11 +439,17 @@ class CaptureJob:
             with self._override():
                 bpy.ops.screen.screen_full_area(use_hide_panels=False)
         areas = list(s["screen"].areas)
-        if s["index"] < len(areas) and areas[s["index"]].type == 'NODE_EDITOR':
+        if s["index"] < len(areas) and areas[s["index"]].type == "NODE_EDITOR":
             self.area = areas[s["index"]]
         sp = self.area.spaces.active
-        _set_flags(self.win, ((obj, k, v) for group, obj in (("regions", sp), ("gizmos", sp), ("overlay", sp.overlay))
-                   for k, v in s["space"][group].items()))
+        _set_flags(
+            self.win,
+            (
+                (obj, k, v)
+                for group, obj in (("regions", sp), ("gizmos", sp), ("overlay", sp.overlay))
+                for k, v in s["space"][group].items()
+            ),
+        )
         self._redraw()
         x, y, zx, _zy = s["view"]
         self._set_zoom(zx)
@@ -453,7 +480,7 @@ class CaptureJob:
         self._setup()
         yield
         ui = bpy.context.preferences.system.ui_scale
-        z = opt.zoom / ui                       # region pixels per view unit
+        z = opt.zoom / ui  # region pixels per view unit
         self._set_zoom(z)
         zx = self._view()[2]
         self.zoom = zx * ui
@@ -498,7 +525,7 @@ class CaptureJob:
                     panned = (i * sx, j * sy)
                 self._redraw()
                 shot = self._shoot()
-                tile = shot[uy0:uy0 + uh, ux0:ux0 + uw]
+                tile = shot[uy0 : uy0 + uh, ux0 : ux0 + uw]
                 rects = []
                 if i:
                     rects.append((0, uh, 0, OVERLAP + REACH))  # the strip shared with the left tile
@@ -546,7 +573,7 @@ class CaptureJob:
         im = self._load()
         try:
             with bpy.context.temp_override(window=self.win, edit_image=im):
-                ok = bpy.ops.image.clipboard_copy() == {'FINISHED'}
+                ok = bpy.ops.image.clipboard_copy() == {"FINISHED"}
         except RuntimeError as e:
             ok = False
             self.warnings.append(f"could not copy to the clipboard: {e}")
@@ -561,7 +588,7 @@ class CaptureJob:
     def _open_image(self):
         """Show the saved image in an Image Editor of the window, or in a new window."""
         im = self._load()
-        area = next((a for a in self.win.screen.areas if a.type == 'IMAGE_EDITOR'), None)
+        area = next((a for a in self.win.screen.areas if a.type == "IMAGE_EDITOR"), None)
         win = self.win
         if area is None:
             before = {w.as_pointer() for w in bpy.context.window_manager.windows}
@@ -572,9 +599,9 @@ class CaptureJob:
                 self.warnings.append("could not open a window for the image")
                 return
             area = max(win.screen.areas, key=lambda a: a.width * a.height)
-            area.ui_type = 'IMAGE_EDITOR'
+            area.ui_type = "IMAGE_EDITOR"
         area.spaces.active.image = im
-        region = next(r for r in area.regions if r.type == 'WINDOW')
+        region = next(r for r in area.regions if r.type == "WINDOW")
         with bpy.context.temp_override(window=win, area=area, region=region):
             bpy.ops.image.view_all(fit_view=True)
 
@@ -583,5 +610,7 @@ class CaptureJob:
         w, h = self.size
         mb = os.path.getsize(self.path) / 1e6
         extra = ", copied to the clipboard" if self.copied else ""
-        return (f"Saved {self.path} ({w} x {h} px, {mb:.1f} MB, {self.tiles} tiles, "
-                f"{time.perf_counter() - self.t0:.1f} s{extra})")
+        return (
+            f"Saved {self.path} ({w} x {h} px, {mb:.1f} MB, {self.tiles} tiles, "
+            f"{time.perf_counter() - self.t0:.1f} s{extra})"
+        )

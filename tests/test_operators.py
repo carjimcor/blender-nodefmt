@@ -9,6 +9,7 @@ and drives the operators as the panel does (INVOKE_DEFAULT: modal, with progress
 Blender run between steps. --enable-event-simulate lets the test press Esc (and blocks real
 input while it runs). Prints one line per test and exits 1 if any fails.
 """
+
 import os
 import re
 import sys
@@ -40,11 +41,11 @@ def append(code):
 def editor():
     """(window, area, region) of the node editor (the largest area, made one)."""
     win = bpy.context.window_manager.windows[0]
-    area = next((a for a in win.screen.areas if a.type == 'NODE_EDITOR'), None)
+    area = next((a for a in win.screen.areas if a.type == "NODE_EDITOR"), None)
     if area is None:
         area = max(win.screen.areas, key=lambda a: a.width * a.height)
-        area.ui_type = 'GeometryNodeTree'
-    return win, area, next(r for r in area.regions if r.type == 'WINDOW')
+        area.ui_type = "GeometryNodeTree"
+    return win, area, next(r for r in area.regions if r.type == "WINDOW")
 
 
 def override():
@@ -63,6 +64,7 @@ def show(name):
 def state(names):
     """What a sort changes, for the trees `names`: node and reroute positions and links."""
     from nodefmt import api, check
+
     return {n: (api._signature(bpy.data.node_groups[n]), check.fingerprint(bpy.data.node_groups[n])) for n in names}
 
 
@@ -76,7 +78,7 @@ def wait_job(ui, seen, press_esc_after=None):
         if not seen or seen[-1] != (job.text, job.factor):
             seen.append((job.text, job.factor))
         if press_esc_after is not None and len(seen) >= press_esc_after:
-            editor()[0].event_simulate(type='ESC', value='PRESS')
+            editor()[0].event_simulate(type="ESC", value="PRESS")
             press_esc_after = None
         yield 0.02
 
@@ -84,6 +86,7 @@ def wait_job(ui, seen, press_esc_after=None):
 def run():
     """The tests (a generator: the timer lets Blender run in between)."""
     from nodefmt import ui
+
     bpy.context.preferences.view.ui_scale = 1.0  # in memory only
     ui.register()
     names = [append(c) for c in EXAMPLES]
@@ -98,16 +101,19 @@ def run():
     # Sort Current Tree with progress, then one undo step
     seen = []
     with override():
-        r = bpy.ops.node.nodefmt_sort_tree('INVOKE_DEFAULT', True)
-    test("sort current tree starts", r == {'RUNNING_MODAL'}, str(r))
+        r = bpy.ops.node.nodefmt_sort_tree("INVOKE_DEFAULT", True)
+    test("sort current tree starts", r == {"RUNNING_MODAL"}, str(r))
     yield from wait_job(ui, seen)
     after = state(names)
     test("sort current tree sorts", after[names[1]][0] != start[names[1]][0] and after[names[0]] == start[names[0]])
     test("logic unchanged", after[names[1]][1] == start[names[1]][1])
     texts = [t for t, _ in seen]
     pattern = re.compile(r"Tree 1/1 .+: pass \d+ \(of at most \d+\), .+ \(step \d+/\d+\)$")
-    test("progress shown", len(seen) >= 3 and all(pattern.match(t) for t in texts[1:]),
-         f"{len(seen)} updates, e.g. {texts[len(texts) // 2]!r}")
+    test(
+        "progress shown",
+        len(seen) >= 3 and all(pattern.match(t) for t in texts[1:]),
+        f"{len(seen)} updates, e.g. {texts[len(texts) // 2]!r}",
+    )
     factors = [f for _, f in seen]
     test("progress never goes back", factors == sorted(factors), f"{factors[0]:.2f} .. {factors[-1]:.2f}")
     test("layout steps counted", any(re.search(r"layout \d+/\d+", t) for t in texts))
@@ -120,8 +126,8 @@ def run():
     # Sort All Trees, cancelled with Esc after a few steps: everything is put back
     seen = []
     with override():
-        r = bpy.ops.node.nodefmt_sort_all('INVOKE_DEFAULT', True)
-    test("sort all starts", r == {'RUNNING_MODAL'}, str(r))
+        r = bpy.ops.node.nodefmt_sort_all("INVOKE_DEFAULT", True)
+    test("sort all starts", r == {"RUNNING_MODAL"}, str(r))
     yield from wait_job(ui, seen, press_esc_after=8)
     test("Esc cancels", ui._JOB["job"] is None and len(seen) >= 8, f"{len(seen)} updates, last {seen[-1][0]!r}")
     test("Esc puts every tree back", state(names) == start)
@@ -129,7 +135,7 @@ def run():
     # Sort All Trees to the end, then undo
     seen = []
     with override():
-        r = bpy.ops.node.nodefmt_sort_all('INVOKE_DEFAULT', True)
+        r = bpy.ops.node.nodefmt_sort_all("INVOKE_DEFAULT", True)
     yield from wait_job(ui, seen)
     after = state(names)
     test("sort all sorts every tree", all(after[n][0] != start[n][0] for n in names))
@@ -147,9 +153,9 @@ def run():
         bpy.ops.ed.undo_push(message="before selection")
     before = state([sel])
     with override():
-        r = bpy.ops.node.nodefmt_sort_selection('INVOKE_DEFAULT', True)
+        r = bpy.ops.node.nodefmt_sort_selection("INVOKE_DEFAULT", True)
     yield 0.3
-    test("sort selection", r == {'FINISHED'} and state([sel])[sel][0] != before[sel][0], str(r))
+    test("sort selection", r == {"FINISHED"} and state([sel])[sel][0] != before[sel][0], str(r))
     test("sort selection keeps the logic", state([sel])[sel][1] == before[sel][1])
     with override():
         bpy.ops.ed.undo()
@@ -161,8 +167,8 @@ def run():
 
     # scripts: EXEC_DEFAULT sorts at once
     with override():
-        r = bpy.ops.node.nodefmt_sort_all('EXEC_DEFAULT', True)
-    test("sort all from a script", r == {'FINISHED'} and state(names) != start, str(r))
+        r = bpy.ops.node.nodefmt_sort_all("EXEC_DEFAULT", True)
+    test("sort all from a script", r == {"FINISHED"} and state(names) != start, str(r))
 
     # Capture Tree: at two UI scales, the selection, no undo step, Esc
     yield from capture_tests(ui)
@@ -178,8 +184,11 @@ def check_tests(ui):
     with override():
         r = bpy.ops.node.nodefmt_check()
     found = [v.code for v in ui._LAST["violations"]]
-    test("check finds the rule", r == {'FINISHED'} and found.count("NF004") == 2 and "NF900" in found,
-         ", ".join(sorted(set(found))))
+    test(
+        "check finds the rule",
+        r == {"FINISHED"} and found.count("NF004") == 2 and "NF900" in found,
+        ", ".join(sorted(set(found))),
+    )
     test("every place has nodes or a point", all(v.nodes or (v.x, v.y) != (0.0, 0.0) for v in ui._LAST["violations"]))
     region = editor()[2]
     shown = []
@@ -190,12 +199,20 @@ def check_tests(ui):
         yield 0.2
         selected = {n.name for n in nt.nodes if n.select}
         shown.append((r, ui._LAST["shown"], selected, before != tuple(region.view2d.view_to_region(0, 0, clip=False))))
-    test("show selects the place", all(r == {'FINISHED'} and "Group Input" in sel
-                                      and any(nt.nodes[k].bl_idname == 'NodeReroute' for k in sel)
-                                      for r, _, sel, _ in shown), str([sorted(s) for _, _, s, _ in shown][:1]))
+    test(
+        "show selects the place",
+        all(
+            r == {"FINISHED"} and "Group Input" in sel and any(nt.nodes[k].bl_idname == "NodeReroute" for k in sel)
+            for r, _, sel, _ in shown
+        ),
+        str([sorted(s) for _, _, s, _ in shown][:1]),
+    )
     test("show frames the place", any(moved for _, _, _, moved in shown))
-    test("show cycles through the places", shown[0][1] != shown[1][1] and shown[2][1] == shown[0][1],
-         str([k for _, k, _, _ in shown]))
+    test(
+        "show cycles through the places",
+        shown[0][1] != shown[1][1] and shown[2][1] == shown[0][1],
+        str([k for _, k, _, _ in shown]),
+    )
     calls = []
 
     def probe():
@@ -205,10 +222,11 @@ def check_tests(ui):
             calls.append("ok")
         except Exception as e:  # noqa: BLE001 - the outcome is what is tested
             calls.append(repr(e))
-    handle = bpy.types.SpaceNodeEditor.draw_handler_add(probe, (), 'WINDOW', 'POST_PIXEL')
+
+    handle = bpy.types.SpaceNodeEditor.draw_handler_add(probe, (), "WINDOW", "POST_PIXEL")
     with override():
-        bpy.ops.wm.redraw_timer(type='DRAW_WIN', iterations=1)
-    bpy.types.SpaceNodeEditor.draw_handler_remove(handle, 'WINDOW')
+        bpy.ops.wm.redraw_timer(type="DRAW_WIN", iterations=1)
+    bpy.types.SpaceNodeEditor.draw_handler_remove(handle, "WINDOW")
     test("overlay draws", calls and all(c == "ok" for c in calls), str(calls[:2]))
     with override():
         test("result is current", ui.checked(bpy.context) is not None)
@@ -216,10 +234,9 @@ def check_tests(ui):
     with override():
         test("result is stale after an edit", ui.checked(bpy.context) is None)
         test("show is off when stale", not bpy.ops.node.nodefmt_show_violation.poll())
-        bpy.ops.node.nodefmt_sort_tree('EXEC_DEFAULT', True)
+        bpy.ops.node.nodefmt_sort_tree("EXEC_DEFAULT", True)
         bpy.ops.node.nodefmt_check()
-    test("no problems after a sort", ui._LAST["violations"] == [],
-         ", ".join(v.code for v in ui._LAST["violations"]))
+    test("no problems after a sort", ui._LAST["violations"] == [], ", ".join(v.code for v in ui._LAST["violations"]))
 
 
 def editor_state():
@@ -230,9 +247,18 @@ def editor_state():
     x0, y0 = v.view_to_region(0, 0, clip=False)
     x1, y1 = v.view_to_region(100000, 100000, clip=False)
     sp = area.spaces.active
-    flags = (region.width, region.height, sp.show_region_header, sp.show_region_toolbar, sp.show_region_ui,
-             sp.overlay.show_context_path, win.screen.name, win.screen.show_fullscreen,
-             bpy.context.window_manager.nodefmt_overlay, len(bpy.context.window_manager.windows))
+    flags = (
+        region.width,
+        region.height,
+        sp.show_region_header,
+        sp.show_region_toolbar,
+        sp.show_region_ui,
+        sp.overlay.show_context_path,
+        win.screen.name,
+        win.screen.show_fullscreen,
+        bpy.context.window_manager.nodefmt_overlay,
+        len(bpy.context.window_manager.windows),
+    )
     return (x0, y0, (x1 - x0) / 100000, (y1 - y0) / 100000), flags
 
 
@@ -240,8 +266,9 @@ def same_editor(a, b):
     """True if two editor_state() results match: the view within 2 pixels and 0.01% zoom."""
     (ax, ay, azx, azy), fa = a
     (bx, by, bzx, bzy), fb = b
-    return (fa == fb and abs(ax - bx) <= 2 and abs(ay - by) <= 2 and abs(azx / bzx - 1) < 1e-4
-            and abs(azy / bzy - 1) < 1e-4)
+    return (
+        fa == fb and abs(ax - bx) <= 2 and abs(ay - by) <= 2 and abs(azx / bzx - 1) < 1e-4 and abs(azy / bzy - 1) < 1e-4
+    )
 
 
 def wait_capture(ui, esc_at=None):
@@ -251,7 +278,7 @@ def wait_capture(ui, esc_at=None):
         if job is None:
             return
         if esc_at is not None and f"tile {esc_at}/" in job.text:
-            editor()[0].event_simulate(type='ESC', value='PRESS')
+            editor()[0].event_simulate(type="ESC", value="PRESS")
             esc_at = None
         yield 0.02
 
@@ -259,8 +286,13 @@ def wait_capture(ui, esc_at=None):
 def tree_state(nt):
     """Positions, logic, selection and locations of a tree (what a capture must not change)."""
     from nodefmt import api, check
-    return (api._signature(nt), check.fingerprint(nt), {n.name: n.select for n in nt.nodes},
-            {n.name: tuple(n.location) for n in nt.nodes})
+
+    return (
+        api._signature(nt),
+        check.fingerprint(nt),
+        {n.name: n.select for n in nt.nodes},
+        {n.name: tuple(n.location) for n in nt.nodes},
+    )
 
 
 def capture_tests(ui):
@@ -271,9 +303,10 @@ def capture_tests(ui):
     import tempfile
 
     from nodefmt import capture
+
     tmp = tempfile.mkdtemp(prefix="nodefmt-test-")
     s = bpy.context.window_manager.nodefmt_capture
-    s.margin, s.scope, s.clipboard, s.open_image = 40, 'TREE', False, False
+    s.margin, s.scope, s.clipboard, s.open_image = 40, "TREE", False, False
     name = append("NF032")
     for scale in (1.0, 1.4):
         bpy.context.preferences.view.ui_scale = scale  # in memory only
@@ -287,25 +320,32 @@ def capture_tests(ui):
         s.zoom = 2.0
         s.filepath = os.path.join(tmp, f"capture-{scale:g}.png")
         with override():
-            r = bpy.ops.node.nodefmt_capture_tree('INVOKE_DEFAULT')
+            r = bpy.ops.node.nodefmt_capture_tree("INVOKE_DEFAULT")
         job = ui._CAPTURE["job"]
         yield from wait_capture(ui)
-        ok = r == {'RUNNING_MODAL'} and os.path.exists(s.filepath)
+        ok = r == {"RUNNING_MODAL"} and os.path.exists(s.filepath)
         w, h = capture.png_size(s.filepath) if ok else (0, 0)
         ui_s = bpy.context.preferences.system.ui_scale
         xs = [x for n in nt.nodes for x in (n.location_absolute.x, n.location_absolute.x + n.dimensions.x / ui_s)]
         ys = [y for n in nt.nodes for y in (n.location_absolute.y, n.location_absolute.y - n.dimensions.y / ui_s)]
         ew, eh = (max(xs) - min(xs)) * 2.0 + 80, (max(ys) - min(ys)) * 2.0 + 80  # nodes, zoom, margins
         extra = 2 * (capture.ZONE_EDGE + capture.BADGES) * 2.0 + 4  # zone outlines and badges
-        test(f"capture at UI scale {scale:g}",
-             ok and job.tiles > 1 and ew <= w <= ew + extra and eh <= h <= eh + extra,
-             f"{w} x {h} px, expected about {ew:.0f} x {eh:.0f}, {job.tiles} tiles")
-        test(f"capture tiles line up at UI scale {scale:g}",
-             job.matches and all(m is None or m <= capture.MATCH for _, _, m in job.matches),
-             str([(dx, dy, None if m is None else round(m, 4)) for dx, dy, m in job.matches]))
+        test(
+            f"capture at UI scale {scale:g}",
+            ok and job.tiles > 1 and ew <= w <= ew + extra and eh <= h <= eh + extra,
+            f"{w} x {h} px, expected about {ew:.0f} x {eh:.0f}, {job.tiles} tiles",
+        )
+        test(
+            f"capture tiles line up at UI scale {scale:g}",
+            job.matches and all(m is None or m <= capture.MATCH for _, _, m in job.matches),
+            str([(dx, dy, None if m is None else round(m, 4)) for dx, dy, m in job.matches]),
+        )
         test(f"capture keeps the tree and its selection at UI scale {scale:g}", tree_state(nt) == tree)
-        test(f"capture puts the editor back at UI scale {scale:g}", same_editor(editor_state(), ed),
-             f"{ed} -> {editor_state()}")
+        test(
+            f"capture puts the editor back at UI scale {scale:g}",
+            same_editor(editor_state(), ed),
+            f"{ed} -> {editor_state()}",
+        )
     bpy.context.preferences.view.ui_scale = 1.0
     show(name)
     yield 0.5
@@ -314,16 +354,16 @@ def capture_tests(ui):
     # only the selection: one node, with the margins
     for n in nt.nodes:
         n.select = n.name == "Group Input"
-    s.scope, s.zoom, s.filepath = 'SELECTION', 1.0, os.path.join(tmp, "selection.png")
+    s.scope, s.zoom, s.filepath = "SELECTION", 1.0, os.path.join(tmp, "selection.png")
     ed = editor_state()
     with override():
-        r = bpy.ops.node.nodefmt_capture_tree('EXEC_DEFAULT')  # at once, not maximised
-    w, h = capture.png_size(s.filepath) if r == {'FINISHED'} else (0, 0)
+        r = bpy.ops.node.nodefmt_capture_tree("EXEC_DEFAULT")  # at once, not maximised
+    w, h = capture.png_size(s.filepath) if r == {"FINISHED"} else (0, 0)
     want = nt.nodes["Group Input"].dimensions.x + 80 + 2 * capture.ZONE_EDGE
-    test("capture the selection", r == {'FINISHED'} and abs(w - want) <= 4, f"{w} x {h} px, width {want:.0f} expected")
+    test("capture the selection", r == {"FINISHED"} and abs(w - want) <= 4, f"{w} x {h} px, width {want:.0f} expected")
     yield 0.3
     test("capture from a script puts the editor back", same_editor(editor_state(), ed), f"{ed} -> {editor_state()}")
-    s.scope = 'TREE'
+    s.scope = "TREE"
 
     # no undo step: Ctrl+Z after a capture undoes what came before it
     node = nt.nodes["Group Input"]
@@ -335,7 +375,7 @@ def capture_tests(ui):
         bpy.ops.ed.undo_push(message="moved")
     s.filepath = os.path.join(tmp, "undo.png")
     with override():
-        bpy.ops.node.nodefmt_capture_tree('INVOKE_DEFAULT')
+        bpy.ops.node.nodefmt_capture_tree("INVOKE_DEFAULT")
     yield from wait_capture(ui)
     with override():
         bpy.ops.ed.undo()
@@ -350,13 +390,19 @@ def capture_tests(ui):
     tree, ed = tree_state(nt), editor_state()
     s.zoom, s.filepath = 4.0, os.path.join(tmp, "esc.png")
     with override():
-        bpy.ops.node.nodefmt_capture_tree('INVOKE_DEFAULT')
+        bpy.ops.node.nodefmt_capture_tree("INVOKE_DEFAULT")
     job = ui._CAPTURE["job"]
     yield from wait_capture(ui, esc_at=2)
-    test("Esc cancels the capture", ui._CAPTURE["job"] is None and not os.path.exists(s.filepath)
-         and not job.done and job.tiles > 2, f"{job.tiles} tiles, last {job.text!r}")
-    test("Esc puts the editor and the tree back", same_editor(editor_state(), ed) and tree_state(nt) == tree,
-         f"{ed} -> {editor_state()}")
+    test(
+        "Esc cancels the capture",
+        ui._CAPTURE["job"] is None and not os.path.exists(s.filepath) and not job.done and job.tiles > 2,
+        f"{job.tiles} tiles, last {job.text!r}",
+    )
+    test(
+        "Esc puts the editor and the tree back",
+        same_editor(editor_state(), ed) and tree_state(nt) == tree,
+        f"{ed} -> {editor_state()}",
+    )
     shutil.rmtree(tmp, ignore_errors=True)
 
 

@@ -13,6 +13,7 @@ A weighted sum (weights W_* in params.py) of the faults of the routed wires:
   node's wire, nodes off the grid, height and width, wires on a zone's outline (NF032) and wire
   labels in the way (NF041).
 """
+
 from bisect import bisect_left, bisect_right
 
 from . import params as P
@@ -35,27 +36,30 @@ class CostMixin:
         xr = self.col_x[self.R] + self.colw[self.R] + P.COL_GAP / 2
         segs = []
         for e in self.edges:
-            if e.u.kind == 'pin_in':
-                p, pk = (xl, e.u.y), 'lane'
+            if e.u.kind == "pin_in":
+                p, pk = (xl, e.u.y), "lane"
             elif e.u.is_point:
-                p, pk = (e.u.x, e.u.y), 'lane'
+                p, pk = (e.u.x, e.u.y), "lane"
             else:
                 dx, dy = e.u.outs.get(e.uk, (e.u.w, 0))
-                p, pk = (e.u.x + dx, e.u.y + dy), 'sock'
-            if e.v.kind == 'pin_out':
-                q, qk = (xr, e.v.y), 'lane'
+                p, pk = (e.u.x + dx, e.u.y + dy), "sock"
+            if e.v.kind == "pin_out":
+                q, qk = (xr, e.v.y), "lane"
             elif e.v.is_point:
-                q, qk = (e.v.x, e.v.y), 'lane'
+                q, qk = (e.v.x, e.v.y), "lane"
             else:
                 dx, dy = e.v.ins.get(e.vk, (0, 0))
-                q, qk = (e.v.x + dx, e.v.y + dy), 'sock'
+                q, qk = (e.v.x + dx, e.v.y + dy), "sock"
             t = self._turn_y(e)
             if t is not None:
                 xc = self.track_x[e.u.rank][e.tag]
                 a, b = (xc, p[1]), (xc, t)
                 if detail:
-                    segs += [(e.tag, p, a, e, pk, 'bend'), (e.tag, a, b, e, 'bend', 'bend'),
-                             (e.tag, b, q, e, 'bend', qk)]
+                    segs += [
+                        (e.tag, p, a, e, pk, "bend"),
+                        (e.tag, a, b, e, "bend", "bend"),
+                        (e.tag, b, q, e, "bend", qk),
+                    ]
                 else:
                     segs += [(e.tag, p, a), (e.tag, a, b), (e.tag, b, q)]
             else:
@@ -77,17 +81,20 @@ class CostMixin:
         bottom = max([i.y + i.h + 20.0 for i in inner] + [i.y + i.h for i in pins])
         n = 0
         for _, p, q in route:
-            if abs(p[1] - q[1]) <= P.EPS and abs(p[0] - q[0]) > P.CLEAR_RUN and (
-                    abs(p[1] - top) < P.CLEAR_OUTLINE or abs(p[1] - bottom) < P.CLEAR_OUTLINE):
+            if (
+                abs(p[1] - q[1]) <= P.EPS
+                and abs(p[0] - q[0]) > P.CLEAR_RUN
+                and (abs(p[1] - top) < P.CLEAR_OUTLINE or abs(p[1] - bottom) < P.CLEAR_OUTLINE)
+            ):
                 n += 1
         return n
 
     def _dest_nodes(self, item):
         """Real items a point (dummy, port) or node leads to; used to find bundles."""
-        memo = self.__dict__.setdefault('_dest_memo', {})
+        memo = self.__dict__.setdefault("_dest_memo", {})
         if item in memo:
             return memo[item]
-        if not item.is_point or item.kind in ('pin_out', 'label'):
+        if not item.is_point or item.kind in ("pin_out", "label"):
             res = frozenset([item.id])
         else:
             memo[item] = frozenset()
@@ -104,7 +111,7 @@ class CostMixin:
         for s in segs:
             tag, p, q, _e, pk, qk = s
             for pt, k in ((p, pk), (q, qk)):
-                if k == 'bend':
+                if k == "bend":
                     key = (round(pt[0], 1), round(pt[1], 1))
                     bends.setdefault(key, set()).add(tag)
                     if _multi(s) is not None:
@@ -116,7 +123,9 @@ class CostMixin:
                 vs.append(s)
             else:
                 ds.append(s)
-        dst = lambda s: self._dest_nodes(s[3].v)
+
+        def dst(s):
+            return self._dest_nodes(s[3].v)
 
         def bundle(s, t):
             """True if two segments belong to links that leave the same node or enter the same node."""
@@ -125,8 +134,8 @@ class CostMixin:
         def dirty(x, s):
             """A crossing at x is too close to an end of segment s."""
             for pt, k in ((s[1], s[4]), (s[2], s[5])):
-                d = P.NEAR_SOCK if k == 'sock' else P.NEAR_RR
-                if k != 'lane' and _near(pt, x, d):
+                d = P.NEAR_SOCK if k == "sock" else P.NEAR_RR
+                if k != "lane" and _near(pt, x, d):
                     return True
             return False
 
@@ -137,7 +146,7 @@ class CostMixin:
         for h in hs:
             y = h[1][1]
             x1, x2 = sorted((h[1][0], h[2][0]))
-            for v in vs_x[bisect_left(xs, x1):bisect_right(xs, x2)]:
+            for v in vs_x[bisect_left(xs, x1) : bisect_right(xs, x2)]:
                 if v[0] == h[0]:
                     continue
                 x = v[1][0]
@@ -192,29 +201,38 @@ class CostMixin:
         near = P.ON_WIRE + 1.0
         for pt, tags in bends.items():
             mine = multi.get(pt, ())
-            for s in hs_y[bisect_left(ys, pt[1] - near):bisect_right(ys, pt[1] + near)]:
+            for s in hs_y[bisect_left(ys, pt[1] - near) : bisect_right(ys, pt[1] + near)]:
                 if s[0] in tags or abs(s[1][1] - pt[1]) >= P.ON_WIRE or _multi(s) in mine:
                     continue
                 if min(s[1][0], s[2][0]) + 1 < pt[0] < max(s[1][0], s[2][0]) - 1:
                     on_wire += 1
-            for s in vs_x[bisect_left(xs, pt[0] - near):bisect_right(xs, pt[0] + near)]:
+            for s in vs_x[bisect_left(xs, pt[0] - near) : bisect_right(xs, pt[0] + near)]:
                 if s[0] in tags or abs(s[1][0] - pt[0]) >= P.ON_WIRE:
                     continue
                 if min(s[1][1], s[2][1]) + 1 < pt[1] < max(s[1][1], s[2][1]) - 1:
                     on_wire += 1
-        return {"clean": clean, "bad": bad, "bundle": inbundle, "collinear": collinear,
-                "clash": clash, "on_wire": on_wire, "label": self._label_faults(bends, segs)}
+        return {
+            "clean": clean,
+            "bad": bad,
+            "bundle": inbundle,
+            "collinear": collinear,
+            "clash": clash,
+            "on_wire": on_wire,
+            "label": self._label_faults(bends, segs),
+        }
 
     def _label_faults(self, bends, segs):
         """NF041: labels that overlap another label, a node or a wire. Blender shows a wire's label
         on every reroute after it, so each bend of a labelled wire (self.label_w: source tag ->
         text width) counts as a label above the bend."""
         from . import labels as L
-        lw = getattr(self, 'label_w', None)
+
+        lw = getattr(self, "label_w", None)
         if not lw:
             return 0
-        shown = [(pt, L.box(pt, lw[t])) for pt, tags in sorted(bends.items()) for t in sorted(tags, key=repr)
-                 if t in lw]
+        shown = [
+            (pt, L.box(pt, lw[t])) for pt, tags in sorted(bends.items()) for t in sorted(tags, key=repr) if t in lw
+        ]
         if not shown:
             return 0
         # boxes and nodes sorted by left edge, vertical wires by x, horizontal ones by y: each
@@ -238,10 +256,10 @@ class CostMixin:
         hy = [t[0] for t in horiz]
         n = 0
         for k, (pt, b) in enumerate(shown):
-            n += any(L.overlap(b, o) for _, j, o in boxes[:bisect_left(bx, b[2])] if j != k)
-            n += any(L.overlap(b, o) for o in nodes[:bisect_left(nx, b[2])])
-            cand = [t[1] for t in vert[bisect_right(vx, b[0]):bisect_left(vx, b[2])]]
-            cand += [t[1] for t in horiz[bisect_right(hy, b[1]):bisect_left(hy, b[3])]]
+            n += any(L.overlap(b, o) for _, j, o in boxes[: bisect_left(bx, b[2])] if j != k)
+            n += any(L.overlap(b, o) for o in nodes[: bisect_left(nx, b[2])])
+            cand = [t[1] for t in vert[bisect_right(vx, b[0]) : bisect_left(vx, b[2])]]
+            cand += [t[1] for t in horiz[bisect_right(hy, b[1]) : bisect_left(hy, b[3])]]
             n += any(L.hits(b, s[1], s[2]) and not L.near(pt, s[1]) and not L.near(pt, s[2]) for s in cand + other)
         return n
 
@@ -250,7 +268,7 @@ class CostMixin:
         kept in self.cost_parts for inspection."""
         f = self.faults()
         bends = vlen = src = jogs = labelled = 0.0
-        lw = getattr(self, 'label_w', None) or {}
+        lw = getattr(self, "label_w", None) or {}
         route = self._route()
         hlen = sum(abs(q[0] - p[0]) for _, p, q in route)
         border = self._on_border(route) if P.W_BORDER else 0
@@ -261,7 +279,7 @@ class CostMixin:
                 vlen += d
                 if d < P.JOG:
                     jogs += 1
-                if getattr(e.u, 'src', False):
+                if getattr(e.u, "src", False):
                     src += d
                 if e.tag in lw:
                     labelled += 1
@@ -271,20 +289,42 @@ class CostMixin:
         xs = [i.x for i in self.items] + [i.x + i.w for i in reals]
         h = (max(ys) - min(ys)) if ys else 0.0
         w = (max(xs) - min(xs)) if xs else 0.0
-        self.cost_parts = {**f, "bends": bends, "jogs": jogs, "vlen": vlen, "src": src,
-                           "offgrid": off, "h": h, "w": w, "hlen": hlen,
-                           "border": border}
-        return (P.W_CROSS * f["clean"] + P.W_CROSS_BAD * f["bad"] + P.W_CROSS_BUNDLE * f["bundle"]
-                + P.W_OVERLAP * f["collinear"] + P.W_CLASH * (f["clash"] + f["on_wire"])
-                + P.W_BEND * bends + P.W_JOG * jogs + P.W_VLEN * vlen + P.W_SRC * src
-                + P.W_GRID * off + P.W_H * h + P.W_W * w + P.W_HLEN * hlen
-                + P.W_BORDER * border + P.W_LABEL * f["label"] + P.W_LABEL_BEND * labelled)
+        self.cost_parts = {
+            **f,
+            "bends": bends,
+            "jogs": jogs,
+            "vlen": vlen,
+            "src": src,
+            "offgrid": off,
+            "h": h,
+            "w": w,
+            "hlen": hlen,
+            "border": border,
+        }
+        return (
+            P.W_CROSS * f["clean"]
+            + P.W_CROSS_BAD * f["bad"]
+            + P.W_CROSS_BUNDLE * f["bundle"]
+            + P.W_OVERLAP * f["collinear"]
+            + P.W_CLASH * (f["clash"] + f["on_wire"])
+            + P.W_BEND * bends
+            + P.W_JOG * jogs
+            + P.W_VLEN * vlen
+            + P.W_SRC * src
+            + P.W_GRID * off
+            + P.W_H * h
+            + P.W_W * w
+            + P.W_HLEN * hlen
+            + P.W_BORDER * border
+            + P.W_LABEL * f["label"]
+            + P.W_LABEL_BEND * labelled
+        )
 
 
 def _multi(s):
     """The multi-input socket that a detailed route segment ends at (the last run of a link into
     one of its slots), else None. These runs are only a slot apart, which is not a fault."""
-    if s[5] != 'sock':
+    if s[5] != "sock":
         return None
     key = slot_of(s[3].vk)
     return key[:3] if key is not None else None
@@ -292,7 +332,9 @@ def _multi(s):
 
 def _segments_cross(a, b, c, d):
     """True if segments a-b and c-d cross at a single inner point."""
+
     def ccw(p, q, r):
         """Signed area of the triangle p, q, r (orientation test)."""
         return (r[1] - p[1]) * (q[0] - p[0]) - (q[1] - p[1]) * (r[0] - p[0])
+
     return ccw(c, d, a) * ccw(c, d, b) < 0 and ccw(a, b, c) * ccw(a, b, d) < 0

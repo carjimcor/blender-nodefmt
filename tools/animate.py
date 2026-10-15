@@ -21,6 +21,7 @@ search. Writes out_dir/nodefmt-demo.mp4 (H.264, width x height), nodefmt-demo.we
 and nodefmt-demo.gif (half size, fewer frames); --still renders one frame to still.png instead.
 Needs Pillow, numpy and PyAV.
 """
+
 import argparse
 import glob
 import json
@@ -31,34 +32,67 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from nodefmt import dup, rules, wires
 from nodefmt.layout import Formatter
 from nodefmt.model import Model
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # socket colours (Blender 5, node_socket.cc)
-SOCKET = {"GEOMETRY": (0, 214, 163), "VALUE": (161, 161, 161), "INT": (89, 140, 92), "BOOLEAN": (204, 166, 214),
-          "VECTOR": (99, 99, 199), "STRING": (112, 178, 255), "RGBA": (199, 199, 41), "ROTATION": (165, 110, 200),
-          "MENU": (102, 102, 102), "OBJECT": (237, 158, 74), "COLLECTION": (245, 245, 245),
-          "MATRIX": (184, 51, 133), "SHADER": (99, 199, 99), "IMAGE": (199, 140, 102), "MATERIAL": (235, 117, 117)}
-TAG_THEME = {"CONVERTER": "converter_node", "INTERFACE": "group_socket_node", "GROUP": "group_node",
-             "INPUT": "input_node", "OUTPUT": "output_node", "GEOMETRY": "geometry_node",
-             "ATTRIBUTE": "attribute_node", "VECTOR": "vector_node", "COLOR": "color_node",
-             "TEXTURE": "texture_node", "SHADER": "shader_node", "SCRIPT": "script_node",
-             "FILTER": "filter_node", "MATTE": "matte_node", "DISTORT": "distor_node", "PATTERN": "texture_node"}
-ZONE_THEME = {"GeometryNodeRepeatInput": "repeat_zone", "GeometryNodeSimulationInput": "simulation_zone",
-              "GeometryNodeForeachGeometryElementInput": "foreach_geometry_element_zone",
-              "NodeClosureInput": "closure_zone", "ShaderNodeRepeatInput": "repeat_zone"}
+SOCKET = {
+    "GEOMETRY": (0, 214, 163),
+    "VALUE": (161, 161, 161),
+    "INT": (89, 140, 92),
+    "BOOLEAN": (204, 166, 214),
+    "VECTOR": (99, 99, 199),
+    "STRING": (112, 178, 255),
+    "RGBA": (199, 199, 41),
+    "ROTATION": (165, 110, 200),
+    "MENU": (102, 102, 102),
+    "OBJECT": (237, 158, 74),
+    "COLLECTION": (245, 245, 245),
+    "MATRIX": (184, 51, 133),
+    "SHADER": (99, 199, 99),
+    "IMAGE": (199, 140, 102),
+    "MATERIAL": (235, 117, 117),
+}
+TAG_THEME = {
+    "CONVERTER": "converter_node",
+    "INTERFACE": "group_socket_node",
+    "GROUP": "group_node",
+    "INPUT": "input_node",
+    "OUTPUT": "output_node",
+    "GEOMETRY": "geometry_node",
+    "ATTRIBUTE": "attribute_node",
+    "VECTOR": "vector_node",
+    "COLOR": "color_node",
+    "TEXTURE": "texture_node",
+    "SHADER": "shader_node",
+    "SCRIPT": "script_node",
+    "FILTER": "filter_node",
+    "MATTE": "matte_node",
+    "DISTORT": "distor_node",
+    "PATTERN": "texture_node",
+}
+ZONE_THEME = {
+    "GeometryNodeRepeatInput": "repeat_zone",
+    "GeometryNodeSimulationInput": "simulation_zone",
+    "GeometryNodeForeachGeometryElementInput": "foreach_geometry_element_zone",
+    "NodeClosureInput": "closure_zone",
+    "ShaderNodeRepeatInput": "repeat_zone",
+}
 HEADER = 20.0  # node header height (a widget unit)
-GAP = 20.0     # vertical space between nodes stacked in a column
-CAPTIONS = ["A messy node tree",
-            "1. Read the graph: drop reroutes, links as direct lines",
-            "2. Rank: each node gets a column",
-            "3. Order: reorder columns to remove crossings",
-            "4. Place: settle heights, straighten links",
-            "5. Route: orthogonal wires on reroutes",
-            "Formatted: same logic, no curves, nothing behind nodes"]
+GAP = 20.0  # vertical space between nodes stacked in a column
+CAPTIONS = [
+    "A messy node tree",
+    "1. Read the graph: drop reroutes, links as direct lines",
+    "2. Rank: each node gets a column",
+    "3. Order: reorder columns to remove crossings",
+    "4. Place: settle heights, straighten links",
+    "5. Route: orthogonal wires on reroutes",
+    "Formatted: same logic, no curves, nothing behind nodes",
+]
 
 
 # ---------------------------------------------------------------- easing and helpers
@@ -113,10 +147,12 @@ def pav(desired, heights):
 
 def crossings(segs):
     """Number of proper crossings between straight segments [(a, b, source)]."""
+
     def orient(p, q, r):
         """Turn direction of p, q, r: 1, -1, or 0 when collinear."""
         v = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
         return 0 if abs(v) < 1e-6 else (1 if v > 0 else -1)
+
     n = 0
     for i in range(len(segs)):
         a, b, s = segs[i]
@@ -147,7 +183,7 @@ class Demo:
         orig = set(data["nodes"])
         before = {n: (v["x"], v["y"]) for n, v in data["nodes"].items()}  # where the nodes are now
         with rules.applied(cfg):
-            plan = dup.plan(data, 'relayout')
+            plan = dup.plan(data, "relayout")
             if dup.changes(plan, data):
                 data, _ = dup.apply_model(data, plan)
             self.F = F = Formatter(Model(data), record=True, rules=cfg.rules).run()
@@ -278,8 +314,17 @@ class Demo:
         out = []
         for f, label, kids, (pl, pt, pr, pb) in self.frames:
             bs = [self.box(n, pos) for n in kids]
-            out.append((label, (min(b[0] for b in bs) - pl, min(b[1] for b in bs) - pt,
-                                max(b[2] for b in bs) + pr, max(b[3] for b in bs) + pb)))
+            out.append(
+                (
+                    label,
+                    (
+                        min(b[0] for b in bs) - pl,
+                        min(b[1] for b in bs) - pt,
+                        max(b[2] for b in bs) + pr,
+                        max(b[3] for b in bs) + pb,
+                    ),
+                )
+            )
         return out
 
     def zone_polys(self, pos):
@@ -305,9 +350,9 @@ class Demo:
             xs += [p[0] for p in poly]
             ys += [p[1] for p in poly]
         if routed:
-            for l in self.final["links"]:
-                xs += [l["a"][0], l["b"][0]]
-                ys += [l["a"][1], l["b"][1]]
+            for lk in self.final["links"]:
+                xs += [lk["a"][0], lk["b"][0]]
+                ys += [lk["a"][1], lk["b"][1]]
         return min(xs), min(ys), max(xs), max(ys)
 
 
@@ -320,7 +365,9 @@ class Timeline:
         self.d, self.fps = demo, fps
         self.frames = []
         d = demo
-        S = lambda s: round(s * fps)
+
+        def S(s):
+            return round(s * fps)
 
         def hold(pos, n, **kw):
             """Add n frames that keep positions `pos`."""
@@ -397,8 +444,12 @@ def find_font(path=None):
     """A font file: `path`, else Blender's own UI font (Inter, from BLENDER_DIR, the folder of the
     Blender executable, or a default install), else a common system font."""
     cands = [path] if path else []
-    for base in (os.environ.get("BLENDER_DIR"), r"C:\Program Files\Blender Foundation\Blender 5.2",
-                 "/usr/share/blender", "/Applications/Blender.app/Contents/Resources"):
+    for base in (
+        os.environ.get("BLENDER_DIR"),
+        r"C:\Program Files\Blender Foundation\Blender 5.2",
+        "/usr/share/blender",
+        "/Applications/Blender.app/Contents/Resources",
+    ):
         if base:
             cands += sorted(glob.glob(os.path.join(base, "*", "datafiles", "fonts", "Inter.woff2")))
             cands.append(os.path.join(base, "datafiles", "fonts", "Inter.woff2"))
@@ -411,6 +462,7 @@ def find_font(path=None):
 
 class Renderer:
     """Draws one frame of the animation with Pillow, supersampled by `ss`."""
+
     def __init__(self, demo, W, H, font, ss=2):
         """Renderer of `demo` for a W x H output; colours from the dumped Blender theme."""
         self.d, self.W, self.H, self.ss = demo, W, H, ss
@@ -450,8 +502,13 @@ class Renderer:
         im = Image.new("RGB", (W, H), self.back)
         dr = ImageDraw.Draw(im)
         sc, ox, oy = cam
-        P = lambda p: ((p[0] - ox) * sc, (p[1] - oy) * sc + self.bar)
-        L = lambda u, lo=0.0: max(u * sc, lo * ss)  # a length in node units, at least lo output px
+
+        def P(p):
+            return ((p[0] - ox) * sc, (p[1] - oy) * sc + self.bar)
+
+        def L(u, lo=0.0):
+            return max(u * sc, lo * ss)  # a length in node units, at least lo output px
+
         pos = st["pos"]
         d.w = st.get("w", 1.0)
         alpha = {n: d.w for n in d.copies}
@@ -535,8 +592,12 @@ class Renderer:
         for i in range(25):
             t = i / 24
             u = 1 - t
-            pts.append((u ** 3 * a[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t ** 3 * b[0],
-                        u ** 3 * a[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t ** 3 * b[1]))
+            pts.append(
+                (
+                    u**3 * a[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t**3 * b[0],
+                    u**3 * a[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t**3 * b[1],
+                )
+            )
         return pts
 
     def routes(self, dr, P, L, front, wi, wo):
@@ -544,9 +605,9 @@ class Renderer:
         grow from their upstream end once the front passes them."""
         d = self.d
         segs = []
-        for l in d.final["links"]:
-            a, b = l["a"], l["b"]
-            col = SOCKET.get(l.get("type"), (160, 160, 160))
+        for lk in d.final["links"]:
+            a, b = lk["a"], lk["b"]
+            col = SOCKET.get(lk.get("type"), (160, 160, 160))
             if abs(a[1] - b[1]) < 0.5:  # horizontal
                 lo, hi = min(a[0], b[0]), max(a[0], b[0])
                 if front <= lo:
@@ -573,8 +634,9 @@ class Renderer:
         bg = self.back
         body = blend(self.body, bg, k)
         head = blend(self.header(n), bg, k)
-        dr.rounded_rectangle([a[0] - ss, a[1] - ss, b[0] + ss, b[1] + ss], radius=rad + ss,
-                             fill=blend((10, 10, 10), bg, k))
+        dr.rounded_rectangle(
+            [a[0] - ss, a[1] - ss, b[0] + ss, b[1] + ss], radius=rad + ss, fill=blend((10, 10, 10), bg, k)
+        )
         dr.rounded_rectangle([a, b], radius=rad, fill=body)
         hb = P((x1, y0 + HEADER))[1]
         dr.rounded_rectangle([a[0], a[1], b[0], hb], radius=rad, fill=head, corners=(True, True, False, False))
@@ -591,8 +653,9 @@ class Renderer:
             if text != title:
                 text = text[:-1].rstrip() + "\u2026" if len(text) > 3 else ""
             if text:
-                dr.text((a[0] + L(6, 2.5), (a[1] + hb) / 2), text, font=f, anchor="lm",
-                        fill=blend((235, 235, 235), bg, k))
+                dr.text(
+                    (a[0] + L(6, 2.5), (a[1] + hb) / 2), text, font=f, anchor="lm", fill=blend((235, 235, 235), bg, k)
+                )
         # sockets
         rr = L(3.6, 2.0)
         for s in d.sockets(n).values():
@@ -600,8 +663,10 @@ class Renderer:
                 continue
             c = P((x0 + s["off"][0], y0 + s["off"][1]))
             col = blend(SOCKET.get(s["type"], (160, 160, 160)), bg, k)
-            dr.ellipse([c[0] - rr - ss * 0.8, c[1] - rr - ss * 0.8, c[0] + rr + ss * 0.8, c[1] + rr + ss * 0.8],
-                       fill=blend((15, 15, 15), bg, k))
+            dr.ellipse(
+                [c[0] - rr - ss * 0.8, c[1] - rr - ss * 0.8, c[0] + rr + ss * 0.8, c[1] + rr + ss * 0.8],
+                fill=blend((15, 15, 15), bg, k),
+            )
             dr.ellipse([c[0] - rr, c[1] - rr, c[0] + rr, c[1] + rr], fill=col)
 
     def caption(self, dr, st, cap_mix):
@@ -616,8 +681,13 @@ class Renderer:
         for idx, a in ((prev, 1 - 2 * t), (cur, 2 * t - 1)):  # the old one fades out, then the new one in
             if idx is None or a <= 0.01:
                 continue
-            dr.text((self.bar * 0.42, self.bar / 2), CAPTIONS[idx], font=f, anchor="lm",
-                    fill=blend((240, 240, 240), blend((255, 255, 255), self.back, 0.045), a))
+            dr.text(
+                (self.bar * 0.42, self.bar / 2),
+                CAPTIONS[idx],
+                font=f,
+                anchor="lm",
+                fill=blend((240, 240, 240), blend((255, 255, 255), self.back, 0.045), a),
+            )
         # step dots
         r = self.bar * 0.09
         for i in range(5):
@@ -628,8 +698,13 @@ class Renderer:
         hud = st.get("hud")
         if hud:
             fs = self.font(self.bar * 0.32)
-            dr.text((W - self.bar * 0.42 - 4 * r * 4.2 - r * 3, self.bar / 2), hud, font=fs, anchor="rm",
-                    fill=(170, 170, 170))
+            dr.text(
+                (W - self.bar * 0.42 - 4 * r * 4.2 - r * 3, self.bar / 2),
+                hud,
+                font=fs,
+                anchor="rm",
+                fill=(170, 170, 170),
+            )
 
 
 def cameras(demo, tl, W, H, bar, ss):
@@ -669,6 +744,7 @@ def main():
     ap.add_argument("--select", default=None, help="rules to sort with, as in nodefmt.toml (e.g. ALL)")
     a = ap.parse_args()
     import av
+
     os.makedirs(a.out, exist_ok=True)
     demo = Demo(a.tree, a.select.split(",") if a.select else None)
     tl = Timeline(demo, a.fps)
@@ -679,19 +755,34 @@ def main():
         if st.get("front") is not None:
             key = "final"
             if key not in cache:
-                segs = [(tuple(l["a"]), tuple(l["b"]), tuple(l["src"])) for l in demo.final["links"]]
+                segs = [(tuple(lk["a"]), tuple(lk["b"]), tuple(lk["src"])) for lk in demo.final["links"]]
                 cache[key] = crossings(segs)
         else:
-            key = (round(demo.w, 3), st.get("curve", 0) < 0.5,
-                   tuple(sorted((n, round(p[0]), round(p[1])) for n, p in st["pos"].items())))
+            key = (
+                round(demo.w, 3),
+                st.get("curve", 0) < 0.5,
+                tuple(sorted((n, round(p[0]), round(p[1])) for n, p in st["pos"].items())),
+            )
             if key not in cache:
                 segs = [(p, q, s) for p, q, _, s in demo.model_links(st["pos"])]
                 cache[key] = crossings(segs) if st.get("curve", 0) < 0.5 else None
         c = cache[key]
         st["hud"] = f"{c} crossings" if c is not None else ""
     direct = max(i for i, st in enumerate(tl.frames) if st["cap"] == 1)
-    print("direct lines:", tl.frames[direct]["hud"], "| result:", tl.frames[-1]["hud"], "| columns", len(demo.cols),
-          "| order steps", len(demo.sweep) - 1, "| copies", len(demo.copies), "| reroutes", len(demo.final["reroutes"]))
+    print(
+        "direct lines:",
+        tl.frames[direct]["hud"],
+        "| result:",
+        tl.frames[-1]["hud"],
+        "| columns",
+        len(demo.cols),
+        "| order steps",
+        len(demo.sweep) - 1,
+        "| copies",
+        len(demo.copies),
+        "| reroutes",
+        len(demo.final["reroutes"]),
+    )
     font = find_font(a.font)
     r = Renderer(demo, a.width // 2, a.height // 2, font, ss=4)
     cams = cameras(demo, tl, r.W, r.H, r.bar, r.ss)
@@ -741,20 +832,35 @@ def main():
     ms = 1000.0 / a.fps
     durs = [round((i + 1) * ms) - round(i * ms) for i in range(len(small))]
     webp = os.path.join(a.out, "nodefmt-demo.webp")
-    small[0].save(webp, save_all=True, append_images=small[1:], duration=durs, loop=0,
-                  quality=a.webp_quality, method=6, minimize_size=True)
+    small[0].save(
+        webp,
+        save_all=True,
+        append_images=small[1:],
+        duration=durs,
+        loop=0,
+        quality=a.webp_quality,
+        method=6,
+        minimize_size=True,
+    )
     step = max(1, round(a.fps / a.gif_fps))
     gif_frames = small[::step]
     # one palette for all frames, from frames spread over the whole animation
-    picks = gif_frames[::max(1, len(gif_frames) // 8)]
+    picks = gif_frames[:: max(1, len(gif_frames) // 8)]
     sheet = Image.new("RGB", (picks[0].width, picks[0].height * len(picks)))
     for k, f in enumerate(picks):
         sheet.paste(f, (0, k * f.height))
     pal = sheet.quantize(colors=192, method=Image.Quantize.FASTOCTREE)
     gq = [f.quantize(palette=pal, dither=Image.Dither.NONE) for f in gif_frames]
     gif = os.path.join(a.out, "nodefmt-demo.gif")
-    gq[0].save(gif, save_all=True, append_images=gq[1:], duration=round(1000 * step / a.fps), loop=0,
-               optimize=False, disposal=1)
+    gq[0].save(
+        gif,
+        save_all=True,
+        append_images=gq[1:],
+        duration=round(1000 * step / a.fps),
+        loop=0,
+        optimize=False,
+        disposal=1,
+    )
     for p in (mp4, webp, gif):
         print(f"{p}: {os.path.getsize(p) / 1e6:.2f} MB")
     print(f"{len(small)} frames, {len(small) / a.fps:.1f} s at {a.fps} fps")

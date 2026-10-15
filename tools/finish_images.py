@@ -7,6 +7,7 @@ Needs Pillow. Each screenshot is cropped to the box in CAPTURE_DIR/boxes.json an
 palette PNG (256 colours, no dithering: node editor screenshots have few colours), in
 DOCS_DIR/rules/ for the rule examples (NF0xx-*.png) and DOCS_DIR/images/ for the others.
 """
+
 import json
 import os
 import sys

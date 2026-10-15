@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Ranking: columns (layers) for the items of one container, and lanes (dummies) for long links."""
+
 from . import params as P
 from .graph import CycleError, Edge, Item, _name
 
@@ -15,7 +16,7 @@ class RankingMixin:
             indeg[e.v] += 1
             succ[e.u].append(e.v)
         order = [i for i in items if indeg[i] == 0]
-        order.sort(key=(lambda i: (i.ox if i.ox is not None else 0)) if self.mode == 'keep' else _name)
+        order.sort(key=(lambda i: i.ox if i.ox is not None else 0) if self.mode == "keep" else _name)
         k = 0
         while k < len(order):
             u = order[k]
@@ -42,10 +43,16 @@ class RankingMixin:
             for b in self.items:
                 # a big block with no links out (a side branch) may share its column, and so may a
                 # satellite (NF021): it sits above or below the others and reaches to the left
-                if getattr(b, 'big', False) and not b.sat and (b in out or not P.OVERHANG):
+                if getattr(b, "big", False) and not b.sat and (b in out or not P.OVERHANG):
                     for i in self.items:
-                        if i is not b and i.rank == b.rank and not i.is_point and not getattr(i, 'big', False) \
-                                and not i.sat and not self._reaches(i, b, self.edges + extra):
+                        if (
+                            i is not b
+                            and i.rank == b.rank
+                            and not i.is_point
+                            and not getattr(i, "big", False)
+                            and not i.sat
+                            and not self._reaches(i, b, self.edges + extra)
+                        ):
                             add.append(Edge(b, None, i, None, None))
             if not add:
                 return
@@ -56,12 +63,15 @@ class RankingMixin:
         into them, such as a frame that starts from its own Group Input. Each sits at the top or
         bottom of the column right before its consumer and reaches left over the earlier columns
         (columns.py), so its output wire is short instead of crossing the whole tree."""
-        if not P.SATELLITES or self.mode == 'keep' or not getattr(self, 'use_sats', True):
+        if not P.SATELLITES or self.mode == "keep" or not getattr(self, "use_sats", True):
             return set()
         fed = {e.v for e in self.edges}
         feeds = {e.u for e in self.edges}
-        return {b for b in self.items if b.kind == 'compound' and getattr(b, 'big', False) and b.pin is None
-                and b not in fed and b in feeds}
+        return {
+            b
+            for b in self.items
+            if b.kind == "compound" and getattr(b, "big", False) and b.pin is None and b not in fed and b in feeds
+        }
 
     @staticmethod
     def _reaches(a, b, edges):
@@ -91,7 +101,7 @@ class RankingMixin:
             preds[e.v].append(e.u)
             succs[e.u].append(e.v)
         r = {}
-        if self.mode == 'keep':
+        if self.mode == "keep":
             real = sorted((i for i in items if i.ox is not None), key=lambda i: i.ox)
             col, start, c = {}, None, -1
             for i in real:
@@ -99,27 +109,27 @@ class RankingMixin:
                     c += 1
                     start = i.ox
                 col[i] = c
-            first = any(i.pin == 'first' for i in items)
+            first = any(i.pin == "first" for i in items)
             for i in topo:
-                if i.pin == 'first':
+                if i.pin == "first":
                     r[i] = 0
                     continue
                 base = col.get(i, 0) + (1 if first else 0)
                 r[i] = max([base] + [r[p] + 1 for p in preds[i]])
         else:
             for i in topo:
-                r[i] = 0 if i.pin == 'first' else max([0] + [r[p] + 1 for p in preds[i]])
+                r[i] = 0 if i.pin == "first" else max([0] + [r[p] + 1 for p in preds[i]])
             R = max(r.values(), default=0)
             for i in reversed(topo):
-                if i.pin == 'first':
+                if i.pin == "first":
                     continue
-                if i.pin == 'last':
+                if i.pin == "last":
                     r[i] = R
                 elif succs[i]:
                     r[i] = min(r[s] for s in succs[i]) - 1
         R = max(r.values(), default=0)
         for i in items:
-            if i.pin == 'last':
+            if i.pin == "last":
                 r[i] = R
         # pinning the last items may break a constraint before them: re-check
         for i in topo:
@@ -128,19 +138,19 @@ class RankingMixin:
                     r[i] = r[p] + 1
         R = max(r.values(), default=0)
         for i in items:
-            if i.pin == 'last':
+            if i.pin == "last":
                 r[i] = R
         # the pins of a part of the tree (part.py) take columns of their own: before and after
         # everything else, even nodes with no links inside the part
-        own = [i for i in items if getattr(i, 'own_column', False)]
+        own = [i for i in items if getattr(i, "own_column", False)]
         if own:
-            rest = [i for i in items if not getattr(i, 'own_column', False)]
-            if any(i.pin == 'first' for i in own):
+            rest = [i for i in items if not getattr(i, "own_column", False)]
+            if any(i.pin == "first" for i in own):
                 for i in rest:
                     r[i] += 1
             R = max((r[i] for i in rest), default=0)
             for i in own:
-                r[i] = 0 if i.pin == 'first' else R + 1
+                r[i] = 0 if i.pin == "first" else R + 1
         # compress empty ranks
         used = sorted(set(r.values()))
         remap = {v: k for k, v in enumerate(used)}
@@ -164,19 +174,18 @@ class RankingMixin:
             prev, pk = u, uk
             bus = {}
             for k in range(u.rank + 1, last):
-                d = Item(("dummy", es[0].tag, k), 'dummy', ins={'in': (0, 0)}, outs={'out': (0, 0)})
+                d = Item(("dummy", es[0].tag, k), "dummy", ins={"in": (0, 0)}, outs={"out": (0, 0)})
                 d.rank = k
                 d.tag = es[0].tag
                 d.oy = None
                 # where the wires it carries ran before (stability: engine.current_cands)
-                d.routes = [getattr(e, 'route', None) for e in sorted(far, key=lambda e: repr(e.vk))
-                            if e.v.rank > k]
+                d.routes = [getattr(e, "route", None) for e in sorted(far, key=lambda e: repr(e.vk)) if e.v.rank > k]
                 self.items.append(d)
-                new_edges.append(Edge(prev, pk, d, 'in', es[0].tag, es[0].geo))
+                new_edges.append(Edge(prev, pk, d, "in", es[0].tag, es[0].geo))
                 bus[k] = d
-                prev, pk = d, 'out'
+                prev, pk = d, "out"
             for e in far:
-                new_edges.append(Edge(bus[e.v.rank - 1], 'out', e.v, e.vk, e.tag, e.geo))
+                new_edges.append(Edge(bus[e.v.rank - 1], "out", e.v, e.vk, e.tag, e.geo))
         for e in new_edges:
             if e.v.rank <= e.u.rank:
                 raise ValueError(f"backward edge {e}")

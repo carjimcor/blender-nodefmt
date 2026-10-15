@@ -6,12 +6,31 @@ parents, zone pairs, the group interface, and links resolved through reroutes (w
 of multi-input sockets). Trees with equal fingerprints compute the same thing. String values
 are hashed so no text from the file is kept.
 """
+
 import hashlib
 
-SKIP = {"location", "location_absolute", "width", "height", "dimensions", "select",
-        "rna_type", "internal_links", "inputs", "outputs", "parent", "warning_propagation",
-        "is_active_output", "show_options", "show_preview", "show_texture", "bl_static_type",
-        "color_tag", "debug_zone_body_lazy_function_graph", "debug_zone_lazy_function_graph"}
+SKIP = {
+    "location",
+    "location_absolute",
+    "width",
+    "height",
+    "dimensions",
+    "select",
+    "rna_type",
+    "internal_links",
+    "inputs",
+    "outputs",
+    "parent",
+    "warning_propagation",
+    "is_active_output",
+    "show_options",
+    "show_preview",
+    "show_texture",
+    "bl_static_type",
+    "color_tag",
+    "debug_zone_body_lazy_function_graph",
+    "debug_zone_lazy_function_graph",
+}
 
 
 def _val(v):
@@ -33,7 +52,7 @@ def _props(obj):
     d = {}
     for p in obj.bl_rna.properties:
         k = p.identifier
-        if k in SKIP or p.type == 'COLLECTION':
+        if k in SKIP or p.type == "COLLECTION":
             continue
         try:
             d[k] = _val(getattr(obj, k))
@@ -55,19 +74,19 @@ def _resolve_from(link, muted=False):
     on the way is muted."""
     muted = muted or link.is_muted
     n = link.from_node
-    if n.bl_idname != 'NodeReroute':
+    if n.bl_idname != "NodeReroute":
         return [(n.name, link.from_socket.identifier, muted)]
     res = []
-    for l in n.inputs[0].links:
-        res += _resolve_from(l, muted)
+    for lk in n.inputs[0].links:
+        res += _resolve_from(lk, muted)
     return res or [("<dangling reroute>", "", muted)]
 
 
 def _state(s, name):
     """What an input of a commutative pair receives: its links (resolved) or its own value."""
-    links = [l for l in s.links if not l.is_hidden]
+    links = [lk for lk in s.links if not lk.is_hidden]
     if links:
-        return ("link", sorted((name(a), b, mu) for l in links for a, b, mu in _resolve_from(l)))
+        return ("link", sorted((name(a), b, mu) for lk in links for a, b, mu in _resolve_from(lk)))
     return ("value", _val(getattr(s, "default_value", None)))
 
 
@@ -75,12 +94,16 @@ def fingerprint(nt):
     """The logic fingerprint of a tree (see the module docstring); plain data."""
     from .dup import source_keys
     from .model import comm_pair
+
     src = source_keys(nt)
-    name = lambda n: src.get(n, n)
+
+    def name(n):
+        return src.get(n, n)
+
     nodes = {}
     comm = {}
     for n in nt.nodes:
-        if n.bl_idname == 'NodeReroute' or n.name in src:
+        if n.bl_idname == "NodeReroute" or n.name in src:
             continue
         nodes[n.name] = {
             "type": n.bl_idname,
@@ -98,24 +121,32 @@ def fingerprint(nt):
             comm[(n.name, a.identifier)] = comm[(n.name, b.identifier)] = n.name
             nodes[n.name]["pair"] = sorted([repr(_state(a, name)), repr(_state(b, name))])
     resolved = set()
-    for l in nt.links:
-        if l.to_node.bl_idname == 'NodeReroute':
+    for lk in nt.links:
+        if lk.to_node.bl_idname == "NodeReroute":
             continue
-        if (l.to_node.name, l.to_socket.identifier) in comm:
+        if (lk.to_node.name, lk.to_socket.identifier) in comm:
             continue
-        for fn, fs, mu in _resolve_from(l):
-            resolved.add((name(fn), fs, name(l.to_node.name), l.to_socket.identifier, mu))
+        for fn, fs, mu in _resolve_from(lk):
+            resolved.add((name(fn), fs, name(lk.to_node.name), lk.to_socket.identifier, mu))
     multi = {}
     for n in nt.nodes:
         for s in n.inputs:
             if s.is_multi_input and s.links:
-                ls = sorted(s.links, key=lambda l: l.multi_input_sort_id)
-                multi[f"{name(n.name)}:{s.identifier}"] = [[(name(a), b, mu) for a, b, mu in _resolve_from(l)]
-                                                          for l in ls]
-    iface = [(i.item_type, getattr(i, "in_out", None), i.name, _val(getattr(i, "default_value", None)))
-             for i in nt.interface.items_tree]
-    return {"nodes": nodes, "links": sorted(resolved), "multi": multi, "interface": iface,
-            "sources": sorted(set(src.values()))}
+                ls = sorted(s.links, key=lambda lk: lk.multi_input_sort_id)
+                multi[f"{name(n.name)}:{s.identifier}"] = [
+                    [(name(a), b, mu) for a, b, mu in _resolve_from(lk)] for lk in ls
+                ]
+    iface = [
+        (i.item_type, getattr(i, "in_out", None), i.name, _val(getattr(i, "default_value", None)))
+        for i in nt.interface.items_tree
+    ]
+    return {
+        "nodes": nodes,
+        "links": sorted(resolved),
+        "multi": multi,
+        "interface": iface,
+        "sources": sorted(set(src.values())),
+    }
 
 
 def diff(a, b):
@@ -145,28 +176,45 @@ class Snapshot:
     def __init__(self, nt):
         """Record the layout state of tree `nt`."""
         from .dup import source_keys
+
         keys = source_keys(nt)
         self.nodes = {}
         for n in nt.nodes:
-            if n.bl_idname == 'NodeReroute':
+            if n.bl_idname == "NodeReroute":
                 continue
-            self.nodes[n.name] = {"loc": tuple(n.location), "parent": n.parent.name if n.parent else None,
-                                  "size": (n.width, n.height) if n.bl_idname == 'NodeFrame' else None,
-                                  "key": keys.get(n.name), "hide": [o.hide for o in n.outputs]}
-        self.reroutes = [(n.name, n.label, n.parent.name if n.parent else None, tuple(n.location))
-                         for n in nt.nodes if n.bl_idname == 'NodeReroute']
+            self.nodes[n.name] = {
+                "loc": tuple(n.location),
+                "parent": n.parent.name if n.parent else None,
+                "size": (n.width, n.height) if n.bl_idname == "NodeFrame" else None,
+                "key": keys.get(n.name),
+                "hide": [o.hide for o in n.outputs],
+            }
+        self.reroutes = [
+            (n.name, n.label, n.parent.name if n.parent else None, tuple(n.location))
+            for n in nt.nodes
+            if n.bl_idname == "NodeReroute"
+        ]
         links = []
-        for l in nt.links:
-            sid = l.multi_input_sort_id if l.to_socket.is_multi_input else 0
-            links.append((l.from_node.name, list(l.from_node.outputs).index(l.from_socket),
-                          l.to_node.name, list(l.to_node.inputs).index(l.to_socket), l.is_muted, sid))
+        for lk in nt.links:
+            sid = lk.multi_input_sort_id if lk.to_socket.is_multi_input else 0
+            links.append(
+                (
+                    lk.from_node.name,
+                    list(lk.from_node.outputs).index(lk.from_socket),
+                    lk.to_node.name,
+                    list(lk.to_node.inputs).index(lk.to_socket),
+                    lk.is_muted,
+                    sid,
+                )
+            )
         self.links = sorted(links, key=lambda x: x[5])
 
     def restore(self, nt, editor=None):
         """Put everything back. Inputs are relinked before anything is removed, so no socket is
         left unlinked on the way (the Viewer drops unlinked items)."""
         from .dup import _copy_node, source_keys
-        current = [n for n in nt.nodes if n.bl_idname == 'NodeReroute']
+
+        current = [n for n in nt.nodes if n.bl_idname == "NodeReroute"]
         for k, n in enumerate(current):  # free their names for the reroutes put back
             n.name = f"nodefmt_tmp_{k}"
         # input nodes removed as unused copies: copy a node of the same class back
@@ -188,7 +236,7 @@ class Snapshot:
             if (n.parent.name if n.parent else None) != p:
                 n.parent = nt.nodes[p] if p else None
         for name, label, parent, loc in self.reroutes:
-            r = nt.nodes.new('NodeReroute')
+            r = nt.nodes.new("NodeReroute")
             r.name = name
             r.label = label
             if parent:
@@ -214,25 +262,29 @@ class Snapshot:
             if to.is_linked and to.links[0].from_socket.as_pointer() == frm.as_pointer():
                 to.links[0].is_muted = muted
                 continue
-            l = nt.links.new(frm, to)
-            if l is None:
+            lk = nt.links.new(frm, to)
+            if lk is None:
                 raise RuntimeError(f"restore {nt.name}: could not link {fn}[{fi}] -> {tn}[{ti}]")
-            l.is_muted = muted
+            lk.is_muted = muted
         for (tn, ti), lst in multi.items():
-            for l in list(nt.nodes[tn].inputs[ti].links):
-                nt.links.remove(l)
+            for lk in list(nt.nodes[tn].inputs[ti].links):
+                nt.links.remove(lk)
             for fn, fi, muted in lst:
-                l = nt.links.new(nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti])
-                if l is None:
+                lk = nt.links.new(nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti])
+                if lk is None:
                     raise RuntimeError(f"restore {nt.name}: could not link {fn}[{fi}] -> {tn}[{ti}]")
-                l.is_muted = muted
+                lk.is_muted = muted
         keep_names = set(self.nodes) | {r[0] for r in self.reroutes}
         for n in list(nt.nodes):  # leftover reroutes and copies the format added
             if n.name not in keep_names:
                 nt.nodes.remove(n)
         keep = {(fn, fi, tn, ti) for fn, fi, tn, ti, _, _ in self.links}
-        for l in list(nt.links):
-            key = (l.from_node.name, list(l.from_node.outputs).index(l.from_socket),
-                   l.to_node.name, list(l.to_node.inputs).index(l.to_socket))
+        for lk in list(nt.links):
+            key = (
+                lk.from_node.name,
+                list(lk.from_node.outputs).index(lk.from_socket),
+                lk.to_node.name,
+                list(lk.to_node.inputs).index(lk.to_socket),
+            )
             if key not in keep:
-                nt.links.remove(l)
+                nt.links.remove(lk)

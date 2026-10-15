@@ -4,31 +4,32 @@
 `read(nt)` turns a drawn tree into a JSON-able dict; `Model(data)` derives what the layout needs.
 Coordinates: y is DOWN (y = -blender_y). A socket is a gid (node name, 'i' | 'o', index).
 """
+
 import math
 
-FRAME = 'NodeFrame'
+FRAME = "NodeFrame"
 SLOT = 5.0  # distance between the links of a multi-input socket at UI scale 1 (Blender's
 #              NODE_MULTI_INPUT_LINK_GAP, a quarter widget unit); data["slot"] has the drawn one
-REROUTE = 'NodeReroute'
+REROUTE = "NodeReroute"
 
 # commutative nodes: node type -> the operations whose two inputs may be swapped (None: any)
 COMMUTATIVE = {
-    'ShaderNodeMath': {'ADD', 'MULTIPLY', 'MINIMUM', 'MAXIMUM'},
-    'FunctionNodeIntegerMath': {'ADD', 'MULTIPLY', 'MINIMUM', 'MAXIMUM'},
-    'FunctionNodeBooleanMath': {'AND', 'OR', 'XOR', 'NAND', 'NOR'},
-    'ShaderNodeVectorMath': {'ADD', 'MULTIPLY'},
-    'FunctionNodeCompare': {'EQUAL', 'NOT_EQUAL'},
-    'ShaderNodeAddShader': None,  # no operation: always (Mix Shader is not: its Fac picks a side)
+    "ShaderNodeMath": {"ADD", "MULTIPLY", "MINIMUM", "MAXIMUM"},
+    "FunctionNodeIntegerMath": {"ADD", "MULTIPLY", "MINIMUM", "MAXIMUM"},
+    "FunctionNodeBooleanMath": {"AND", "OR", "XOR", "NAND", "NOR"},
+    "ShaderNodeVectorMath": {"ADD", "MULTIPLY"},
+    "FunctionNodeCompare": {"EQUAL", "NOT_EQUAL"},
+    "ShaderNodeAddShader": None,  # no operation: always (Mix Shader is not: its Fac picks a side)
 }
-FLOW = ('GEOMETRY', 'SHADER')  # socket types of the main flow, lined up first
+FLOW = ("GEOMETRY", "SHADER")  # socket types of the main flow, lined up first
 
 
 def gid_of(s):
     """The gid of a socket: (node name, 'i' | 'o', index)."""
     n = s.node
     if s.is_output:
-        return (n.name, 'o', list(n.outputs).index(s))
-    return (n.name, 'i', list(n.inputs).index(s))
+        return (n.name, "o", list(n.outputs).index(s))
+    return (n.name, "i", list(n.inputs).index(s))
 
 
 def comm_pair(n):
@@ -36,12 +37,12 @@ def comm_pair(n):
     if n.bl_idname not in COMMUTATIVE:
         return None
     ops = COMMUTATIVE[n.bl_idname]
-    if ops is not None and getattr(n, 'operation', None) not in ops:
+    if ops is not None and getattr(n, "operation", None) not in ops:
         return None
     vis = [k for k, s in enumerate(n.inputs) if s.enabled and not s.hide]
-    if n.bl_idname == 'FunctionNodeCompare':
-        a = [k for k in vis if n.inputs[k].name == 'A']
-        b = [k for k in vis if n.inputs[k].name == 'B']
+    if n.bl_idname == "FunctionNodeCompare":
+        a = [k for k in vis if n.inputs[k].name == "A"]
+        b = [k for k in vis if n.inputs[k].name == "B"]
         if len(a) != 1 or len(b) != 1 or n.inputs[a[0]].type != n.inputs[b[0]].type:
             return None
         return (a[0], b[0])
@@ -52,7 +53,7 @@ def comm_pair(n):
 
 def _same_default(a, b):
     """True if two sockets hold the same stored value."""
-    va, vb = getattr(a, 'default_value', None), getattr(b, 'default_value', None)
+    va, vb = getattr(a, "default_value", None), getattr(b, "default_value", None)
     try:
         va, vb = tuple(va), tuple(vb)
     except TypeError:
@@ -73,13 +74,14 @@ def read(nt, where=None, part=None, pins=None):
     from . import dup, ortho
     from .labels import text_width
     from .sockets import socket_location, verify
+
     verify(nt)
     ui = ortho.ui_scale()
     nodes = [n for n in nt.nodes if part is None or n.name in part]
     # reroutes to remove and rebuild; labels go back on the new routes (routes.place_labels)
     removable = {n.name for n in nodes if n.bl_idname == REROUTE and n.name not in pins}
-    bad = [l for l in nt.links if l.is_hidden]
-    todo = [n.name for l in bad for n in (l.from_node, l.to_node) if n.name in removable]
+    bad = [lk for lk in nt.links if lk.is_hidden]
+    todo = [n.name for lk in bad for n in (lk.from_node, lk.to_node) if n.name in removable]
     for n in nodes:  # dangling reroutes stay (they are visible as such)
         if n.name in removable and (not n.inputs[0].is_linked or (n.label and not n.outputs[0].is_linked)):
             todo.append(n.name)
@@ -93,35 +95,35 @@ def read(nt, where=None, part=None, pins=None):
                 continue
             removable.discard(name)
             r = byname[name]
-            for l in list(r.inputs[0].links) + list(r.outputs[0].links):
-                for m in (l.from_node, l.to_node):
+            for lk in list(r.inputs[0].links) + list(r.outputs[0].links):
+                for m in (lk.from_node, lk.to_node):
                     if m.name in removable:
                         todo.append(m.name)
 
-    def back(l):
+    def back(lk):
         """The real sources of link l through removable reroutes: [(socket, chain of links)]."""
-        n = l.from_node
+        n = lk.from_node
         if n.name not in removable:
-            return [(l.from_socket, [l])]
+            return [(lk.from_socket, [lk])]
         res = []
         for k in n.inputs[0].links:
-            res += [(s, chain + [l]) for s, chain in back(k)]
+            res += [(s, chain + [lk]) for s, chain in back(k)]
         return res
 
     def label_info(n):
         """Sources, destinations and depth (reroutes upstream) of a labelled reroute."""
-        srcs = {gid_of(s) for l in n.inputs[0].links for s, _ in back(l)}
+        srcs = {gid_of(s) for lk in n.inputs[0].links for s, _ in back(lk)}
         dsts, todo2, seen = [], [n], set()
         while todo2:
             r = todo2.pop()
-            for l in r.outputs[0].links:
-                if l.is_hidden or l.to_node.name in seen:
+            for lk in r.outputs[0].links:
+                if lk.is_hidden or lk.to_node.name in seen:
                     continue
-                if l.to_node.name in removable:
-                    seen.add(l.to_node.name)
-                    todo2.append(l.to_node)
-                elif l.to_node.bl_idname != FRAME:
-                    dsts.append(gid_of(l.to_socket))
+                if lk.to_node.name in removable:
+                    seen.add(lk.to_node.name)
+                    todo2.append(lk.to_node)
+                elif lk.to_node.bl_idname != FRAME:
+                    dsts.append(gid_of(lk.to_socket))
         depth, r = 0, n
         while r.inputs[0].links and r.inputs[0].links[0].from_node.name in removable:
             depth += 1
@@ -130,8 +132,11 @@ def read(nt, where=None, part=None, pins=None):
 
     keep(todo)
     while True:  # a labelled reroute that does not carry one wire to real sockets stays as it is
-        bad = [n.name for n in nodes if n.name in removable and n.label
-               and (len(label_info(n)[0]) != 1 or not label_info(n)[1])]
+        bad = [
+            n.name
+            for n in nodes
+            if n.name in removable and n.label and (len(label_info(n)[0]) != 1 or not label_info(n)[1])
+        ]
         if not bad:
             break
         keep(bad)
@@ -140,33 +145,50 @@ def read(nt, where=None, part=None, pins=None):
         if n.name in removable and n.label:
             srcs, dsts, depth = label_info(n)
             x, y = where.get(n.name, n.location_absolute)
-            labels.append({"name": n.name, "label": n.label, "src": list(next(iter(srcs))), "x": x, "y": -y,
-                           "dsts": sorted(list(d) for d in dsts), "depth": depth, "w": text_width(n.label)})
+            labels.append(
+                {
+                    "name": n.name,
+                    "label": n.label,
+                    "src": list(next(iter(srcs))),
+                    "x": x,
+                    "y": -y,
+                    "dsts": sorted(list(d) for d in dsts),
+                    "depth": depth,
+                    "w": text_width(n.label),
+                }
+            )
 
     links = []
     old_routes = {}  # where each link ran before: its reroutes (stability, see engine.py)
     inside = {n.name for n in nodes}
-    for l in nt.links:
-        if l.to_node.name in removable or l.is_hidden or l.to_node.bl_idname == FRAME:
+    for lk in nt.links:
+        if lk.to_node.name in removable or lk.is_hidden or lk.to_node.bl_idname == FRAME:
             continue
-        if l.to_node.name not in inside:
+        if lk.to_node.name not in inside:
             continue
-        for s, chain in back(l):
+        for s, chain in back(lk):
             if any(c.is_hidden for c in chain) or s.node.name not in inside:
                 continue
-            sid = l.multi_input_sort_id if l.to_socket.is_multi_input else 0
+            sid = lk.multi_input_sort_id if lk.to_socket.is_multi_input else 0
             muted = any(c.is_muted for c in chain)
-            links.append([list(gid_of(s)), list(gid_of(l.to_socket)), muted, sid])
+            links.append([list(gid_of(s)), list(gid_of(lk.to_socket)), muted, sid])
             pts = []
             for c in chain[1:]:
                 x, y = where.get(c.from_node.name, c.from_node.location_absolute)
                 pts.append([round(x, 1), round(-y, 1)])
             if pts:
-                old_routes[route_key(gid_of(s), gid_of(l.to_socket), sid)] = pts
+                old_routes[route_key(gid_of(s), gid_of(lk.to_socket), sid)] = pts
     keys = dup.source_keys(nt)
-    data = {"tree": nt.name, "nodes": {}, "links": sorted(links), "removable": sorted(removable),
-            "labels": sorted(labels, key=lambda l: l["name"]), "scale": ui, "slot": ortho.slot_gap(ui),
-            "routes": old_routes}
+    data = {
+        "tree": nt.name,
+        "nodes": {},
+        "links": sorted(links),
+        "removable": sorted(removable),
+        "labels": sorted(labels, key=lambda lb: lb["name"]),
+        "scale": ui,
+        "slot": ortho.slot_gap(ui),
+        "routes": old_routes,
+    }
     linked = {tuple(g) for s, d, _, _ in links for g in (s, d)}
     for n in nodes:
         if n.name in removable:
@@ -177,8 +199,15 @@ def read(nt, where=None, part=None, pins=None):
         parent = n.parent
         while parent is not None and parent.name not in inside:  # a frame outside the part
             parent = parent.parent
-        d = {"type": n.bl_idname, "label": n.label, "title": title, "parent": parent.name if parent else None,
-             "x": x, "y": -y, "hide": n.hide}
+        d = {
+            "type": n.bl_idname,
+            "label": n.label,
+            "title": title,
+            "parent": parent.name if parent else None,
+            "x": x,
+            "y": -y,
+            "hide": n.hide,
+        }
         if n.name in pins:
             d["pin"] = pins[n.name]
         if n.bl_idname == FRAME:
@@ -194,14 +223,19 @@ def read(nt, where=None, part=None, pins=None):
         # Blender places sockets whole pixels away from the location rounded to its pixel grid
         bx, by = ortho.to_px(cx, ui), ortho.to_px(cy, ui)
         socks = {}
-        for side, coll in (('o', n.outputs), ('i', n.inputs)):
+        for side, coll in (("o", n.outputs), ("i", n.inputs)):
             for k, s in enumerate(coll):
                 vis = s.enabled and not s.hide and not n.hide
                 if not vis and (n.name, side, k) not in linked:
                     continue
                 sx, sy = socket_location(s)
-                socks[f"{side}{k}"] = {"off": [round(sx - bx, 4), round(by - sy, 4)], "type": s.type,
-                                       "vis": vis, "id": s.identifier, "multi": s.is_multi_input}
+                socks[f"{side}{k}"] = {
+                    "off": [round(sx - bx, 4), round(by - sy, 4)],
+                    "type": s.type,
+                    "vis": vis,
+                    "id": s.identifier,
+                    "multi": s.is_multi_input,
+                }
         d["socks"] = socks
         d["dupkey"] = keys.get(n.name)
         p = comm_pair(n)
@@ -225,8 +259,10 @@ def with_modes(low, high):
         d = dict(d)
         e = high["nodes"].get(name)
         if e is not None and "socks" in d and "socks" in e and d["type"] not in (FRAME, REROUTE) and not d.get("hide"):
-            d["modes"] = {"low": (d["h"], {k: list(s["off"]) for k, s in d["socks"].items()}),
-                          "high": (e["h"], {k: list(s["off"]) for k, s in e["socks"].items()})}
+            d["modes"] = {
+                "low": (d["h"], {k: list(s["off"]) for k, s in d["socks"].items()}),
+                "high": (e["h"], {k: list(s["off"]) for k, s in e["socks"].items()}),
+            }
         out["nodes"][name] = d
     return out
 
@@ -254,8 +290,9 @@ def at(data, where):
             step = (vh - prev_h) if top - (prev + (vh - prev_h) / 2) * sc >= 0 else (vl - prev_l)
             prev, prev_h, prev_l = prev + step, vh, vl
             got[k] = prev
-        socks = {k: dict(s, off=[s["off"][0], round(got[k], 4) if k in got else s["off"][1]])
-                 for k, s in d["socks"].items()}
+        socks = {
+            k: dict(s, off=[s["off"][0], round(got[k], 4) if k in got else s["off"][1]]) for k, s in d["socks"].items()
+        }
         out["nodes"][name] = dict(d, socks=socks, h=round(got[None], 3))
     return out
 
@@ -289,7 +326,7 @@ class Model:
             c = nodes[k].get("comm")
             if not c:
                 continue
-            a, b = (k, 'i', c[0]), (k, 'i', c[1])
+            a, b = (k, "i", c[0]), (k, "i", c[1])
             la, lb = self.linked_in(a), self.linked_in(b)
             if ((la and lb) or ((la or lb) and c[2])) and all(f"i{g[2]}" in nodes[k]["socks"] for g in (a, b)):
                 self.comm[k] = (a, b)
@@ -319,8 +356,9 @@ class Model:
         socket; self.fan keeps the slot's own offset, where the last stretch ends. A slot level
         with its fan point needs no fan."""
         from . import params as P
+
         self.slot = {}
-        self.fan = {}       # slot key -> (dx, dy) of the slot, for the slots laid out to a fan point
+        self.fan = {}  # slot key -> (dx, dy) of the slot, for the slots laid out to a fan point
         self.fan_reach = {}  # node -> how far its fans reach out on the left of its box
         gap = self.data.get("slot", SLOT)
         multi = {}
@@ -357,9 +395,9 @@ class Model:
         depth: at least FAN_DEPTH and FAN_SLOPE times the largest drop to a slot, rounded up to
         a multiple of 10."""
         from . import params as P
+
         y = self.ins[d[0]][d][1]
-        others = [self.ins[d[0]][g][1] - y for g in self.ins[d[0]]
-                  if len(g) == 3 and g != d and self.linked_in(g)]
+        others = [self.ins[d[0]][g][1] - y for g in self.ins[d[0]] if len(g) == 3 and g != d and self.linked_in(g)]
         lo = max([o + P.FAN_CLEAR for o in others if o < 0], default=-math.inf)  # y down: above
         hi = min([o - P.FAN_CLEAR for o in others if o > 0], default=math.inf)
         g = P.FAN_GAP
@@ -403,7 +441,7 @@ class Model:
         n, side, k = g
         s = self.info[n]["socks"][f"{side}{k}"]
         off = tuple(s["off"])
-        (self.outs if side == 'o' else self.ins)[n][g] = off
+        (self.outs if side == "o" else self.ins)[n][g] = off
         self.sock_type[g] = s["type"]
 
     def linked_in(self, g):

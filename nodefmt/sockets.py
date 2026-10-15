@@ -8,6 +8,7 @@ drawn, each socket's runtime data holds its location in view space (node units t
 the ctypes mirrors below read it. verify() checks the mirrors against a drawn tree before any
 position is read, so a Blender with another data layout stops with a clear message.
 """
+
 import ctypes
 import platform
 
@@ -16,6 +17,7 @@ import bpy
 
 class bNodeStack(ctypes.Structure):
     """Mirror of Blender's bNodeStack (only for the layout of bNodeSocket)."""
+
     vec: ctypes.c_float * 4
     min: ctypes.c_float
     max: ctypes.c_float
@@ -31,7 +33,8 @@ class bNodeStack(ctypes.Structure):
 
 class bNodeSocketRuntime(ctypes.Structure):
     """Mirror of the start of Blender's bNodeSocketRuntime, up to `location`."""
-    if platform.system() == 'Windows':
+
+    if platform.system() == "Windows":
         _pad0: ctypes.c_char * 8
     declaration: ctypes.c_void_p
     if bpy.app.version >= (5, 2, 0):
@@ -46,6 +49,7 @@ class bNodeSocketRuntime(ctypes.Structure):
 
 class bNodeSocket(ctypes.Structure):
     """Mirror of Blender's bNodeSocket (DNA), up to its runtime pointer."""
+
     next: ctypes.c_void_p
     prev: ctypes.c_void_p
     prop: ctypes.c_void_p
@@ -96,11 +100,11 @@ def verify(nt):
     ui = bpy.context.preferences.system.ui_scale
     for n in nt.nodes:
         socks = [s for s in list(n.inputs) + list(n.outputs) if s.enabled and not s.hide]
-        if n.bl_idname in ('NodeFrame', 'NodeReroute') or n.hide or not socks:
+        if n.bl_idname in ("NodeFrame", "NodeReroute") or n.hide or not socks:
             continue
         for s in socks[:2]:
             c = bNodeSocket.from_address(s.as_pointer())
-            ok = c.identifier.decode('utf-8', 'replace') == s.identifier and bool(c.runtime)
+            ok = c.identifier.decode("utf-8", "replace") == s.identifier and bool(c.runtime)
             if ok:
                 x, y = c.runtime.contents.location
                 x0, y1 = n.location_absolute
@@ -109,7 +113,8 @@ def verify(nt):
             if not ok:
                 raise UnsupportedBlender(
                     f"nodefmt cannot read socket positions in Blender "
-                    f"{'.'.join(map(str, bpy.app.version))} (checked up to 5.2): update nodefmt")
+                    f"{'.'.join(map(str, bpy.app.version))} (checked up to 5.2): update nodefmt"
+                )
         return
 
 

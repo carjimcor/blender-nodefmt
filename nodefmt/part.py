@@ -14,19 +14,20 @@ reroutes or what is inside a selected frame. Everything else stays where it is.
 5. Wires of the part are straightened, the logic is checked, and the selection is restored
    with the new reroutes added.
 """
+
 from itertools import pairwise
 
 from . import blend, check, model, ortho, rules
 from . import params as P
 from .layout import Formatter
 
-REROUTE = 'NodeReroute'
-FRAME = 'NodeFrame'
-GAP = 20.0         # from the block to the first track of its links to the rest
-TRACK = 10.0       # between those tracks (and the steps the router tries)
-CLEAR_X = 50.0     # the block keeps this far from the nodes of the rest, left and right (room
-                   # for a vertical run of a link between them: GAP + 2 CLEAR_WIRE) ...
-CLEAR_Y = 30.0     # ... and above and below
+REROUTE = "NodeReroute"
+FRAME = "NodeFrame"
+GAP = 20.0  # from the block to the first track of its links to the rest
+TRACK = 10.0  # between those tracks (and the steps the router tries)
+CLEAR_X = 50.0  # the block keeps this far from the nodes of the rest, left and right (room
+# for a vertical run of a link between them: GAP + 2 CLEAR_WIRE) ...
+CLEAR_Y = 30.0  # ... and above and below
 CLEAR_WIRE = 12.0  # a link to the rest keeps this far from nodes (NF032)
 
 
@@ -65,11 +66,11 @@ def _targets(node, depth=0):
     out = set()
     if depth > 500:
         return out
-    for l in node.outputs[0].links:
-        if l.to_node.bl_idname == REROUTE:
-            out |= _targets(l.to_node, depth + 1)
+    for lk in node.outputs[0].links:
+        if lk.to_node.bl_idname == REROUTE:
+            out |= _targets(lk.to_node, depth + 1)
         else:
-            out.add(l.to_node)
+            out.add(lk.to_node)
     return out
 
 
@@ -129,11 +130,16 @@ class _Links:
     links change)."""
 
     @staticmethod
-    def key(l):
+    def key(lk):
         """(from node, output index, to node, input index, muted, multi-input sort id)."""
-        return (l.from_node.name, list(l.from_node.outputs).index(l.from_socket), l.to_node.name,
-                list(l.to_node.inputs).index(l.to_socket), l.is_muted,
-                l.multi_input_sort_id if l.to_socket.is_multi_input else 0)
+        return (
+            lk.from_node.name,
+            list(lk.from_node.outputs).index(lk.from_socket),
+            lk.to_node.name,
+            list(lk.to_node.inputs).index(lk.to_socket),
+            lk.is_muted,
+            lk.multi_input_sort_id if lk.to_socket.is_multi_input else 0,
+        )
 
     @staticmethod
     def relink(nt, changes):
@@ -141,8 +147,8 @@ class _Links:
         (new from node, new output index)}. Links into a multi-input socket are made again in
         their order."""
         by_socket = {}
-        for l in nt.links:
-            k = _Links.key(l)
+        for lk in nt.links:
+            k = _Links.key(lk)
             by_socket.setdefault((k[2], k[3]), []).append(k)
         for (tn, ti), ks in sorted(by_socket.items()):
             if not any((tn, ti, k[0], k[1]) in changes for k in ks):
@@ -150,44 +156,44 @@ class _Links:
             to = nt.nodes[tn].inputs[ti]
             if to.is_multi_input:
                 ks.sort(key=lambda k: k[5])
-                for l in list(to.links):
-                    nt.links.remove(l)
+                for lk in list(to.links):
+                    nt.links.remove(lk)
                 for fn, fi, _, _, muted, _ in ks:
                     fn, fi = changes.get((tn, ti, fn, fi), (fn, fi))
-                    l = nt.links.new(nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti])
-                    l.is_muted = muted
+                    lk = nt.links.new(nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti])
+                    lk.is_muted = muted
             else:
                 fn, fi, _, _, muted, _ = ks[0]
                 fn, fi = changes[(tn, ti, fn, fi)]
-                l = nt.links.new(nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti])
-                l.is_muted = muted
+                lk = nt.links.new(nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti])
+                lk.is_muted = muted
 
 
 def _pins(nt, part):
     """Put a pin on every link between the part and the rest. Returns (pins {name: 'first' |
     'last'}, ins {pin: (outside node, output index)}, outs {pin: [(outside node, input index)]})."""
     groups_in, groups_out = {}, {}
-    for l in nt.links:
-        if l.is_hidden or FRAME in (l.from_node.bl_idname, l.to_node.bl_idname):
+    for lk in nt.links:
+        if lk.is_hidden or FRAME in (lk.from_node.bl_idname, lk.to_node.bl_idname):
             continue
-        k = _Links.key(l)
+        k = _Links.key(lk)
         a, b = k[0] in part, k[2] in part
         if not a and b:
             groups_in.setdefault((k[0], k[1]), []).append(k)
         elif a and not b:
             groups_out.setdefault((k[0], k[1]), []).append(k)
     pins, ins, outs, changes = {}, {}, {}, {}
-    for side, groups in (('first', groups_in), ('last', groups_out)):
+    for side, groups in (("first", groups_in), ("last", groups_out)):
         for (fn, fi), ks in sorted(groups.items()):
             p = nt.nodes.new(REROUTE)
             src = nt.nodes[fn].outputs[fi]
-            near = nt.nodes[ks[0][2]] if side == 'first' else nt.nodes[fn]
+            near = nt.nodes[ks[0][2]] if side == "first" else nt.nodes[fn]
             p.location_absolute = near.location_absolute
             nt.links.new(src, p.inputs[0])
             pins[p.name] = side
             for k in ks:
                 changes[(k[2], k[3], fn, fi)] = (p.name, 0)
-            if side == 'first':
+            if side == "first":
                 ins[p.name] = (fn, fi)
             else:
                 outs[p.name] = [(k[2], k[3]) for k in ks]
@@ -241,12 +247,19 @@ class Router:
             if flat and abs(a[1] - b[1]) <= ortho.TOL:  # two horizontal runs on one line
                 if abs(a[1] - p[1]) < P.COLLINEAR and min(x1, max(a[0], b[0])) - max(x0, min(a[0], b[0])) > 1.0:
                     return False
-            elif (not flat and abs(a[0] - b[0]) <= ortho.TOL  # two vertical runs
-                  and abs(a[0] - p[0]) < P.COLLINEAR and min(y1, max(a[1], b[1])) - max(y0, min(a[1], b[1])) > 1.0):
+            elif (
+                not flat
+                and abs(a[0] - b[0]) <= ortho.TOL  # two vertical runs
+                and abs(a[0] - p[0]) < P.COLLINEAR
+                and min(y1, max(a[1], b[1])) - max(y0, min(a[1], b[1])) > 1.0
+            ):
                 return False
             for c in (a, b):  # through a point of another wire
-                if x0 - P.ON_WIRE < c[0] < x1 + P.ON_WIRE and y0 - P.ON_WIRE < c[1] < y1 + P.ON_WIRE \
-                        and (c not in (p, q)):
+                if (
+                    x0 - P.ON_WIRE < c[0] < x1 + P.ON_WIRE
+                    and y0 - P.ON_WIRE < c[1] < y1 + P.ON_WIRE
+                    and (c not in (p, q))
+                ):
                     return False
         return True
 
@@ -263,6 +276,7 @@ class Router:
 
     def _route(self, a, b, src, dst, prefer, wire, strict, a_free, b_free):
         """route() with or without the checks against other wires."""
+
         def seg_ok(k, n, p, q):
             """Segment k of n: the first may touch the source node, the last the destination."""
             ex = ({src} if k == 0 else set()) | ({dst} if k == n - 1 else set())
@@ -279,8 +293,10 @@ class Router:
             return []
         lo, hi = a[0] + GAP, b[0] - GAP
         if lo <= hi:  # a Z: one vertical run in the gap
-            xs = sorted({round(lo + TRACK * k, 1) for k in range(int((hi - lo) / TRACK) + 1)} | {hi},
-                        key=lambda x: (abs(x - prefer), x))
+            xs = sorted(
+                {round(lo + TRACK * k, 1) for k in range(int((hi - lo) / TRACK) + 1)} | {hi},
+                key=lambda x: (abs(x - prefer), x),
+            )
             for x in xs:
                 if ok([(x, a[1]), (x, b[1])]):
                     return [(x, a[1]), (x, b[1])]
@@ -329,11 +345,13 @@ def _wire_id(sock):
 def _drawn_segments(nt, pins, part):
     """[(wire, p, q)] of every drawn link but the direct links between the pins and the rest
     (they are being replaced)."""
-    def temporary(l):
+
+    def temporary(lk):
         """A link between a pin and a node of the rest."""
-        a, b = l.from_node.name, l.to_node.name
+        a, b = lk.from_node.name, lk.to_node.name
         return (a in pins and b not in part) or (b in pins and a not in part)
-    return [(_wire_id(l.from_socket), a, b) for l, a, b in ortho.drawn(nt) if not temporary(l)]
+
+    return [(_wire_id(lk.from_socket), a, b) for lk, a, b in ortho.drawn(nt) if not temporary(lk)]
 
 
 def _wire(nt, router, frm, to_node, to_index, prefer, made, tree):
@@ -341,16 +359,25 @@ def _wire(nt, router, frm, to_node, to_index, prefer, made, tree):
     on new reroutes along a route of `router`; returns the output to link the input from.
     tree: {point: reroute name} of this wire so far, whose reroutes a route reuses."""
     from .sockets import socket_location
+
     to = nt.nodes[to_node].inputs[to_index]
     a = socket_location(frm) if frm.node.bl_idname != REROUTE else tuple(frm.node.location_absolute)
     if nt.nodes[to_node].bl_idname == REROUTE:
         b = tuple(nt.nodes[to_node].location_absolute)
     else:
-        link = next((l for l in to.links if l.from_node == frm.node), None)
+        link = next((lk for lk in to.links if lk.from_node == frm.node), None)
         b = ortho.link_end(link, ortho.slot_gap()) if link is not None else socket_location(to)
     wire = _wire_id(frm)
-    pts = router.route(a, b, frm.node.name, to_node, prefer, wire,
-                       frm.node.bl_idname == REROUTE, nt.nodes[to_node].bl_idname == REROUTE)
+    pts = router.route(
+        a,
+        b,
+        frm.node.name,
+        to_node,
+        prefer,
+        wire,
+        frm.node.bl_idname == REROUTE,
+        nt.nodes[to_node].bl_idname == REROUTE,
+    )
     if pts is None:  # nothing is clear: a plain Z at the preferred x
         pts = [(prefer, a[1]), (prefer, b[1])] if abs(a[1] - b[1]) > ortho.TOL else []
     router.add(wire, [a] + pts + [b])
@@ -373,6 +400,7 @@ def _wire(nt, router, frm, to_node, to_index, prefer, made, tree):
 def _socket_y(nt, d):
     """Height of input `d` (node name, input index)."""
     from .sockets import socket_location
+
     return socket_location(nt.nodes[d[0]].inputs[d[1]])[1]
 
 
@@ -396,8 +424,12 @@ def _place(nt, names, real, old, ui, others):
         for axis in (0, 1):  # 0: right, 1: down
             shift = 0.0
             for _ in range(200):
-                b = (box[0] + (shift if axis == 0 else 0), box[1] - (shift if axis == 1 else 0),
-                     box[2] + (shift if axis == 0 else 0), box[3] - (shift if axis == 1 else 0))
+                b = (
+                    box[0] + (shift if axis == 0 else 0),
+                    box[1] - (shift if axis == 1 else 0),
+                    box[2] + (shift if axis == 0 else 0),
+                    box[3] - (shift if axis == 1 else 0),
+                )
                 o = clear(b)
                 if o is None:
                     found.append((shift, axis))
@@ -416,10 +448,11 @@ def _place(nt, names, real, old, ui, others):
     return best
 
 
-def sort_selection(nt, editor, cfg=None, mode='relayout'):
+def sort_selection(nt, editor, cfg=None, mode="relayout"):
     """Sort the selected part of tree nt (see the module docstring). On a logic change the tree
     is restored and api.LogicChanged raised. Returns stats."""
     from . import api
+
     cfg = cfg or rules.Config()
     with rules.applied(cfg):
         return _sort_selection(nt, editor, cfg, mode, api)
@@ -455,8 +488,10 @@ def _sort_selection(nt, editor, cfg, mode, api):
         placed = _bbox(nt, real, ui)
         made = []
         editor.redraw()
-        router = Router({n.name: _box(n, ui) for n in nt.nodes if n.bl_idname not in (FRAME, REROUTE)},
-                        _drawn_segments(nt, pins, part))
+        router = Router(
+            {n.name: _box(n, ui) for n in nt.nodes if n.bl_idname not in (FRAME, REROUTE)},
+            _drawn_segments(nt, pins, part),
+        )
         order = sorted(ins, key=lambda p: -nt.nodes[p].location_absolute[1])
         for k, p in enumerate(order):
             fn, fi = ins[p]
@@ -475,24 +510,35 @@ def _sort_selection(nt, editor, cfg, mode, api):
         new = {n.name for n in nt.nodes if n.name not in before_names}
         movable = (part | new) - frames
         editor.redraw()
-        st = ortho.straighten(nt, editor, movable, fan=cfg.on('NF035'))
-        if cfg.on('NF034'):
+        st = ortho.straighten(nt, editor, movable, fan=cfg.on("NF035"))
+        if cfg.on("NF034"):
             editor.redraw()
             ortho.drop_straight(nt, movable)
     except Exception as e:
         snap.restore(nt, editor)
         again = check.diff(before, check.fingerprint(nt))
-        raise api.LogicChanged(f"{api.tree_name(nt)}: sorting the selection failed ({e}), reverted "
-                               f"({'restore OK' if not again else 'RESTORE FAILED'})") from e
+        raise api.LogicChanged(
+            f"{api.tree_name(nt)}: sorting the selection failed ({e}), reverted "
+            f"({'restore OK' if not again else 'RESTORE FAILED'})"
+        ) from e
     d = check.diff(before, check.fingerprint(nt))
     if d:
         snap.restore(nt, editor)
         again = check.diff(before, check.fingerprint(nt))
-        raise api.LogicChanged(f"{api.tree_name(nt)}: sorting the selection changed the logic, reverted "
-                               f"({'restore OK' if not again else 'RESTORE FAILED'}): {d[:3]}")
+        raise api.LogicChanged(
+            f"{api.tree_name(nt)}: sorting the selection changed the logic, reverted "
+            f"({'restore OK' if not again else 'RESTORE FAILED'}): {d[:3]}"
+        )
     new = {n.name for n in nt.nodes if n.name not in before_names}
     for n in nt.nodes:
         n.select = n.name in selected or n.name in new
     editor.redraw()
-    return {"tree": api.tree_name(nt), "nodes": len(real), "reroutes": len(new), "moved": moved,
-            "box": placed, "old": old, "left": st["left"]}
+    return {
+        "tree": api.tree_name(nt),
+        "nodes": len(real),
+        "reroutes": len(new),
+        "moved": moved,
+        "box": placed,
+        "old": old,
+        "left": st["left"],
+    }

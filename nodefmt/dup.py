@@ -11,27 +11,59 @@ consumers by where they land and gives each distant group its own member: existi
 reused, new ones are copies, unlinked ones are removed. The plan does not depend on the members
 that exist now, so formatting twice gives the same result. realize() carries it out in Blender.
 """
+
 import copy as _copy
 import hashlib
 
-INPUTS = {'NodeGroupInput', 'ShaderNodeValue', 'FunctionNodeInputInt', 'FunctionNodeInputBool',
-          'FunctionNodeInputVector', 'FunctionNodeInputColor', 'FunctionNodeInputRotation',
-          'FunctionNodeInputSpecialCharacters', 'GeometryNodeCollectionInfo', 'GeometryNodeObjectInfo',
-          'GeometryNodeSelfObject', 'GeometryNodeIsViewport',
-          # shader nodes that only read the shading point or hold a constant (no inputs)
-          'ShaderNodeRGB', 'ShaderNodeTexCoord', 'ShaderNodeAttribute', 'ShaderNodeNewGeometry',
-          'ShaderNodeObjectInfo', 'ShaderNodeCameraData', 'ShaderNodeLightPath', 'ShaderNodeUVMap',
-          'ShaderNodeVertexColor', 'ShaderNodeHairInfo', 'ShaderNodePointInfo', 'ShaderNodeParticleInfo',
-          'ShaderNodeVolumeInfo',
-          # compositor constants
-          'CompositorNodeRGB', 'CompositorNodeValue', 'CompositorNodeNormal'}
+INPUTS = {
+    "NodeGroupInput",
+    "ShaderNodeValue",
+    "FunctionNodeInputInt",
+    "FunctionNodeInputBool",
+    "FunctionNodeInputVector",
+    "FunctionNodeInputColor",
+    "FunctionNodeInputRotation",
+    "FunctionNodeInputSpecialCharacters",
+    "GeometryNodeCollectionInfo",
+    "GeometryNodeObjectInfo",
+    "GeometryNodeSelfObject",
+    "GeometryNodeIsViewport",
+    # shader nodes that only read the shading point or hold a constant (no inputs)
+    "ShaderNodeRGB",
+    "ShaderNodeTexCoord",
+    "ShaderNodeAttribute",
+    "ShaderNodeNewGeometry",
+    "ShaderNodeObjectInfo",
+    "ShaderNodeCameraData",
+    "ShaderNodeLightPath",
+    "ShaderNodeUVMap",
+    "ShaderNodeVertexColor",
+    "ShaderNodeHairInfo",
+    "ShaderNodePointInfo",
+    "ShaderNodeParticleInfo",
+    "ShaderNodeVolumeInfo",
+    # compositor constants
+    "CompositorNodeRGB",
+    "CompositorNodeValue",
+    "CompositorNodeNormal",
+}
 # never copied: text, and nodes that load data or render (images, textures, render layers, masks,
 # movie clips, scene and sequencer inputs), even with nothing linked in
-NEVER = {'FunctionNodeInputString', 'ShaderNodeTexImage', 'ShaderNodeTexEnvironment', 'CompositorNodeImage',
-         'CompositorNodeRLayers', 'CompositorNodeMask', 'CompositorNodeMovieClip', 'CompositorNodeTexture',
-         'CompositorNodeTrackPos', 'CompositorNodeImageInfo', 'CompositorNodeSequencerStripInfo'}
-SPLIT = 160.0   # consumers further apart than this (vertically, in one column) are separate groups
-NEAR = 360.0    # a group this close (route length) to the merged source shares it
+NEVER = {
+    "FunctionNodeInputString",
+    "ShaderNodeTexImage",
+    "ShaderNodeTexEnvironment",
+    "CompositorNodeImage",
+    "CompositorNodeRLayers",
+    "CompositorNodeMask",
+    "CompositorNodeMovieClip",
+    "CompositorNodeTexture",
+    "CompositorNodeTrackPos",
+    "CompositorNodeImageInfo",
+    "CompositorNodeSequencerStripInfo",
+}
+SPLIT = 160.0  # consumers further apart than this (vertically, in one column) are separate groups
+NEAR = 360.0  # a group this close (route length) to the merged source shares it
 
 
 # ---------------------------------------------------------------- Blender side
@@ -41,7 +73,7 @@ def duplicable(n):
     t = n.bl_idname
     if t in NEVER or n.label:
         return False
-    if t not in INPUTS and not t.startswith('GeometryNodeInput'):
+    if t not in INPUTS and not t.startswith("GeometryNodeInput"):
         return False
     if any(s.is_linked for s in n.inputs):
         return False
@@ -51,9 +83,10 @@ def duplicable(n):
 def source_keys(nt):
     """Class key of every duplicable node: what it computes, not its name or place."""
     from .check import _props, _val
+
     keys = {}
     for n in nt.nodes:
-        if n.bl_idname != 'NodeReroute' and duplicable(n):
+        if n.bl_idname != "NodeReroute" and duplicable(n):
             ins = [(s.identifier, s.name, s.enabled, _val(getattr(s, "default_value", None))) for s in n.inputs]
             outs = [s.identifier for s in n.outputs]
             props = {k: v for k, v in _props(n).items() if k not in ("name", "is_active_output", "hide", "label")}
@@ -81,17 +114,17 @@ def realize(nt, editor, plan):
             for k, d in g["dsts"]:
                 to = nt.nodes[d[0]].inputs[d[2]]
                 frm = node.outputs[k]
-                old = [l for l in to.links if not l.is_hidden]
+                old = [lk for lk in to.links if not lk.is_hidden]
                 if old and _source_socket(old[0]) == frm.as_pointer():
                     used.add(k)  # fed by this member already (directly or through reroutes)
                     continue
                 mu = old[0].is_muted if old else False
                 was = old[0].from_node if old else None
-                l = nt.links.new(frm, to)
-                l.is_muted = mu
+                lk = nt.links.new(frm, to)
+                lk.is_muted = mu
                 used.add(k)
                 _prune(nt, was)
-            if node.bl_idname == 'NodeGroupInput':
+            if node.bl_idname == "NodeGroupInput":
                 for k, o in enumerate(node.outputs):  # a Group Input shows only what it feeds
                     if o.hide != (k not in used):
                         o.hide = k not in used
@@ -106,7 +139,7 @@ def realize(nt, editor, plan):
 def _source_socket(link):
     """as_pointer() of the real output socket feeding a link, through reroutes (None if none)."""
     for _ in range(1000):
-        if link.from_node.bl_idname != 'NodeReroute':
+        if link.from_node.bl_idname != "NodeReroute":
             return link.from_socket.as_pointer()
         ins = link.from_node.inputs[0].links
         if not ins:
@@ -118,7 +151,7 @@ def _source_socket(link):
 def _prune(nt, node):
     """Remove reroute `node` and the reroutes above it while they lead nowhere: what is left of
     a wire whose destination now gets its link from another member."""
-    while node is not None and node.bl_idname == 'NodeReroute' and not node.outputs[0].is_linked:
+    while node is not None and node.bl_idname == "NodeReroute" and not node.outputs[0].is_linked:
         ins = node.inputs[0].links
         up = ins[0].from_node if ins else None
         nt.nodes.remove(node)
@@ -128,11 +161,12 @@ def _prune(nt, node):
 def _copy_node(nt, editor, node):
     """A full copy of a node (properties, hidden values), made with Blender's own duplicate."""
     import bpy
+
     for n in nt.nodes:
         n.select = False
     node.select = True
     nt.nodes.active = node
-    region = next(r for r in editor.area.regions if r.type == 'WINDOW')
+    region = next(r for r in editor.area.regions if r.type == "WINDOW")
     before = {n.as_pointer() for n in nt.nodes}
     with bpy.context.temp_override(window=editor.win, area=editor.area, region=region):
         bpy.ops.node.duplicate(keep_inputs=False)
@@ -153,8 +187,9 @@ def _classes(data):
         if d.get("dupkey"):
             cls.setdefault(d["dupkey"], []).append(name)
     linked_from = {s[0] for s, _, _, _ in data["links"]}
-    multi = {s[0] for s, d, _, _ in data["links"]
-             if data["nodes"][d[0]].get("socks", {}).get(f"i{d[2]}", {}).get("multi")}
+    multi = {
+        s[0] for s, d, _, _ in data["links"] if data["nodes"][d[0]].get("socks", {}).get(f"i{d[2]}", {}).get("multi")
+    }
     out = {}
     for k, names in cls.items():
         live = sorted(n for n in names if n in linked_from)
@@ -179,25 +214,26 @@ def merged(data):
     # commutative pairs in a fixed order (by source), so the plan does not depend on swaps
     actual = {}
     by_dst = {}
-    for l in data["links"]:
-        by_dst.setdefault(tuple(l[1]), []).append(l)
+    for lk in data["links"]:
+        by_dst.setdefault(tuple(lk[1]), []).append(lk)
     for name, v in data["nodes"].items():
         c = v.get("comm")
         if not c:
             continue
-        a, b = (name, 'i', c[0]), (name, 'i', c[1])
-        ls = sorted(by_dst.get(a, []) + by_dst.get(b, []), key=lambda l: repr(l[0]))
-        for l, slot in zip(ls, (a, b)):
-            actual[(tuple(l[0]), slot)] = tuple(l[1])
-            l[1] = list(slot)
+        a, b = (name, "i", c[0]), (name, "i", c[1])
+        ls = sorted(by_dst.get(a, []) + by_dst.get(b, []), key=lambda lk: repr(lk[0]))
+        for lk, slot in zip(ls, (a, b)):
+            actual[(tuple(lk[0]), slot)] = tuple(lk[1])
+            lk[1] = list(slot)
     return data, rep_of, actual
 
 
-def plan(data, mode='relayout'):
+def plan(data, mode="relayout"):
     """The copy plan of a tree (see the module docstring): for each class, the groups of consumer
     sockets, which member feeds each group (existing or new) and which members are removed."""
     from .layout import Formatter
     from .model import Model
+
     classes = _classes(data)
     res = {"classes": []}
     if not classes:
@@ -209,10 +245,11 @@ def plan(data, mode='relayout'):
         for n in names[1:]:
             for key, s in data["nodes"][n]["socks"].items():
                 socks.setdefault(key, s)
-        if mdata["nodes"][rep]["type"] == 'NodeGroupInput':  # the same shape however it shows now
+        if mdata["nodes"][rep]["type"] == "NodeGroupInput":  # the same shape however it shows now
             _show_only(mdata["nodes"][rep], sorted({s[2] for s, _, _, _ in mdata["links"] if s[0] == rep}))
     m = Model(mdata)
     from . import params as P
+
     # the graph only, not the old positions (no STABLE), and one seed: more give another plan,
     # often a worse tree
     stable, seeds, P.STABLE, P.SEEDS = P.STABLE, P.SEEDS, None, 1
@@ -237,15 +274,22 @@ def plan(data, mode='relayout'):
             if c and d[2] in c[:2] and all(f"i{j}" in socks for j in c[:2]):
                 dy = min(socks[f"i{j}"]["off"][1] for j in c[:2])  # the plan must not depend on swaps
             h = f.home[d[0]]
-            dsts.append({"k": s[2], "d": actual.get((s, d), d), "x": x, "y": y + dy, "home": h,
-                         "rank": f.node_items[d[0]].rank})
+            dsts.append(
+                {"k": s[2], "d": actual.get((s, d), d), "x": x, "y": y + dy, "home": h, "rank": f.node_items[d[0]].rank}
+            )
         groups = _group(dsts)
         # the group nearest to the merged source keeps it; groups close to it share it
         ox, oy = sx + m.box[rep][2], sy
-        dist = lambda g, ox=ox, oy=oy: min(abs(t["x"] - ox) + abs(t["y"] - oy) for t in g)
+
+        def dist(g, ox=ox, oy=oy):
+            return min(abs(t["x"] - ox) + abs(t["y"] - oy) for t in g)
+
         groups.sort(key=dist)
         keep, own = list(groups[0]), []
-        col = lambda g: (id(g[0]["home"]), g[0]["rank"])
+
+        def col(g):
+            return (id(g[0]["home"]), g[0]["rank"])
+
         for g in groups[1:]:
             if dist(g) <= NEAR and col(g) != col(groups[0]):  # split within a column on purpose
                 keep += g
@@ -257,7 +301,7 @@ def plan(data, mode='relayout'):
             parent = None
             if len(homes) == 1:
                 h = next(iter(homes))
-                if h.kind == 'frame':
+                if h.kind == "frame":
                     parent = h.key
             out.append({"dsts": sorted((t["k"], t["d"]) for t in g), "parent": parent})
         # existing members keep the groups they already feed most; other groups reuse a free
@@ -273,8 +317,9 @@ def plan(data, mode='relayout'):
         for g in sorted(out, key=lambda g: (-len(g["dsts"]), g["dsts"])):
             if g["node"] is None and free:
                 g["node"] = free.pop(0)
-        res["classes"].append({"key": k, "rep": rep, "groups": out, "remove": free,
-                               "dsts": [list(map(list, g["dsts"])) for g in out]})
+        res["classes"].append(
+            {"key": k, "rep": rep, "groups": out, "remove": free, "dsts": [list(map(list, g["dsts"])) for g in out]}
+        )
     return res
 
 
@@ -307,8 +352,8 @@ def changes(plan, data):
             if g["node"] is None or any(cur.get(tuple(d)) != g["node"] for _, d in g["dsts"]):
                 return True
             n = data["nodes"][g["node"]]
-            if n["type"] == 'NodeGroupInput':
-                shown = {int(k[1:]) for k, v in n["socks"].items() if k[0] == 'o' and v["vis"]}
+            if n["type"] == "NodeGroupInput":
+                shown = {int(k[1:]) for k, v in n["socks"].items() if k[0] == "o" and v["vis"]}
                 if shown != {k for k, _ in g["dsts"]}:
                     return True
     return False
@@ -319,7 +364,7 @@ def apply_model(data, plan):
     give them: a Group Input copy shows only the outputs it feeds."""
     data = _copy.deepcopy(data)
     links = [[s, d, mu, sid] for s, d, mu, sid in data["links"]]
-    by_dst = {tuple(l[1]): l for l in links}  # class links never go to multi-input sockets
+    by_dst = {tuple(lk[1]): lk for lk in links}  # class links never go to multi-input sockets
     made = 0
     for cls in plan["classes"]:
         rep = data["nodes"][cls["rep"]]
@@ -330,11 +375,11 @@ def apply_model(data, plan):
                 name = f"{cls['rep']}~{made}"
                 c = _copy.deepcopy(rep)
                 used = sorted({k for k, _ in g["dsts"]})
-                if c["type"] == 'NodeGroupInput':
+                if c["type"] == "NodeGroupInput":
                     _show_only(c, used)
                 data["nodes"][name] = c
             node = data["nodes"][name]
-            if node["type"] == 'NodeGroupInput' and g["node"] is not None:
+            if node["type"] == "NodeGroupInput" and g["node"] is not None:
                 _show_only(node, sorted({k for k, _ in g["dsts"]}))
             if g["move"]:
                 node["parent"] = g["parent"]
@@ -343,10 +388,13 @@ def apply_model(data, plan):
             for k, d in g["dsts"]:
                 key = f"o{k}"
                 if key not in node["socks"]:
-                    alt = [v["socks"][key] for v in data["nodes"].values()
-                           if v.get("dupkey") == cls["key"] and key in v.get("socks", {})]
+                    alt = [
+                        v["socks"][key]
+                        for v in data["nodes"].values()
+                        if v.get("dupkey") == cls["key"] and key in v.get("socks", {})
+                    ]
                     node["socks"][key] = _copy.deepcopy(alt[0])
-                by_dst[tuple(d)][0] = [name, 'o', k]
+                by_dst[tuple(d)][0] = [name, "o", k]
         for n in cls["remove"]:
             data["nodes"].pop(n, None)
     data["links"] = sorted(links)
@@ -355,7 +403,7 @@ def apply_model(data, plan):
 
 def _show_only(c, used):
     """Make a Group Input record show only the outputs `used`, with Blender's row spacing."""
-    outs = sorted((int(k[1:]), s) for k, s in c["socks"].items() if k[0] == 'o' and s["vis"])
+    outs = sorted((int(k[1:]), s) for k, s in c["socks"].items() if k[0] == "o" and s["vis"])
     if len(outs) < 1:
         return
     ys = sorted(s["off"][1] for _, s in outs)
@@ -363,7 +411,7 @@ def _show_only(c, used):
     if not 18.0 <= step <= 26.0:
         step = 22.0  # sockets read from several members: Blender's row height
     bottom = c["h"] - ys[-1] if c["h"] - ys[-1] > 0 else 17.0
-    socks = {k: s for k, s in c["socks"].items() if k[0] != 'o'}
+    socks = {k: s for k, s in c["socks"].items() if k[0] != "o"}
     for n, k in enumerate(used):
         s = _copy.deepcopy(c["socks"].get(f"o{k}") or outs[0][1])
         s["off"] = [s["off"][0], ys[0] + n * step]

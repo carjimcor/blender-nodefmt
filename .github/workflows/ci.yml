@@ -19,6 +19,7 @@ jobs:
           python-version: "3.13"
       - run: pip install ruff==0.17.1
       - run: ruff check --output-format=github .
+      - run: ruff format --check --diff .
 
   layout:
     name: layouts unchanged

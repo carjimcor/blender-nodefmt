@@ -12,68 +12,168 @@ repository root; the first one found wins; [tool.nodefmt] in a pyproject.toml wo
     ignore = ["NF011"]        # codes or prefixes to switch off
     ui-scale = 1.4            # optional: the Resolution Scale to format for (default: Blender's)
 """
+
 import os
 
 # code, name, kind ('guarantee' | 'style'), summary
 RULES = [
-    ("NF001", "no-curved-links", "guarantee",
-     "A link that is not straight turns on reroutes: no link is drawn as a curve or a diagonal."),
+    (
+        "NF001",
+        "no-curved-links",
+        "guarantee",
+        "A link that is not straight turns on reroutes: no link is drawn as a curve or a diagonal.",
+    ),
     ("NF002", "no-links-behind-nodes", "guarantee", "No wire passes behind a node."),
-    ("NF003", "orthogonal-segments", "guarantee",
-     ("Every drawn wire segment is exactly horizontal or vertical (within half a unit) at the UI "
-      "scale the tree is formatted for.")),
-    ("NF004", "no-overlapping-reroutes", "guarantee",
-     "No two reroutes of different wires sit on top of each other (closer than 10 units)."),
-    ("NF005", "logic-unchanged", "guarantee",
-     "Formatting never changes what the tree computes; a format that would is undone."),
-    ("NF010", "duplicate-input-nodes", "style",
-     ("Input-like nodes (Group Input, Named Attribute, constants, ...) get a copy next to each "
-      "distant group of consumers instead of long wires from one node.")),
-    ("NF011", "commutative-swaps", "style",
-     ("The two inputs of a commutative node (Add, Multiply, AND, Equal, ...) may be swapped when "
-      "that removes a crossing.")),
-    ("NF020", "free-zone-outputs", "style",
-     "A zone's output may sit where its inputs are instead of level with the zone input."),
-    ("NF021", "blocks-next-to-consumer", "style",
-     ("A frame or zone with nothing linked into it sits in the column right before the node it "
-      "feeds, above or below the main flow, instead of at the far left; one with nothing linked at "
-      "all sits compactly under the tree.")),
-    ("NF022", "converging-shape", "style",
-     ("A tree that converges on one output may take a '>' shape with the output in the middle of "
-      "its inputs. Off by default.")),
-    ("NF023", "stacked-fields", "style",
-     ("A short chain of field nodes (up to three, such as Index -> Compare) that feeds one input "
-      "of a node and nothing else sits in that node's column, stacked right above or below it, "
-      "with its wires running round the side. Off by default.")),
-    ("NF030", "staircase-bundles", "style",
-     ("Wires that leave one node or enter one node are nested like stairs and never cross each "
-      "other.")),
-    ("NF031", "no-u-jogs", "style",
-     ("A route does not reverse its vertical direction unless a node is in the way, has no "
-      "landing that could merge with the level before or after it, and no step so small that "
-      "its two reroutes sit on one spot.")),
-    ("NF032", "wire-clearance", "style",
-     "Wires keep clear of node edges, frame borders and zone outlines (no wire runs along them)."),
-    ("NF033", "avoid-crossings", "style",
-     ("A crossing that can be avoided (a lane on the other side, a wire entering a zone above its "
-      "input) is avoided.")),
-    ("NF034", "no-junction-look", "style",
-     ("Different wires never share a point or run on one line, and no reroute sits in the middle "
-      "of a straight run: nothing looks like a junction.")),
-    ("NF035", "fanned-multi-inputs", "style",
-     ("The links into a multi-input socket (Join Geometry, Join Strings, ...) arrive a widget unit "
-      "apart and converge only in a short fan right before the socket, instead of running a "
-      "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
-      "Blender's noodle curving). Off by default.")),
-    ("NF036", "shared-tracks", "style",
-     ("Vertical runs in one gap between columns that lie one above the other, at least 10 units "
-      "apart (as far as two reroutes must be), share one x instead of each taking its own track, "
-      "so the gap reads as a few clean lines and stays narrow.")),
-    ("NF040", "label-first-reroute", "style",
-     "The label of a labelled reroute goes on the first reroute of its wire, near the source."),
-    ("NF041", "label-clearance", "style",
-     ("A reroute label, and every greyed copy of it that Blender shows on the later reroutes of its "
-      "wire, overlaps no other label, no node and no wire.")),
+    (
+        "NF003",
+        "orthogonal-segments",
+        "guarantee",
+        (
+            "Every drawn wire segment is exactly horizontal or vertical (within half a unit) at the UI "
+            "scale the tree is formatted for."
+        ),
+    ),
+    (
+        "NF004",
+        "no-overlapping-reroutes",
+        "guarantee",
+        "No two reroutes of different wires sit on top of each other (closer than 10 units).",
+    ),
+    (
+        "NF005",
+        "logic-unchanged",
+        "guarantee",
+        "Formatting never changes what the tree computes; a format that would is undone.",
+    ),
+    (
+        "NF010",
+        "duplicate-input-nodes",
+        "style",
+        (
+            "Input-like nodes (Group Input, Named Attribute, constants, ...) get a copy next to each "
+            "distant group of consumers instead of long wires from one node."
+        ),
+    ),
+    (
+        "NF011",
+        "commutative-swaps",
+        "style",
+        (
+            "The two inputs of a commutative node (Add, Multiply, AND, Equal, ...) may be swapped when "
+            "that removes a crossing."
+        ),
+    ),
+    (
+        "NF020",
+        "free-zone-outputs",
+        "style",
+        "A zone's output may sit where its inputs are instead of level with the zone input.",
+    ),
+    (
+        "NF021",
+        "blocks-next-to-consumer",
+        "style",
+        (
+            "A frame or zone with nothing linked into it sits in the column right before the node it "
+            "feeds, above or below the main flow, instead of at the far left; one with nothing linked at "
+            "all sits compactly under the tree."
+        ),
+    ),
+    (
+        "NF022",
+        "converging-shape",
+        "style",
+        (
+            "A tree that converges on one output may take a '>' shape with the output in the middle of "
+            "its inputs. Off by default."
+        ),
+    ),
+    (
+        "NF023",
+        "stacked-fields",
+        "style",
+        (
+            "A short chain of field nodes (up to three, such as Index -> Compare) that feeds one input "
+            "of a node and nothing else sits in that node's column, stacked right above or below it, "
+            "with its wires running round the side. Off by default."
+        ),
+    ),
+    (
+        "NF030",
+        "staircase-bundles",
+        "style",
+        ("Wires that leave one node or enter one node are nested like stairs and never cross each other."),
+    ),
+    (
+        "NF031",
+        "no-u-jogs",
+        "style",
+        (
+            "A route does not reverse its vertical direction unless a node is in the way, has no "
+            "landing that could merge with the level before or after it, and no step so small that "
+            "its two reroutes sit on one spot."
+        ),
+    ),
+    (
+        "NF032",
+        "wire-clearance",
+        "style",
+        "Wires keep clear of node edges, frame borders and zone outlines (no wire runs along them).",
+    ),
+    (
+        "NF033",
+        "avoid-crossings",
+        "style",
+        (
+            "A crossing that can be avoided (a lane on the other side, a wire entering a zone above its "
+            "input) is avoided."
+        ),
+    ),
+    (
+        "NF034",
+        "no-junction-look",
+        "style",
+        (
+            "Different wires never share a point or run on one line, and no reroute sits in the middle "
+            "of a straight run: nothing looks like a junction."
+        ),
+    ),
+    (
+        "NF035",
+        "fanned-multi-inputs",
+        "style",
+        (
+            "The links into a multi-input socket (Join Geometry, Join Strings, ...) arrive a widget unit "
+            "apart and converge only in a short fan right before the socket, instead of running a "
+            "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
+            "Blender's noodle curving). Off by default."
+        ),
+    ),
+    (
+        "NF036",
+        "shared-tracks",
+        "style",
+        (
+            "Vertical runs in one gap between columns that lie one above the other, at least 10 units "
+            "apart (as far as two reroutes must be), share one x instead of each taking its own track, "
+            "so the gap reads as a few clean lines and stays narrow."
+        ),
+    ),
+    (
+        "NF040",
+        "label-first-reroute",
+        "style",
+        "The label of a labelled reroute goes on the first reroute of its wire, near the source.",
+    ),
+    (
+        "NF041",
+        "label-clearance",
+        "style",
+        (
+            "A reroute label, and every greyed copy of it that Blender shows on the later reroutes of its "
+            "wire, overlaps no other label, no node and no wire."
+        ),
+    ),
 ]
 # one-line tooltips for the add-on (the summaries above are the full text)
 SHORT = {
@@ -97,8 +197,8 @@ CODES = [r[0] for r in RULES]
 NAMES = {r[0]: r[1] for r in RULES}
 KIND = {r[0]: r[2] for r in RULES}
 SUMMARY = {r[0]: r[3] for r in RULES}
-GUARANTEES = [c for c in CODES if KIND[c] == 'guarantee']
-STYLE = [c for c in CODES if KIND[c] == 'style']
+GUARANTEES = [c for c in CODES if KIND[c] == "guarantee"]
+STYLE = [c for c in CODES if KIND[c] == "style"]
 OPT_IN = {"NF022", "NF023", "NF035"}  # style rules that are off unless selected (by code, prefix, name or ALL)
 CONFIG_NAMES = ("nodefmt.toml", "pyproject.toml")
 
@@ -107,7 +207,7 @@ def _match(code, pats):
     """True if a code is named by one of the patterns: 'ALL', a code, a prefix or a rule name."""
     for p in pats:
         p = p.strip()
-        if p.upper() == 'ALL' or (p and code.startswith(p.upper())) or p == NAMES.get(code):
+        if p.upper() == "ALL" or (p and code.startswith(p.upper())) or p == NAMES.get(code):
             return True
     return False
 
@@ -116,7 +216,7 @@ def resolve(select=None, ignore=None):
     """The set of enabled codes: guarantees, plus the selected style rules (default: all but the
     opt-in ones) minus the ignored ones. Unknown codes raise ValueError."""
     for p in list(select or []) + list(ignore or []):
-        if p.strip() and p.strip().upper() != 'ALL' and not any(_match(c, [p]) for c in CODES):
+        if p.strip() and p.strip().upper() != "ALL" and not any(_match(c, [p]) for c in CODES):
             raise ValueError(f"unknown rule {p!r}")
     if select:
         sel = [c for c in STYLE if _match(c, select)]
@@ -152,31 +252,32 @@ def _parse_toml(text):
     """A dict from TOML text (tomllib; a small fallback parser for flat key = value files)."""
     try:
         import tomllib
+
         return tomllib.loads(text)
     except ImportError:
         pass
     out_root = {}
     out = out_root
     for line in text.splitlines():
-        line = line.split('#', 1)[0].strip()
+        line = line.split("#", 1)[0].strip()
         if not line:
             continue
-        if line.startswith('['):
+        if line.startswith("["):
             out = out_root
-            for part in line.strip('[]').split('.'):
+            for part in line.strip("[]").split("."):
                 out = out.setdefault(part.strip(), {})
             continue
-        k, _, v = line.partition('=')
+        k, _, v = line.partition("=")
         v = v.strip()
-        if v.startswith('['):
-            val = [x.strip().strip('"\'') for x in v.strip('[]').split(',') if x.strip()]
-        elif v in ('true', 'false'):
-            val = v == 'true'
+        if v.startswith("["):
+            val = [x.strip().strip("\"'") for x in v.strip("[]").split(",") if x.strip()]
+        elif v in ("true", "false"):
+            val = v == "true"
         else:
             try:
                 val = float(v)
             except ValueError:
-                val = v.strip('"\'')
+                val = v.strip("\"'")
         out[k.strip()] = val
     return out_root
 
@@ -225,11 +326,12 @@ class applied:
     def __enter__(self):
         """Set the parameters."""
         from . import params as P
+
         on = self.cfg.on
         new = {
             "SATELLITES": on("NF021"),
-            "ZONE_OUT": ('level', 'median', 'mean') if on("NF020") else ('level',),
-            "PLACERS": ('blocks', 'balanced', 'relax') if on("NF022") else ('blocks', 'relax'),
+            "ZONE_OUT": ("level", "median", "mean") if on("NF020") else ("level",),
+            "PLACERS": ("blocks", "balanced", "relax") if on("NF022") else ("blocks", "relax"),
             "TRACK_BUNDLE": 4.0 if on("NF030") else 1.0,
             "W_CROSS_BUNDLE": 15.0 if on("NF030") else 0.0,
             "W_CROSS": 4.0 if on("NF033") else 1.5,
@@ -249,6 +351,7 @@ class applied:
     def __exit__(self, *exc):
         """Restore the parameters."""
         from . import params as P
+
         for k, v in self.saved.items():
             setattr(P, k, v)
         return False

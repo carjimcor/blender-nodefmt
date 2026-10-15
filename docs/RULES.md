@@ -4,8 +4,8 @@ Every behaviour of nodefmt is a rule with a code, as in ruff. Guarantees (NF001-
 hold. Style rules can be switched off: with their checkbox in the panel (or in Preferences >
 Add-ons > nodefmt), with `ignore = ["NF031"]` in [nodefmt.toml](CONFIGURATION.md), or with
 `--ignore NF031` on the [command line](CLI.md). A rule that is off is neither applied when
-sorting nor reported by a check. NF023 is off by default: select it by code, by name or with
-`"ALL"`.
+sorting nor reported by a check. NF023 and NF035 are off by default: select them by code, by
+name or with `"ALL"`.
 
 | Code | Name | Kind | What it does |
 |---|---|---|---|
@@ -25,6 +25,7 @@ sorting nor reported by a check. NF023 is off by default: select it by code, by 
 | [NF032](#nf032-wire-clearance) | wire-clearance | style | Wires keep clear of node edges, frame borders and zone outlines. |
 | [NF033](#nf033-avoid-crossings) | avoid-crossings | style | A crossing that can be avoided is avoided. |
 | [NF034](#nf034-no-junction-look) | no-junction-look | style | Wires never share a point or run on one line. |
+| [NF035](#nf035-fanned-multi-inputs) | fanned-multi-inputs | style, off by default | The links into a Join Geometry or Join Strings arrive spread out and converge in a short fan. |
 | [NF040](#nf040-label-first-reroute) | label-first-reroute | style | A reroute label goes on the first reroute of its wire. |
 | [NF041](#nf041-label-clearance) | label-clearance | style | Reroute labels, and the greyed copies Blender shows, overlap no label, node or wire. |
 
@@ -61,6 +62,10 @@ straight runs and right angles read like a circuit diagram.
 
 Example: Set Position sits lower than the nodes it connects, so both links curve. After the sort
 it is level with them and both links are straight.
+
+With NF035 (off by default), the last stretch of each link into a multi-input socket, from its
+fan point to its slot, is drawn diagonal (or curved, with Blender's noodle curving): that is the
+fan, not a fault of NF001 or NF003.
 
 Images: before, the example as built; after, sorted with no style rules.
 
@@ -430,6 +435,46 @@ scale 1.25).
 | Before | After |
 |---|---|
 | ![NF034 before: a reroute in a straight wire](rules/NF034-before.png) | ![NF034 after: no reroute](rules/NF034-after.png) |
+
+### NF035 fanned-multi-inputs
+
+Style, off by default. The links into a multi-input socket (Join Geometry, Join Strings, Mesh
+Boolean, ...) arrive a widget unit (20 units) apart and converge only in a short fan right
+before the socket, instead of running a quarter widget unit (5 units) apart all the way from the
+gap before the node.
+
+Why: the order of the links into a Join Geometry or Join Strings matters, and five units apart
+their wires blur into one thick band: it is hard to see which wire goes to which slot. Spread
+out, each wire can be followed to its slot.
+
+Each link runs to its fan point, a reroute a little left of the socket, and from there straight
+to its slot. The fan points are centred on the socket and keep 10 units from the wires into the
+node's other inputs (the Delimiter of a Join Strings): the fan moves away from them and, only if
+that is not enough, spreads less, never less than 10 units. A slot whose fan point is level with
+it (the middle one of an odd number) needs no fan. The fan reaches 30 units to the left of the
+socket, more for a big fan (at least 1.5 times its largest drop), and the gap before the node
+widens so the vertical runs of the wires stay clear of it. The last stretch of each wire is
+diagonal; with Blender's noodle curving it is drawn as a small curve, and with a curving of 0
+as a straight diagonal. A collapsed node has no fan (all its links meet at the socket).
+
+Example: three Grids feed one Join Geometry. Without the rule their wires turn into the socket
+5 units apart. With it they arrive 20 units apart and converge in the last 30 units. The second
+example (`NF035-strings`) is a Join Strings whose Delimiter is linked too: the fan of its three
+Strings moves down, clear of the Delimiter wire.
+
+Off: the links run to their slots, 5 units apart.
+
+Check reports a multi-input socket whose links arrive less than 10 units apart.
+
+Images: before, sorted with every style rule off; after, sorted with only NF035.
+
+| Before | After |
+|---|---|
+| ![NF035 before: three wires packed into a Join Geometry](rules/NF035-before.png) | ![NF035 after: the wires spread out and converge in a fan](rules/NF035-after.png) |
+
+| Before | After |
+|---|---|
+| ![NF035-strings before: the Strings wires packed under the Delimiter](rules/NF035-strings-before.png) | ![NF035-strings after: the fan below the Delimiter wire](rules/NF035-strings-after.png) |
 
 ### NF040 label-first-reroute
 

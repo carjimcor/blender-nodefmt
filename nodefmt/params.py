@@ -19,6 +19,12 @@ SATELLITES = True   # NF021: a big block with no inputs sits right before its co
 STACK_MAX = 3       # NF023: the most nodes in a chain stacked above or below its consumer
 STACK_GAP = 40.0    # NF023: vertical space between two nodes of a stack (its wire runs in the middle)
 STACK_TRACK = 20.0  # NF023: distance of a stack's wires from the left and right edges of its nodes
+FAN = False         # NF035: the links into a multi-input socket spread out before it (rules.applied sets it)
+FAN_GAP = 20.0      # NF035: vertical space between the links of a multi-input socket before they converge
+FAN_MIN = 10.0      # NF035: the least space, where the wires into the node's other inputs leave less room
+FAN_CLEAR = 10.0    # NF035: room kept between the fan and the wire into another input of the node
+FAN_DEPTH = 30.0    # NF035: the shortest horizontal reach of the fan, from where it spreads to the socket
+FAN_SLOPE = 1.5     # NF035: the reach is at least this times the largest drop of a link in the fan
 
 # ---------------------------------------------------------------- track order (columns.py)
 EXACT_TRACKS = 8    # gaps with up to this many tracks are ordered exactly

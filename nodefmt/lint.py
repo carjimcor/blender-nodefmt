@@ -47,11 +47,14 @@ def lint(d, rules=None, labels=None, groups=None):
     out = []
     segs = d.segments()
     rr = d.reroutes()
+    fan = 'NF035' in rules
     # ------------------------------------------------ guarantees
     for s in segs:
         dx, dy = abs(s[1][0] - s[2][0]), abs(s[1][1] - s[2][1])
         mid = ((s[1][0] + s[2][0]) / 2, (s[1][1] + s[2][1]) / 2)
-        if dx > 2.0 and dy > 2.0:
+        if fan and _fan_stretch(d, s):
+            pass  # NF035: the last stretch of a fan into a multi-input slot may be diagonal
+        elif dx > 2.0 and dy > 2.0:
             out.append(_v('NF001', f"wire of {_name(s[0])} is drawn as a curve ({dx:.0f} x {dy:.0f})", mid, _ends(s)))
         elif dx > 0.5 and dy > 0.5:
             out.append(_v('NF003', f"segment of {_name(s[0])} is off by {min(dx, dy):.1f} units", mid, _ends(s)))
@@ -143,6 +146,11 @@ def lint(d, rules=None, labels=None, groups=None):
                 if a is not None and len(cs) == 1 and wires._same_dir(a, p, next(iter(cs))):
                     out.append(_v('NF034', f"a reroute of {_name(tag)} sits in the middle of a straight run", p,
                                   (_src(tag),)))
+    # ------------------------------------------------ fans into multi-input sockets (NF035)
+    if fan:
+        for sock, (gap, at) in sorted(_tight_multi(d).items(), key=lambda kv: repr(kv[0])):
+            out.append(_v('NF035', f"links into {sock[0]!r} ({_name(sock)}) arrive {gap:.1f} units apart; "
+                                   f"they could spread out and converge in a fan", at, (sock[0],)))
     # ------------------------------------------------ blocks far from their consumer (NF021)
     if 'NF021' in rules and groups:
         for name, members in sorted(groups.items()):
@@ -296,6 +304,40 @@ def _multi_pair(d, a, b):
         return False
     ka, kb = d.trees[a[0]].dst.get(a[2]), d.trees[b[0]].dst.get(b[2])
     return ka is not None and kb is not None and len(ka) == 4 and len(kb) == 4 and ka[:3] == kb[:3]
+
+
+FAN_REACH = 200.0  # NF035: the longest diagonal stretch counted as part of a fan
+
+
+def _fan_stretch(d, s):
+    """True if segment s is the last stretch of a fan into a multi-input slot (rule NF035): from
+    a reroute, rightwards and not far, into a slot of a multi-input socket."""
+    if s[3] != 'rr' or s[4] != 'sock':
+        return False
+    k = d.trees[s[0]].dst.get(s[2])
+    return k is not None and len(k) == 4 and 0.5 < s[2][0] - s[1][0] <= FAN_REACH
+
+
+def _tight_multi(d):
+    """NF035: multi-input sockets whose links arrive closer than FAN_MIN to each other, as
+    {socket gid: (smallest distance, a point to report)}. The links are taken where their last
+    stretch starts (the fan point, else the bend or the socket the last run comes from); a
+    collapsed node, where all slots meet at one point, has no fan."""
+    ends = {}
+    for tag, t in d.trees.items():
+        for q, k in t.dst.items():
+            if len(k) == 4 and q in t.parent:
+                ends.setdefault(k[:3], []).append((k[3], t.parent[q], q))
+    out = {}
+    for sock, ls in ends.items():
+        if len(ls) < 2 or len({q for _, _, q in ls}) < 2:
+            continue
+        ls.sort()
+        gaps = [(abs(a[1][1] - b[1][1]), b[2]) for a, b in zip(ls, ls[1:])]
+        gap, at = min(gaps)
+        if gap < P.FAN_MIN - 0.5:
+            out[sock] = (gap, at)
+    return out
 
 
 def _jogs(d, tag):

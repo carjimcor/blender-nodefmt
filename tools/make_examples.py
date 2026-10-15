@@ -441,6 +441,35 @@ def nf023():
     return t
 
 
+def nf035():
+    """Three Grids feed one Join Geometry; with the rule off their wires arrive a slot (5 units)
+    apart, packed together right before the socket."""
+    t = Tree("NF035", inputs=())
+    grids = [t.node('GeometryNodeMeshGrid', 0, y) for y in (0, -220, -440)]
+    jo = t.node('GeometryNodeJoinGeometry', 260, -220)
+    go = t.node('NodeGroupOutput', 460, -220)
+    for g in grids:
+        t.link(g, 0, jo, 0)
+    t.link(jo, 0, go, 0)
+    return t
+
+
+def nf035_strings():
+    """Join Strings with its Delimiter linked too: the fan of its three Strings keeps clear of the
+    Delimiter wire just above them."""
+    t = Tree("NF035", inputs=(("Separator", 'String'), ("First", 'String'), ("Second", 'String'),
+                              ("Third", 'String')),
+             outputs=(("Text", 'String'),), name="NF035 fanned-multi-inputs (strings)")
+    gi = t.node('NodeGroupInput', 0, 0)
+    js = t.node('GeometryNodeStringJoin', 260, 0)
+    go = t.node('NodeGroupOutput', 460, 0)
+    t.link(gi, 0, js, "Delimiter")
+    for k in (3, 2, 1):  # the last link made takes the top slot
+        t.link(gi, k, js, "Strings")
+    t.link(js, 0, go, 0)
+    return t
+
+
 def nf030():
     """Combine XYZ and Separate XYZ both feed the Group Output; with Combine XYZ lower, the two
     wires into the Group Output cross."""
@@ -594,7 +623,7 @@ EXAMPLES = {"NF001": nf001, "NF002": nf002, "NF003": nf003, "NF003-rows": nf003_
             "NF005": nf005, "NF010": nf010, "NF011": nf011, "NF011-frame": nf011_frame,
             "NF011-zone": nf011_zone, "NF020": nf020, "NF021": nf021, "NF021-alone": nf021_alone,
             "NF022": nf022, "NF023": nf023, "NF030": nf030, "NF031": nf031, "NF032": nf032, "NF033": nf033,
-            "NF034": nf034, "NF040": nf040, "NF041": nf041}
+            "NF034": nf034, "NF035": nf035, "NF035-strings": nf035_strings, "NF040": nf040, "NF041": nf041}
 
 
 def main():

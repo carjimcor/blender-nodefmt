@@ -476,7 +476,7 @@ def _sort_selection(nt, editor, cfg, mode, api):
         new = {n.name for n in nt.nodes if n.name not in before_names}
         movable = (part | new) - frames
         editor.redraw()
-        st = ortho.straighten(nt, editor, movable)
+        st = ortho.straighten(nt, editor, movable, fan=cfg.on('NF035'))
         if cfg.on('NF034'):
             editor.redraw()
             ortho.drop_straight(nt, movable)

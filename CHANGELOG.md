@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- New rule NF035 fanned-multi-inputs, off by default: the links into a multi-input socket (Join
+  Geometry, Join Strings, ...) arrive a widget unit apart and converge in a short fan right
+  before the socket, clear of the wires into the node's other inputs, instead of running a
+  quarter widget unit apart (examples `NF035` and `NF035-strings`).
+
 ## 0.10.0
 
 - New rule NF023 stacked-fields, off by default: a short chain of field nodes (up to three, such

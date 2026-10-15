@@ -61,6 +61,11 @@ RULES = [
     ("NF034", "no-junction-look", "style",
      "Different wires never share a point or run on one line, and no reroute sits in the middle "
      "of a straight run: nothing looks like a junction."),
+    ("NF035", "fanned-multi-inputs", "style",
+     "The links into a multi-input socket (Join Geometry, Join Strings, ...) arrive a widget unit "
+     "apart and converge only in a short fan right before the socket, instead of running a "
+     "quarter widget unit apart; the fan's last stretches are drawn diagonal (or curved, with "
+     "Blender's noodle curving). Off by default."),
     ("NF040", "label-first-reroute", "style",
      "The label of a labelled reroute goes on the first reroute of its wire, near the source."),
     ("NF041", "label-clearance", "style",
@@ -80,6 +85,7 @@ SHORT = {
     "NF032": "Keep wires away from the edges of nodes, frames and zones",
     "NF033": "Avoid crossings that another route can remove",
     "NF034": "Different wires never share a point, so nothing looks like a junction",
+    "NF035": "Spread the links into a Join Geometry or Join Strings, converging in a fan (off by default)",
     "NF040": "Put a reroute label on the first reroute of its wire",
     "NF041": "Keep reroute labels, and their greyed copies, clear of other labels, nodes and wires",
 }
@@ -89,7 +95,7 @@ KIND = {r[0]: r[2] for r in RULES}
 SUMMARY = {r[0]: r[3] for r in RULES}
 GUARANTEES = [c for c in CODES if KIND[c] == 'guarantee']
 STYLE = [c for c in CODES if KIND[c] == 'style']
-OPT_IN = {"NF023"}  # style rules that are off unless selected (by code, prefix, name or ALL)
+OPT_IN = {"NF023", "NF035"}  # style rules that are off unless selected (by code, prefix, name or ALL)
 CONFIG_NAMES = ("nodefmt.toml", "pyproject.toml")
 
 
@@ -232,6 +238,7 @@ class applied:
             "W_HLEN": 0.002 if on("NF021") else 0.0,
             "W_BORDER": 2.0 if on("NF032") else 0.0,
             "ZONE_LANE_GAP": 34.0 if on("NF032") else 20.0,
+            "FAN": on("NF035"),
         }
         for k, v in new.items():
             self.saved[k] = getattr(P, k)

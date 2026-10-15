@@ -319,8 +319,16 @@ class Model:
         with the highest sort id on top. Such a link is laid out to a slot key, the socket gid plus the
         slot index (0 = bottom), so the links arrive separately instead of meeting at one point.
         On a collapsed node all links meet at the socket (slots with no offset); they are still
-        slots, so each arrives as its own direct link instead of sharing a final run."""
+        slots, so each arrives as its own direct link instead of sharing a final run.
+
+        NF035 (params.FAN): the layout lays a slot's link out to its fan point instead (_fan), a
+        widget unit from the next one and a little left of the socket; self.fan keeps the slot's
+        own offset, where the last stretch of the link, from the fan point, ends. A slot whose
+        fan point is level with it needs no fan."""
+        from . import params as P
         self.slot = {}
+        self.fan = {}       # slot key -> (dx, dy) of the slot, for the slots laid out to a fan point
+        self.fan_reach = {}  # node -> how far its fans reach out on the left of its box
         gap = self.data.get("slot", SLOT)
         multi = {}
         for s, d, _, sid in self.links:
@@ -333,12 +341,55 @@ class Model:
             ls.sort()
             n = len(ls)
             x, y = self.ins[d[0]][d]
+            hide = self.info[d[0]].get("hide")
+            fan = self._fan(d, n, gap) if P.FAN and not hide else None
             for j, (sid, s) in enumerate(ls):
                 key = d + (j,)
-                off = 0 if self.info[d[0]].get("hide") else (n - 1) * gap / 2 - j * gap
-                self.ins[d[0]][key] = (x, y + off)
+                off = 0 if hide else (n - 1) * gap / 2 - j * gap
+                if fan is not None and abs(fan[1][j] - off) > P.EPS:
+                    depth = fan[0]
+                    self.ins[d[0]][key] = (x - depth, y + fan[1][j])
+                    self.fan[key] = (x, y + off)
+                    self.fan_reach[d[0]] = max(self.fan_reach.get(d[0], 0.0), depth - x)
+                else:
+                    self.ins[d[0]][key] = (x, y + off)
                 self.sock_type[key] = self.sock_type[d]
                 self.slot[(s, d, sid)] = key
+
+    def _fan(self, d, n, gap):
+        """NF035: the fan of multi-input socket d with n links (slots `gap` apart): (depth,
+        [offset from the socket of each slot's fan point, slot 0 = bottom]). The fan points
+        stand FAN_GAP apart, centred on the socket, `depth` to its left; the wires into the
+        node's other inputs keep FAN_CLEAR from them, by moving the fan and, if that is not
+        enough, by spreading it less (never less than FAN_MIN). depth: at least FAN_DEPTH and
+        FAN_SLOPE times the largest drop from a fan point to its slot, in steps of 10."""
+        from . import params as P
+        y = self.ins[d[0]][d][1]
+        others = [self.ins[d[0]][g][1] - y for g in self.ins[d[0]]
+                  if len(g) == 3 and g != d and self.linked_in(g)]
+        lo = max([o + P.FAN_CLEAR for o in others if o < 0], default=-math.inf)  # y down: above
+        hi = min([o - P.FAN_CLEAR for o in others if o > 0], default=math.inf)
+        g = P.FAN_GAP
+        if (n - 1) * g > hi - lo:
+            g = max(P.FAN_MIN, (hi - lo) / (n - 1))
+        span = (n - 1) * g
+        top = -span / 2
+        if span > hi - lo:
+            top = (lo + hi - span) / 2
+        elif top < lo:
+            top = lo
+        elif top + span > hi:
+            top = hi - span
+        offs = [top + span - j * g for j in range(n)]
+        drop = max(abs(f - ((n - 1) * gap / 2 - j * gap)) for j, f in enumerate(offs))
+        depth = math.ceil(max(P.FAN_DEPTH, P.FAN_SLOPE * drop) / 10.0 - 1e-9) * 10.0
+        return depth, offs
+
+    def slot_at(self, key):
+        """Offset (dx, dy) where a link into input key ends at its node: the socket, or its
+        multi-input slot (for a slot laid out to a fan point, NF035, the slot itself)."""
+        n = key[0]
+        return self.fan.get(key) or self.ins[n][key]
 
     def old_route(self, s, d, sid):
         """Where link (s, d, sid) was drawn before formatting: source socket, reroutes and input

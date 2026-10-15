@@ -17,6 +17,10 @@ Blender drew and removes what rounding left:
 3. what is still off gets an extra bend: two reroutes, so the change of height is vertical.
 
 A drawn segment counts as orthogonal when |dx| <= TOL or |dy| <= TOL (TOL = 0.5 units).
+
+With rule NF035 (fan=True), the last stretch of a link into a multi-input socket, from a reroute
+on its left, is a fan stretch: it may be diagonal, it is never mended, and its reroute takes the
+height of the wire that runs into it, not the slot's (`fanned`).
 """
 import math
 
@@ -75,9 +79,18 @@ def bad(a, b):
     return abs(a[0] - b[0]) > TOL + 1e-4 and abs(a[1] - b[1]) > TOL + 1e-4
 
 
-def faults(nt, gap=None):
-    """The drawn links that are not exactly horizontal or vertical: [(link, start, end)]."""
-    return [(l, a, b) for l, a, b in drawn(nt, gap) if bad(a, b)]
+def fanned(l, a, b):
+    """True if drawn link l (from a to b) may be the stretch of a fan into a multi-input slot
+    (rule NF035): from a reroute on the left of the slot of a multi-input socket of an open node."""
+    s = l.to_socket
+    return (s.is_multi_input and not l.to_node.hide and l.from_node.bl_idname == REROUTE
+            and a[0] < b[0] - TOL)
+
+
+def faults(nt, gap=None, fan=False):
+    """The drawn links that are not exactly horizontal or vertical: [(link, start, end)]. With
+    fan (NF035), the stretches of fans into multi-input sockets are not faults."""
+    return [(l, a, b) for l, a, b in drawn(nt, gap) if bad(a, b) and not (fan and fanned(l, a, b))]
 
 
 def count(nt):
@@ -85,10 +98,11 @@ def count(nt):
     return len(faults(nt))
 
 
-def straighten(nt, editor, movable=None):
+def straighten(nt, editor, movable=None, fan=False):
     """Make every drawn link segment of `nt` horizontal or vertical (see the module docstring).
     movable (a set of node names): only these nodes and reroutes may move, and only links that
-    touch them are mended (a sort of a part of the tree). Returns stats: reroutes snapped, nodes
+    touch them are mended (a sort of a part of the tree). fan: rule NF035 is on (the stretches
+    of fans into multi-input sockets stay as they are). Returns stats: reroutes snapped, nodes
     nudged, bends added, segments left."""
     s = ui_scale()
     gap = slot_gap(s)
@@ -98,9 +112,11 @@ def straighten(nt, editor, movable=None):
         lambda l: l.from_node.name in movable or l.to_node.name in movable)
     for k in range(ROUNDS):
         editor.redraw()
-        if _snap_reroutes(nt, drawn(nt, gap), st, movable):
+        if _snap_reroutes(nt, drawn(nt, gap), st, movable, fan):
             editor.redraw()
         segs = [x for x in drawn(nt, gap) if mine(x[0])]
+        if fan:
+            segs = [(l, a, b) for l, a, b in segs if not fanned(l, a, b)]
         left = [(l, a, b) for l, a, b in segs if bad(a, b)]
         if DEBUG:
             print(f"straighten {nt.name} round {k}: {len(left)} off", [
@@ -112,7 +128,7 @@ def straighten(nt, editor, movable=None):
             continue
         _bend(nt, left, s, st)
     editor.redraw()
-    st["left"] = sum(1 for l, _, _ in faults(nt, gap) if mine(l))
+    st["left"] = sum(1 for l, _, _ in faults(nt, gap, fan) if mine(l))
     return st
 
 
@@ -121,10 +137,12 @@ def _axis(a, b):
     return 'h' if abs(b[1] - a[1]) <= abs(b[0] - a[0]) else 'v'
 
 
-def _snap_reroutes(nt, segs, st, movable=None):
+def _snap_reroutes(nt, segs, st, movable=None, fan=False):
     """Reroutes joined by horizontal (vertical) wires share one height (x): the exact height (x)
     of the socket that wire runs to, the source socket first. Only reroutes in `movable` move
-    (default all; a fixed reroute counts as a socket). Returns the number moved."""
+    (default all; a fixed reroute counts as a socket). With fan (NF035), the stretch of a fan
+    (more than a unit off its slot's height) does not pull its reroute to the slot. Returns the
+    number moved."""
     rr = {n.name: n for n in nt.nodes if n.bl_idname == REROUTE and (movable is None or n.name in movable)}
     parent = {}
 
@@ -137,6 +155,8 @@ def _snap_reroutes(nt, segs, st, movable=None):
 
     anchors = {}
     for l, a, b in segs:
+        if fan and fanned(l, a, b) and abs(a[1] - b[1]) > 2 * TOL:
+            continue
         ax = _axis(a, b)
         c = 1 if ax == 'h' else 0
         fa, tb = l.from_node.name, l.to_node.name

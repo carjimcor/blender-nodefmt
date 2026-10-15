@@ -17,7 +17,8 @@ steps.
   not straight turns twice at right angles on reroutes, on a vertical track in the gap between
   two columns (NF001-NF003), into multi-input sockets too: each link into a Join Geometry or Join
   Strings arrives on its own, level with its slot (a quarter widget unit apart), never through a
-  fork.
+  fork. With NF035 (off by default) these links arrive a widget unit apart, each at its fan point
+  left of the socket, and converge from there in a short diagonal fan.
 - Crossings: a crossing costs more than a bend (NF033). A lane (a wire that passes columns) may
   run above or below the nodes of its columns, whichever crosses less; a wire from outside a
   zone may enter above the zone input instead of crossing the wires that leave the zone input
@@ -132,6 +133,10 @@ steps.
     dropped. A link into a multi-input slot turns at the slot's height, like any other link;
     the track order nests the links of one socket so they do not cross, and the cost does not
     count their last runs (a slot apart) as collinear wires or as reroutes on a wire.
+    With NF035, `Model` gives each such slot a fan point instead (`Model._fan`): the layout
+    routes the link to it (the node reaches out on its left by the fan's depth, `reach_l`, so
+    the tracks of the gap keep clear of the fan), and `Formatter.place` adds the last stretch,
+    from the fan point to the slot; the fan point becomes a reroute.
     Then the whole drawing is tidied (`wires.py`): runs that are almost level are made level
     (NF034), and single horizontal runs move to another free height when that removes a
     crossing, a U-jog, a landing or a run along a node edge or zone outline, never onto a node
@@ -207,7 +212,9 @@ is several units taller above 0. No layout is exact at two scales at once, so:
    source) onto the line, left to right so a chain lines up in one round, at most 4 units and 3
    times per node; what is still off gets an extra bend (two reroutes). At scale 1 this pass
    mostly places the reroutes of multi-input slots (half units); at 1.5 it also moves a few
-   nodes by a pixel or two.
+   nodes by a pixel or two. With NF035, the stretch of a fan into a multi-input slot is left as
+   it is (`ortho.fanned`): it is meant to be diagonal, and its reroute keeps the height of the
+   wire that runs into it.
 4. `--check` (and the Check Current Tree button) counts every drawn segment that is not orthogonal before
    anything else, so a file formatted at another scale is reported.
 

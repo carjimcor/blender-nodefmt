@@ -196,7 +196,7 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     yield step._replace(phase="writing", step=n + 4)
     anchor = tuple(nt.nodes[f.anchor].location_absolute)
     editor.show(nt)
-    st = ortho.straighten(nt, editor)
+    st = ortho.straighten(nt, editor, fan=cfg.on('NF035'))
     if cfg.on('NF034'):
         editor.redraw()
         st["dropped"] = ortho.drop_straight(nt)
@@ -335,7 +335,7 @@ def unformatted(nt, mode='relayout', editor=None, cfg=None):
     editor = editor or Editor()
     try:
         editor.show(nt)
-        bad = ortho.faults(nt)
+        bad = ortho.faults(nt, fan=(cfg or rules.Config()).on('NF035'))
         if bad:
             return sorted({n for l, _, _ in bad for n in (l.from_node.name, l.to_node.name)})
         snap = check.Snapshot(nt)

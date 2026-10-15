@@ -294,7 +294,7 @@ class Formatter:
         links = []
         for s, d, _, sid in m.links:
             a, b = m.box[s[0]], m.box[d[0]]
-            ds, dd = m.outs[s[0]][s], m.ins[d[0]][m.slot_key(s, d, sid)]
+            ds, dd = m.outs[s[0]][s], m.slot_at(m.slot_key(s, d, sid))
             links.append({"a": [a[0] + ds[0], a[1] + ds[1]], "b": [b[0] + dd[0], b[1] + dd[1]], "src": list(s)})
         return {"nodes": nodes, "links": links}
 
@@ -367,6 +367,7 @@ class Formatter:
             it.own_column = bool(m.info[name].get("pin")) and c.kind == 'root'  # see ranking.rank
             it.geo_out = any(m.geo.get(g, False) for g in m.outs[name])
             it.src = not any(d[0] == name for _, d, _, _ in m.links)
+            it.reach_l = m.fan_reach.get(name, 0.0)  # NF035: its fans, in the gap before its column
             if name in m.comm and self.swaps_on:
                 it.comm = it.comm_pair = m.comm[name]
             if pin and c.kind == 'zone':  # zone input/output: their items, to put them on one line
@@ -604,6 +605,9 @@ class Formatter:
         comp.res = res
         comp.big = res.ranks >= 3
         comp.reach_l, comp.reach_r = getattr(res, 'reach', (0.0, 0.0))  # a stack's side wires
+        # NF035: the fans of the block's first column reach out on its left, like its ports there
+        if m.fan:
+            comp.reach_l = max([comp.reach_l] + [-dx for dx, _ in ins.values()])
         # main input: the zone input's main socket, else a geometry port, else the top port
         main = None
         if c.kind in ('zone', 'stack'):  # the main socket of the zone input or the consumer
@@ -680,6 +684,16 @@ class Formatter:
         self.pos = {k: (x + off[0], y + off[1]) for k, (x, y) in self.pos.items()}
         self.segments = [(t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d)
                          for t, p, q, d in self.segments]
+        if m.fan:  # NF035: a link laid out to its fan point goes on from there to its slot
+            segs = []
+            for t, p, q, d in self.segments:
+                if d is not None and d in m.fan:
+                    x, y = self.pos[d[0]]
+                    dx, dy = m.fan[d]
+                    segs += [(t, p, q, None), (t, q, (x + dx, y + dy), d)]
+                else:
+                    segs.append((t, p, q, d))
+            self.segments = segs
         roots = {}
         for s in {seg[0] for seg in self.segments}:
             x, y = self.pos[s[0]]
@@ -787,7 +801,7 @@ class Formatter:
                 for q in cs:
                     if q in t.dst:
                         x, y = self.pos[t.dst[q][0]]
-                        dx, dy = m.ins[t.dst[q][0]][t.dst[q]]
+                        dx, dy = m.slot_at(t.dst[q])
                         links.append({"a": list(p), "b": [rnd(x) + dx, rnd(y) + dy], "type": typ,
                                       "src": list(s), "dst": list(t.dst[q][:3]), "rr_a": p != t.root, "rr_b": False,
                                       "multi": len(t.dst[q]) == 4})

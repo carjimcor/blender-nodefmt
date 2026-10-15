@@ -40,7 +40,7 @@ RULES = [
      "all sits compactly under the tree."),
     ("NF022", "converging-shape", "style",
      "A tree that converges on one output may take a '>' shape with the output in the middle of "
-     "its inputs."),
+     "its inputs. Off by default."),
     ("NF023", "stacked-fields", "style",
      "A short chain of field nodes (up to three, such as Index -> Compare) that feeds one input "
      "of a node and nothing else sits in that node's column, stacked right above or below it, "

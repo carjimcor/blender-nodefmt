@@ -15,6 +15,7 @@ import bpy
 
 from . import api, capture, check, lint, rules
 from .draw import Editor
+from .sockets import UnsupportedBlender
 
 MODES = [('relayout', "Relayout", "Build a new layout from scratch: columns, order and wires"),
          ('keep', "Keep layout (experimental)", "Keep your columns and order; only straighten wires and fix reroutes")]
@@ -529,6 +530,9 @@ class NODEFMT_OT_check(bpy.types.Operator):
         ed = Editor(context.area)
         try:
             vs = api.check_tree(nt, context.window_manager.nodefmt_mode, ed, config(context))
+        except UnsupportedBlender as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
         finally:
             ed.close()
         _LAST.update(done=True, tree=api.tree_name(nt), ptr=nt.as_pointer(), key=_tree_key(nt),

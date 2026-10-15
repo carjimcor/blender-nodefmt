@@ -10,9 +10,10 @@ REROUTE = 'NodeReroute'
 def pixel_snap(nt, s, part=None):
     """Put every node (of `part`, a set of names, if given) on the pixel grid of UI scale s (see
     ortho.py), so that its sockets are exactly where the model measures them. Moves nodes by
-    less than a pixel."""
+    less than a pixel. Reroutes stay: their dot sits exactly at their location, which
+    ortho.straighten sets to the height of the socket their wire runs to (often off the grid)."""
     for n in nt.nodes:
-        if n.bl_idname == 'NodeFrame' or (part is not None and n.name not in part):
+        if n.bl_idname in ('NodeFrame', 'NodeReroute') or (part is not None and n.name not in part):
             continue
         x, y = n.location_absolute
         px, py = to_px(x, s), to_px(y, s)

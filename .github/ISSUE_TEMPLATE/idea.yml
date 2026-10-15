@@ -1,0 +1,35 @@
+name: Idea or suggestion
+description: A new rule, an option, or a change to how trees are laid out
+labels: [idea]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: The idea
+      description: What nodefmt should do, and why it makes trees easier to read or use.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: An example
+      description: A screenshot or sketch of a tree as nodefmt leaves it now and as it should look, or a small .blend file.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of change
+      options:
+        - A new style rule (can be switched off)
+        - A change to an existing rule
+        - A new check (reported, never fixed)
+        - Something else (panel, command line, capture, ...)
+    validations:
+      required: true
+  - type: dropdown
+    id: default
+    attributes:
+      label: For a rule, should it be on by default?
+      options:
+        - "Yes"
+        - "No, off by default"
+        - Not sure

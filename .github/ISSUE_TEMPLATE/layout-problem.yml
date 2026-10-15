@@ -1,0 +1,45 @@
+name: Layout problem
+description: A tree sorts badly, a wire looks wrong, or Check reports something odd
+labels: [layout]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What looks wrong
+      description: What you expected and what nodefmt did. Mark the problem on the screenshots.
+    validations:
+      required: true
+  - type: textarea
+    id: images
+    attributes:
+      label: Before and after
+      description: Screenshots of the tree before and after sorting, at the same zoom (Capture Tree in the nodefmt panel saves the whole tree).
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: The .blend file
+      description: Attach the file (zip it), or a small one that shows the problem, and say which node tree.
+  - type: input
+    id: blender
+    attributes:
+      label: Blender version
+      placeholder: "5.2.2"
+    validations:
+      required: true
+  - type: input
+    id: scale
+    attributes:
+      label: Resolution Scale
+      description: Preferences > Interface > Resolution Scale
+      placeholder: "1.0"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: nodefmt version
+      placeholder: "0.11.0"
+    validations:
+      required: true

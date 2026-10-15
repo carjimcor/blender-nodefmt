@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # the actions used by .github/workflows (nodefmt has no Python dependencies)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

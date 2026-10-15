@@ -1,0 +1,36 @@
+name: Bug or error
+description: An error message, a crash, or a sort that failed or was undone
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: The message nodefmt showed, and the text from Blender's system console if there is one.
+      render: text
+  - type: textarea
+    id: file
+    attributes:
+      label: The .blend file
+      description: Attach the file (zip it), or a small one that shows the problem, and say which node tree.
+  - type: input
+    id: blender
+    attributes:
+      label: Blender version and operating system
+      placeholder: "5.2.2, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: nodefmt version
+      placeholder: "0.11.0"
+    validations:
+      required: true

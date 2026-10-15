@@ -1,0 +1,214 @@
+{
+ "python": "3.13.0",
+ "runs": 1,
+ "rows": [
+  {
+   "tree": "NF001",
+   "nodes": 3,
+   "seconds": 0.005,
+   "plan": 0.002,
+   "runs": 1,
+   "fp": "9abd7ba7f075"
+  },
+  {
+   "tree": "NF002",
+   "nodes": 4,
+   "seconds": 0.009,
+   "plan": 0.004,
+   "runs": 1,
+   "fp": "6e8a3baa477f"
+  },
+  {
+   "tree": "NF003-rows",
+   "nodes": 5,
+   "seconds": 0.02,
+   "plan": 0.01,
+   "runs": 1,
+   "fp": "a110d127bfcc"
+  },
+  {
+   "tree": "NF003",
+   "nodes": 3,
+   "seconds": 0.004,
+   "plan": 0.002,
+   "runs": 1,
+   "fp": "259764bcdedb"
+  },
+  {
+   "tree": "NF004",
+   "nodes": 3,
+   "seconds": 0.007,
+   "plan": 0.002,
+   "runs": 1,
+   "fp": "a15a0d7358bf"
+  },
+  {
+   "tree": "NF005",
+   "nodes": 9,
+   "seconds": 0.029,
+   "plan": 0.012,
+   "runs": 1,
+   "fp": "5eb7f11477e0"
+  },
+  {
+   "tree": "NF010",
+   "nodes": 5,
+   "seconds": 0.014,
+   "plan": 0.008,
+   "runs": 1,
+   "fp": "69cd488c37ab"
+  },
+  {
+   "tree": "NF011-frame",
+   "nodes": 8,
+   "seconds": 0.041,
+   "plan": 0.012,
+   "runs": 1,
+   "fp": "86851e7fb797"
+  },
+  {
+   "tree": "NF011-zone",
+   "nodes": 9,
+   "seconds": 0.183,
+   "plan": 0.058,
+   "runs": 1,
+   "fp": "97459392a646"
+  },
+  {
+   "tree": "NF011",
+   "nodes": 4,
+   "seconds": 0.007,
+   "plan": 0.002,
+   "runs": 1,
+   "fp": "c08be145e2dc"
+  },
+  {
+   "tree": "NF020",
+   "nodes": 6,
+   "seconds": 0.033,
+   "plan": 0.014,
+   "runs": 1,
+   "fp": "763ddbb0adf7"
+  },
+  {
+   "tree": "NF021-alone",
+   "nodes": 14,
+   "seconds": 0.061,
+   "plan": 0.029,
+   "runs": 1,
+   "fp": "5853b8d81471"
+  },
+  {
+   "tree": "NF021",
+   "nodes": 8,
+   "seconds": 0.044,
+   "plan": 0.021,
+   "runs": 1,
+   "fp": "5837f2abfa89"
+  },
+  {
+   "tree": "NF022",
+   "nodes": 7,
+   "seconds": 0.056,
+   "plan": 0.029,
+   "runs": 1,
+   "fp": "7e7806bf54aa"
+  },
+  {
+   "tree": "NF023",
+   "nodes": 9,
+   "seconds": 0.023,
+   "plan": 0.01,
+   "runs": 1,
+   "fp": "92fa4b014c6b"
+  },
+  {
+   "tree": "NF030",
+   "nodes": 4,
+   "seconds": 0.013,
+   "plan": 0.005,
+   "runs": 1,
+   "fp": "add0bc00dd8b"
+  },
+  {
+   "tree": "NF031",
+   "nodes": 5,
+   "seconds": 0.027,
+   "plan": 0.016,
+   "runs": 1,
+   "fp": "a10a14282173"
+  },
+  {
+   "tree": "NF032",
+   "nodes": 7,
+   "seconds": 0.195,
+   "plan": 0.072,
+   "runs": 1,
+   "fp": "e472ad5229b8"
+  },
+  {
+   "tree": "NF033",
+   "nodes": 4,
+   "seconds": 0.009,
+   "plan": 0.004,
+   "runs": 1,
+   "fp": "9548294c245e"
+  },
+  {
+   "tree": "NF034",
+   "nodes": 4,
+   "seconds": 0.015,
+   "plan": 0.008,
+   "runs": 1,
+   "fp": "cb02da35f965"
+  },
+  {
+   "tree": "NF035-strings",
+   "nodes": 3,
+   "seconds": 0.006,
+   "plan": 0.0,
+   "runs": 1,
+   "fp": "07f2061cb51b"
+  },
+  {
+   "tree": "NF035",
+   "nodes": 5,
+   "seconds": 0.006,
+   "plan": 0.0,
+   "runs": 1,
+   "fp": "bdd45035660e"
+  },
+  {
+   "tree": "NF036",
+   "nodes": 10,
+   "seconds": 0.021,
+   "plan": 0.0,
+   "runs": 1,
+   "fp": "0d09f93a009a"
+  },
+  {
+   "tree": "NF040",
+   "nodes": 3,
+   "seconds": 0.007,
+   "plan": 0.003,
+   "runs": 1,
+   "fp": "16ea226cccad"
+  },
+  {
+   "tree": "NF041",
+   "nodes": 3,
+   "seconds": 0.007,
+   "plan": 0.002,
+   "runs": 1,
+   "fp": "d0290b09f461"
+  },
+  {
+   "tree": "selection",
+   "nodes": 9,
+   "seconds": 0.037,
+   "plan": 0.013,
+   "runs": 1,
+   "fp": "866cfc890129"
+  }
+ ]
+}

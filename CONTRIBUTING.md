@@ -18,10 +18,34 @@ Open an issue with:
   zoom, and the `.blend` file or steps to reproduce. A change without them will not be reviewed.
 - Run the tests (below) and `--check` on the trees you tested, and say which rules (NF codes) the
   change affects.
+- Run `ruff check .` (ruff 0.17.1, configured in `ruff.toml`); CI runs it too.
 - The logic check must still pass: sorting must never change what a tree computes.
 - Code, comments and documentation are in English. New functions get a docstring.
 - New behaviour that changes the style gets a rule code, so it can be switched off, and an
   example in `examples/` if it can be shown.
+
+## Continuous integration
+
+Every push to `main` and every pull request runs two checks on GitHub Actions
+(`.github/workflows/ci.yml`), without Blender:
+
+- **ruff**: `ruff check .`.
+- **layouts unchanged**: the layout core is pure Python, so it sorts every example, dumped as
+  JSON in `tests/layout/trees/`, and compares each result with `tests/layout/baseline.json`. A
+  change that alters a layout by accident fails here.
+
+A change that alters layouts on purpose updates the baseline in the same pull request, and shows
+the before and after of those examples:
+
+```
+python tools/bench.py tests/layout/trees --runs 1 --save tests/layout/baseline.json
+```
+
+After changing the examples (`tools/make_examples.py`) or what nodefmt reads from a tree, dump
+them again first: `blender --factory-startup --python tools/dump_examples.py`.
+
+The Blender tests below need Blender's window, so they run on your machine, not in CI: say in the
+pull request that they pass.
 
 ## Run the tests
 
@@ -67,6 +91,7 @@ blender --factory-startup --enable-event-simulate --python tests/test_operators.
 ## Tools
 
 - `tools/build.sh`: build and validate the extension zip in `dist/`.
+- `tools/dump_examples.py`: dump the examples as JSON for the CI layout check (see above).
 - `tools/make_examples.py`: rebuild the examples in `examples/`
   (`blender --factory-startup --python tools/make_examples.py`).
 - `tools/capture_examples.py` and `tools/finish_images.py`: the before and after images of

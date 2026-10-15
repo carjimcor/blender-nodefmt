@@ -6,6 +6,7 @@ the items joined by straight links into blocks, then _compact() positions the bl
 (only with NF022) is 'blocks' without the pull to a common top line.
 """
 import math
+from heapq import heapify, heappop, heappush
 
 from . import params as P
 from .graph import snap_up, snap_down
@@ -31,15 +32,22 @@ class PlacementMixin:
         # flat lookups of the same, kept in step by _try_merge: item -> root, item -> rel y
         self._root = {i: i for i in items}
         self._rel = {i: 0.0 for i in items}
-        self._hs = [i.h for i in self._rel]  # heights, in the order of _rel
         # neighbours in the columns (fixed while the blocks grow): (a, b, a.h, gap below a)
         self._pairs = [(a, b, a.h, self._gap(a, b)) for layer in self.layers for a, b in zip(layer, layer[1:])]
+        self._up = {b: (a, ah, gap) for a, b, ah, gap in self._pairs}  # item -> the pair above it
+        self._zin = self._zone_input()
         # the block order constraints (_merge_cycle) as adjacency sets, kept in step by _try_merge
         self._bsucc = {i: set() for i in items}
         self._bpred = {i: set() for i in items}
         for a, b, _, _ in self._pairs:
             self._bsucc[a].add(b)
             self._bpred[b].add(a)
+        # a topological order of that graph (block -> rank), kept in step by _try_merge
+        cells = sorted(((n, k, i) for k, layer in enumerate(self.layers) for n, i in enumerate(layer)),
+                       key=lambda t: t[:2])
+        self._ord = {t[2]: m for m, t in enumerate(cells)}
+        for i in items:
+            self._ord.setdefault(i, len(self._ord))
         cands = []
         prio = self._priorities()
         # a bundle: several links between the same two nodes that one offset makes all straight
@@ -179,9 +187,10 @@ class PlacementMixin:
             return False  # a wire entering a zone above its input drops to its node: no block
         # items of one block in one column: consecutive in the order and far enough apart
         bycol = {}
+        up = self._up
         for i in merged:
             bycol.setdefault(i.rank, []).append(i)
-        zin = self._zone_input()
+        zin = self._zin
         top_only = zin is not None and self._root[zin] in (ra, rb)
         if top_only and any(r < merged[zin] - 1e-6 for i, r in merged.items() if i not in above):
             return False  # a zone's content hangs below the zone input's top line
@@ -196,7 +205,8 @@ class PlacementMixin:
             if its[-1].order - its[0].order != len(its) - 1:
                 return False
             for a, b in zip(its, its[1:]):
-                if merged[b] < merged[a] + a.h + self._gap(a, b) - 1e-6:
+                _, ah, gap = up[b]
+                if merged[b] < merged[a] + ah + gap - 1e-6:
                     return False
         # the block graph must stay without a cycle
         if self._merge_cycle(ra, rb):
@@ -209,8 +219,11 @@ class PlacementMixin:
         old_a = self.members[ra]
         self.members[ra] = merged
         del self.members[rb]
-        h = self._height()
+        h = self._height_merged(ra, rb)
         if limit is not None and (h > self.height + limit or (cap is not None and h > cap)):
+            Y, hi, lo = self._Y, self._hi, self._lo
+            for x, y, h1, l1 in self._undo:
+                Y[x], hi[x], lo[x] = y, h1, l1
             self.members[ra], self.members[rb] = old_a, mb
             for i, r in mb.items():
                 root[i] = rb
@@ -218,17 +231,25 @@ class PlacementMixin:
             return False
         self.block[rb] = ra
         # the block graph: rb's edges become ra's (an edge between the two disappears)
-        bsucc, bpred = self._bsucc, self._bpred
-        for x in bsucc.pop(rb):
+        bsucc, bpred, order = self._bsucc, self._bpred, self._ord
+        out, inc = bsucc.pop(rb), bpred.pop(rb)
+        del order[rb]
+        for x in out:
             bpred[x].discard(rb)
-            if x is not ra:
-                bpred[x].add(ra)
-                bsucc[ra].add(x)
-        for x in bpred.pop(rb):
+        for x in inc:
             bsucc[x].discard(rb)
-            if x is not ra:
+        for x in out:
+            if x is not ra and x not in bsucc[ra]:
+                bsucc[ra].add(x)
+                bpred[x].add(ra)
+                if order[x] < order[ra]:
+                    self._reorder(ra, x)
+        for x in inc:
+            if x is not ra and x not in bpred[ra]:
                 bsucc[x].add(ra)
                 bpred[ra].add(x)
+                if order[ra] < order[x]:
+                    self._reorder(x, ra)
         self.height = h
         return True
 
@@ -236,23 +257,48 @@ class PlacementMixin:
         """True if merging blocks ra and rb would make the block order constraints cyclic (a is
         above b if a holds an item right above one of b in a column). The graph is acyclic now,
         so the merge makes a cycle exactly when a path leads from one block to the other through
-        a third block."""
-        succ = self._bsucc
-        for a, b in ((ra, rb), (rb, ra)):
-            todo = [x for x in succ[a] if x is not b]
-            seen = set(todo)
-            while todo:
-                x = todo.pop()
-                for y in succ[x]:
-                    if y is b:
-                        return True
-                    if y not in seen:
-                        seen.add(y)
-                        todo.append(y)
+        a third block: from the first in the topological order (self._ord), through blocks
+        before the second."""
+        succ, order = self._bsucc, self._ord
+        a, b = (ra, rb) if order[ra] < order[rb] else (rb, ra)
+        end = order[b]
+        todo = [x for x in succ[a] if x is not b and order[x] < end]
+        seen = set(todo)
+        while todo:
+            x = todo.pop()
+            for y in succ[x]:
+                if y is b:
+                    return True
+                if y not in seen and order[y] < end:
+                    seen.add(y)
+                    todo.append(y)
         return False
 
+    def _reorder(self, x, y):
+        """Keep self._ord topological after adding the block edge x -> y with x after y
+        (Pearce-Kelly): the blocks after y that x must precede and the blocks before x that
+        must precede y swap places, each group in its own order."""
+        succ, pred, order = self._bsucc, self._bpred, self._ord
+        lb, ub = order[y], order[x]
+        fwd, todo = {y}, [y]
+        while todo:
+            for w in succ[todo.pop()]:
+                if w not in fwd and order[w] < ub:
+                    fwd.add(w)
+                    todo.append(w)
+        back, todo = {x}, [x]
+        while todo:
+            for w in pred[todo.pop()]:
+                if w not in back and order[w] > lb:
+                    back.add(w)
+                    todo.append(w)
+        moved = sorted(back, key=order.get) + sorted(fwd, key=order.get)
+        for w, k in zip(moved, sorted([order[w] for w in moved])):
+            order[w] = k
+
     def _height(self):
-        """Height of the tightest stacking of the current blocks (longest path, top-packed)."""
+        """Height of the tightest stacking of the current blocks (longest path, top-packed). Keeps
+        each block's position and extent for _height_merged."""
         rel, root = self._rel, self._root
         # separation constraints between blocks: Y_b >= Y_a + c for each two neighbours in a
         # column (several between two blocks give the same longest path as their maximum)
@@ -278,8 +324,64 @@ class PlacementMixin:
                 indeg[b] -= 1
                 if indeg[b] == 0:
                     todo.append(b)
-        tops = [Y[root[i]] + v for i, v in rel.items()]
-        return max([t + h for t, h in zip(tops, self._hs)]) - min(tops)
+        self._Y, self._hi, self._lo = Y, {}, {}
+        for r, mem in self.members.items():
+            self._extent(r, Y[r], mem)
+        return max(self._hi.values()) - min(self._lo.values())
+
+    def _extent(self, r, y, mem):
+        """Bottom and top of block r at position y, kept in self._hi and self._lo."""
+        tops = [y + v for v in mem.values()]
+        self._hi[r] = max([t + i.h for t, i in zip(tops, mem)])
+        self._lo[r] = min(tops)
+
+    def _height_merged(self, ra, rb):
+        """_height() right after block rb was merged into ra (rb's items already in ra): ra is
+        placed again, then the blocks below it in topological order (self._ord) while their
+        positions change; the old values go to self._undo."""
+        members, root, rel, up, Y = self.members, self._root, self._rel, self._up, self._Y
+        succ, order = self._bsucc, self._ord
+        new = {}
+
+        def pull(x):
+            """Position of block x from the blocks above it (as in _height)."""
+            y = 0.0
+            for b, vb in members[x].items():
+                u = up.get(b)
+                if u is not None:
+                    a = u[0]
+                    p = root[a]
+                    if p is not x:
+                        yp = new[p] if p in new else Y[p]
+                        c = rel[a] + u[1] + u[2] - vb
+                        if yp + c > y:
+                            y = yp + c
+            return y
+
+        new[ra] = pull(ra)
+        queued = {ra, rb}
+        heap = []
+        for x in (*succ[ra], *succ[rb]):  # rb's successors are ra's now
+            if x not in queued:
+                queued.add(x)
+                heap.append((order[x], x))
+        heapify(heap)
+        while heap:
+            x = heappop(heap)[1]
+            y = pull(x)
+            if y != Y[x]:
+                new[x] = y
+                for z in succ[x]:
+                    if z not in queued:
+                        queued.add(z)
+                        heappush(heap, (order[z], z))
+        hi, lo = self._hi, self._lo
+        undo = self._undo = [(rb, Y.pop(rb), hi.pop(rb), lo.pop(rb))]
+        for x, y in new.items():
+            undo.append((x, Y[x], hi[x], lo[x]))
+            Y[x] = y
+            self._extent(x, y, members[x])
+        return max(hi.values()) - min(lo.values())
 
     def _compact(self):
         """Vertical positions of the blocks: separation constraints from each column's order, then
@@ -314,13 +416,12 @@ class PlacementMixin:
             anchor, strict = {}, set()
         # constraints between blocks: Y_b >= Y_a + c
         cons = {}
-        for layer in self.layers:
-            for a, b in zip(layer, layer[1:]):
-                ra, rb = self._find(a), self._find(b)
-                if ra is rb:
-                    continue
-                c = rel[a] + a.h + self._gap(a, b) - rel[b]
-                cons[(ra, rb)] = max(cons.get((ra, rb), -1e18), c)
+        for a, b, ah, gap in self._pairs:
+            ra, rb = self._find(a), self._find(b)
+            if ra is rb:
+                continue
+            c = rel[a] + ah + gap - rel[b]
+            cons[(ra, rb)] = max(cons.get((ra, rb), -1e18), c)
         # a zone's input node is its top-left corner: the zone's content hangs below its top line
         zin = self._zone_input()
         if zin is not None:
@@ -496,26 +597,33 @@ class PlacementMixin:
         def satisfy(Y):
             """Each block at the median of what its links want; where two blocks collide they
             merge and move together to the median of both (separation constraints, VPSC style)."""
-            # a cluster of blocks: [offsets {block: offset}, wanted (value, weight), position]
+            # a cluster of blocks: [offsets {block: offset}, wanted (value, weight), position,
+            # the constraints (m, a, c) into its blocks in their order, less those found inside]
             cl = {}
             for r in topo:
                 vals = sorted([((Y[o] + d) if o is not None else d, w) for o, d, w, _ in pulls[r]])
-                C = [{r: 0.0}, vals, snap_near(r, median_sorted(vals)) if vals else Y[r]]
+                C = [{r: 0.0}, vals, snap_near(r, median_sorted(vals)) if vals else Y[r],
+                     [(r, a, c) for a, c in preds[r]]]
                 cl[r] = C
                 while True:
                     worst = None
                     wv = 1e-6  # the worst violation so far (the first of equal ones wins)
                     pos = C[2]
-                    for m, off in C[0].items():
-                        here = pos + off
-                        for a, c in preds[m]:
-                            Ca = cl.get(a)
-                            if Ca is None or Ca is C:
-                                continue
-                            viol = (Ca[2] + Ca[0][a] + c) - here
-                            if viol > wv:
-                                wv = viol
-                                worst = (viol, Ca, a, m, c)
+                    offs = C[0]
+                    ext = []
+                    for t in C[3]:
+                        m, a, c = t
+                        Ca = cl.get(a)
+                        if Ca is C:
+                            continue
+                        ext.append(t)
+                        if Ca is None:
+                            continue
+                        viol = (Ca[2] + Ca[0][a] + c) - (pos + offs[m])
+                        if viol > wv:
+                            wv = viol
+                            worst = (viol, Ca, a, m, c)
+                    C[3] = ext
                     if worst is None:
                         break
                     _, Ca, a, m, c = worst
@@ -524,6 +632,7 @@ class PlacementMixin:
                     for x, off in C[0].items():
                         offs[x] = off + shift
                         cl[x] = Ca
+                    Ca[3] += C[3]
                     # the wanted heights stay sorted: two sorted runs sort in about linear time
                     Ca[1] += [(v - shift, w) for v, w in C[1]]
                     Ca[1].sort()

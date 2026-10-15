@@ -8,6 +8,10 @@
   quarter widget unit apart (examples `NF035` and `NF035-strings`).
 - New rule NF036 shared-tracks: vertical runs one above the other in a gap share one x
   instead of a staircase of tracks, which also makes gaps narrower (example `NF036`).
+- Large trees sort about twice as fast again, with identical layouts: the block placement updates
+  the layout's height incrementally after each tentative merge instead of recomputing it, and the
+  label check (NF041) only tests the wires near each label (Blender's "Curve to Tube", 392 nodes:
+  one layout pass from 577 s to 251 s).
 - Fix: in a gap widened for a reroute label (NF041), the last tracks could fall on the next
   column, right on a node's input socket; the wire then ran through the socket and the sort
   failed its logic check and was undone (seen on Blender's own "Curve to Tube", 392 nodes). The

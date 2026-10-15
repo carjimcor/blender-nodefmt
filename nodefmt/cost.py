@@ -217,12 +217,32 @@ class CostMixin:
                  if t in lw]
         if not shown:
             return 0
-        nodes = [(i.x, i.y, i.x + i.w, i.y + i.h) for i in self.items if not i.is_point]
+        # boxes and nodes sorted by left edge, vertical wires by x, horizontal ones by y: each
+        # label only tests those that can reach it (the same tests, so the same count)
+        boxes = sorted((o[0], j, o) for j, (_, o) in enumerate(shown))
+        bx = [t[0] for t in boxes]
+        nodes = sorted((i.x, i.y, i.x + i.w, i.y + i.h) for i in self.items if not i.is_point)
+        nx = [o[0] for o in nodes]
+        vert, horiz, other = [], [], []
+        for s in segs:
+            p, q = s[1], s[2]
+            if p[0] == q[0]:
+                vert.append((p[0], s))
+            elif p[1] == q[1]:
+                horiz.append((p[1], s))
+            else:
+                other.append(s)
+        vert.sort(key=lambda t: t[0])
+        horiz.sort(key=lambda t: t[0])
+        vx = [t[0] for t in vert]
+        hy = [t[0] for t in horiz]
         n = 0
         for k, (pt, b) in enumerate(shown):
-            n += any(L.overlap(b, o) for j, (_, o) in enumerate(shown) if j != k)
-            n += any(L.overlap(b, o) for o in nodes)
-            n += any(L.hits(b, s[1], s[2]) and not L.near(pt, s[1]) and not L.near(pt, s[2]) for s in segs)
+            n += any(L.overlap(b, o) for _, j, o in boxes[:bisect_left(bx, b[2])] if j != k)
+            n += any(L.overlap(b, o) for o in nodes[:bisect_left(nx, b[2])])
+            cand = [t[1] for t in vert[bisect_right(vx, b[0]):bisect_left(vx, b[2])]]
+            cand += [t[1] for t in horiz[bisect_right(hy, b[1]):bisect_left(hy, b[3])]]
+            n += any(L.hits(b, s[1], s[2]) and not L.near(pt, s[1]) and not L.near(pt, s[2]) for s in cand + other)
         return n
 
     def cost(self):

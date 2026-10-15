@@ -6,8 +6,9 @@ tree) are hidden, and the view is zoomed to the chosen screen pixels per node un
 then panned over the tree in whole pixels, one screenshot per tile. Neighbouring tiles overlap,
 and a tile is moved a few pixels only if it lines up cleanly there and not where it was planned
 (a safety check: pans are exact). The tiles are joined with numpy (no Pillow), cropped to the tree plus a margin and
-written as a PNG. Blender dims a wire whose two ends are both far outside the view, so a long
-wire can look fainter in the middle of a capture than at its ends.
+written as a PNG. Blender dims a wire whose two ends are both far outside the view, except the
+wires of selected nodes: while capturing, every node is selected and the theme draws selected
+nodes and wires like the others, so long wires keep their colour.
 
 Afterwards the editor is put back as it was (maximised state, regions, overlays, zoom, pan and
 selection); the tree is never changed and no undo step is added. A CaptureJob runs in steps so
@@ -27,6 +28,7 @@ import numpy as np
 from . import api
 
 CROP = 40          # pixels dropped from every tile edge (scrollbars, region arrows)
+THEME_KEYS = ("node_selected", "node_active", "wire_select")  # theme colours set while capturing
 OVERLAP = 96       # pixels shared by neighbouring tiles, to check how they line up
 REACH = 4          # how far (pixels) a tile may be moved to line up with the tiles before it
 MATCH = 0.002      # share of overlapping pixels that may differ for a tile to count as lined up
@@ -362,7 +364,8 @@ class CaptureJob:
         return state
 
     def _setup(self):
-        """Remember the editor, maximise it, hide regions and overlays, deselect the nodes."""
+        """Remember the editor, maximise it, hide regions and overlays, select every node (see the
+        module docstring)."""
         wm = bpy.context.window_manager
         screen = self.win.screen
         sp = self.area.spaces.active
@@ -386,9 +389,16 @@ class CaptureJob:
         _set_flags(self.win, ((obj, k, False) for obj, k in hide))
         if self.opt.hide_overlays and self.saved["marks"]:
             wm.nodefmt_overlay = False
+        # Blender dims a wire whose ends are both far outside the view, except the wires of
+        # selected nodes: every node is selected, and the theme draws selected nodes and wires
+        # like the others while the capture runs
+        th = bpy.context.preferences.themes[0].node_editor
+        self.saved["theme"] = {k: tuple(getattr(th, k)) for k in THEME_KEYS}
+        th.node_selected = th.node_active = tuple(th.wire)[:3]  # the outline of unselected nodes
+        th.wire_select = tuple(th.wire_select)[:3] + (0.0,)  # no highlight over the wire's own colour
         for n in self.tree.nodes:
-            if n.select:
-                n.select = False
+            if not n.select:
+                n.select = True
         self._redraw()
 
     def _restore(self):
@@ -400,6 +410,9 @@ class CaptureJob:
             n = self.tree.nodes.get(name)
             if n is not None and n.select != sel:
                 n.select = sel
+        th = bpy.context.preferences.themes[0].node_editor
+        for k, v in s.get("theme", {}).items():
+            setattr(th, k, v)
         if s["marks"] is not None:
             bpy.context.window_manager.nodefmt_overlay = s["marks"]
         if s["maximised"] and self.win.screen.show_fullscreen:

@@ -24,8 +24,8 @@
   and may cross other wires or take long detours, and a part that grows may have to move to clear
   the nodes around it. Sort the whole tree for the best result.
 - **Unsupported trees.** Line style and texture node trees are not supported.
-- **Capture Tree.** Blender dims a wire whose two ends are both far outside the view, so in a
-  capture larger than the screen a long wire can look fainter in the middle. In a tree with zones
-  the margin is a little wider, to leave room for the zone outlines. Something the mouse hovers
+- **Capture Tree.** While it captures, every node is selected (Blender dims the wires of
+  unselected nodes whose ends are far outside the view) and the theme's selection colours are set
+  to the normal ones, then both are put back. In a tree with zones the margin is a little wider, to leave room for the zone outlines. Something the mouse hovers
   over when the capture starts may be drawn highlighted. The zoom is at most about 2.3 times the
   UI scale, and the image at most 200 megapixels.

@@ -24,14 +24,7 @@ A frame that only groups other frames, with nothing linked between them, is laid
 today, and its children can change order. They should keep the order you gave them and line up
 on a common axis instead. To be explored.
 
-## 3. Capture: faint long wires
-
-Blender dims a wire whose two ends are both outside the view, and this cannot be switched off,
-so in a capture made of screen-sized tiles a long straight run can look faint in the middle. It
-rarely shows at zoom 1.0. Possible fixes: larger tiles (a full-screen window without the top and
-status bars), and a warning before capturing when some wires would be dimmed.
-
-## 4. Lint rules for Check
+## 3. Lint rules for Check
 
 Linters for programming languages also report code that works but is hard to read or maintain.
 Check could do the same for node trees, with a second family of rules that are only reported,
@@ -51,7 +44,7 @@ First candidates:
 - **repeated-subtree**: the same group of nodes, with the same links and settings, appears more
   than once; a candidate for a node group.
 
-## 5. Sorting a part of a tree
+## 4. Sorting a part of a tree
 
 Sort Selection lays the selected nodes out on their own and then routes their links to the rest,
 which can cross other wires or take long detours. It should place the part with the rest in
@@ -59,13 +52,13 @@ view, or be replaced by something narrower that works reliably. One candidate: *
 branch**, the nodes that feed the selected node (its upstream), laid out in front of it while
 the rest stays where it is, as some other node editors do.
 
-## 6. Command line without a window
+## 5. Command line without a window
 
 The command line needs Blender's window, because socket positions only exist once a node editor
 has been drawn, so it cannot run with `blender -b`, for example in CI. To be explored: drawing
 off screen, or computing socket positions from Blender's node layout rules without drawing.
 
-## 7. Very large trees
+## 6. Very large trees
 
 Blender's own "Curve to Tube" node group (392 nodes, 31 frames) sorts correctly but not well: it
 takes about 18 minutes, and its frames end up almost all in one row, so the tree becomes a long

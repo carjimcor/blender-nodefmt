@@ -8,6 +8,9 @@
   quarter widget unit apart (examples `NF035` and `NF035-strings`).
 - New rule NF036 shared-tracks: vertical runs one above the other in a gap (10 units apart or
   more) share one x instead of a staircase of tracks, which also makes gaps narrower (example `NF036`).
+- Capture Tree: long wires keep their colour. Blender dims a wire whose ends are both far outside
+  the view, except the wires of selected nodes, so the capture selects every node and sets the
+  theme's selection colours to the normal ones while it runs, then puts both back.
 - Large trees sort about twice as fast again, with identical layouts: the block placement updates
   the layout's height incrementally after each tentative merge instead of recomputing it, and the
   label check (NF041) only tests the wires near each label (Blender's "Curve to Tube", 392 nodes:

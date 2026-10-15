@@ -216,9 +216,8 @@ def plan(data, mode='relayout'):
             _show_only(mdata["nodes"][rep], sorted({s[2] for s, _, _, _ in mdata["links"] if s[0] == rep}))
     m = Model(mdata)
     from . import params as P
-    # the plan depends on the graph only, not on positions, and not on the search options:
-    # thorough searches the layout of the tree, not this rough one (more seeds here only give
-    # another plan, often a worse tree)
+    # the plan depends on the graph only, not on positions, and runs one seed (more seeds here
+    # only give another plan, often a worse tree)
     stable, seeds, P.STABLE, P.SEEDS = P.STABLE, P.SEEDS, None, 1
     try:
         f = Formatter(m, mode, swaps=False).run(route=False)  # node positions are all it needs

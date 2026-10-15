@@ -8,7 +8,6 @@
 Options:
   --select CODES     rules to apply and check (comma-separated codes, prefixes or names; default ALL)
   --ignore CODES     rules to switch off (added to the config file's ignore list)
-  --thorough         search with several seeds (slower; the default is one deterministic pass)
   --config PATH      a nodefmt.toml to use (default: the first one found from the .blend's folder up)
   --ui-scale S       the Resolution Scale to format for (default: Blender's, or the config's)
   --tree NAME        only this tree (repeatable): a group name or "Material: <name>", ...
@@ -62,7 +61,6 @@ ap.add_argument("--tree", action="append", default=[])
 ap.add_argument("--ui-scale", type=float, default=None)
 ap.add_argument("--select", default=None)
 ap.add_argument("--ignore", default=None)
-ap.add_argument("--thorough", action="store_true", default=None)
 ap.add_argument("--config", default=None)
 ap.add_argument("--no-format-check", action="store_true")
 ap.add_argument("--statistics", action="store_true")
@@ -81,7 +79,7 @@ def config():
     start = os.path.dirname(bpy.data.filepath) if bpy.data.filepath else os.getcwd()
     if ARGS.config:
         start = os.path.dirname(os.path.abspath(ARGS.config))
-    cfg = rules.load(start, _codes(ARGS.select), _codes(ARGS.ignore), thorough=ARGS.thorough, ui_scale=ARGS.ui_scale)
+    cfg = rules.load(start, _codes(ARGS.select), _codes(ARGS.ignore), ui_scale=ARGS.ui_scale)
     if ARGS.config and os.path.abspath(cfg.source or "") != os.path.abspath(ARGS.config):
         raise SystemExit(f"nodefmt: config {ARGS.config} not found or not readable")
     return cfg
@@ -162,7 +160,7 @@ def main():
     ed.redraw()
     off = [c for c in rules.STYLE if not cfg.on(c)]
     print(f"nodefmt: UI scale {prefs.system.ui_scale:g}; rules off: {', '.join(off) or 'none'}; "
-          f"{'thorough' if cfg.thorough else 'one pass'}; config: {cfg.source or 'none'}", flush=True)
+          f"config: {cfg.source or 'none'}", flush=True)
     code = 0
     found, bad_trees = [], 0
     name = os.path.basename(bpy.data.filepath) or "untitled"

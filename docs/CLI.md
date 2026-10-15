@@ -5,7 +5,7 @@ Blender draws a tree. The window opens for a few seconds.
 
 ```
 blender file.blend --python nodefmt_cli.py -- --check [--select CODES] [--ignore CODES] [--strict]
-blender file.blend --python nodefmt_cli.py -- --fix   [--tree NAME] [--ui-scale 1.4] [--thorough]
+blender file.blend --python nodefmt_cli.py -- --fix   [--tree NAME] [--ui-scale 1.4]
 blender file.blend --python nodefmt_cli.py -- --list-rules
 blender file.blend --python nodefmt_cli.py -- --capture TREE [--out FILE.png] [--zoom 1.0]
 ```
@@ -21,7 +21,6 @@ blender file.blend --python nodefmt_cli.py -- --capture TREE [--out FILE.png] [-
 | `--margin PX` | `--capture`: empty pixels around the tree (default 40). |
 | `--select CODES` | Rules to apply and check: comma-separated codes, prefixes or names (default ALL). |
 | `--ignore CODES` | Rules to switch off (added to the config file's `ignore`). |
-| `--thorough` | Search with several seeds (slower; the default is one deterministic pass). |
 | `--config PATH` | A `nodefmt.toml` to use (default: the first one found from the .blend's folder up). |
 | `--ui-scale S` | The Resolution Scale to sort for (default: Blender's, or the config's). |
 | `--tree NAME` | Only this tree (repeatable): a group name, or `"Material: <name>"`, `"World: <name>"`, `"Light: <name>"`. |

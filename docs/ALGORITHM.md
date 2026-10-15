@@ -124,9 +124,7 @@ steps.
     longer search and a final slide pass, which moves a group of nodes held together by straight
     links up or down when that makes one more link straight (and the cost drops). Then the
     layout of the current order is tried (stability, see above). Budgets count layouts, not
-    seconds, so the result is deterministic. With `thorough`, 8 seeds run (seed 0 is the plain
-    run; the others jitter the initial order and shuffle the moves) and the best one goes on. The
-    copy plan of input nodes (step 3) always runs one seed. In a zone, the level and the free zone output modes
+    seconds, so the result is deterministic. In a zone, the level and the free zone output modes
     are two groups searched apart (each seed, the final search and the slide), since the orders
     that suit one output height rarely suit the other; both go to the parent (step 4).
 11. **Routing** (`routes.py`). The route segments of all containers become one reroute tree per
@@ -225,10 +223,9 @@ there than in a pinned editor.
 
 ## Determinism and stability
 
-- **One deterministic pass by default.** The search runs one seed: the same input gives the same
-  layout, every time. `thorough` (8 seeds) is an option: on 41 test trees it gives the same
-  layout for 31 of them, a cheaper one for the other 10 (3.4% lower layout cost in all, up to
-  20% on a single tree) and never a worse one, in about 2.8 times the time.
+- **One deterministic pass.** The search runs one seed: the same input gives the same layout,
+  every time. Several seeds (`params.SEEDS`, for experiments) lower the layout cost by about 3%
+  on the test trees, a difference hard to see, for about 3 times the time.
 - **Idempotent.** Formatting a formatted tree changes nothing (`--check` passes right after
   `--fix`): tested on 106 trees at UI scale 1 and 1.4.
 - **The current layout is the tie-breaker.** Besides the fresh layout (which depends on the graph

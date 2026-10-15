@@ -42,7 +42,7 @@ def config(context):
         return rules.Config()
     on = [c for c in rules.STYLE if getattr(p, "rule_" + c, c not in rules.OPT_IN)]
     enabled = rules.resolve(on, []) if on else rules.resolve(None, ["ALL"])
-    return rules.Config(enabled, thorough=p.thorough)
+    return rules.Config(enabled)
 
 
 def _rule_props():
@@ -60,9 +60,6 @@ class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
     __annotations__ = {
         **_rule_props(),
-        "thorough": bpy.props.BoolProperty(
-            name="Thorough search", default=False,
-            description="Try several layouts and keep the best (about 3 times slower, never worse)"),
         "use_config_file": bpy.props.BoolProperty(
             name="Use nodefmt.toml", default=True,
             description="Use the rules in a nodefmt.toml next to the .blend file, if there is one"),
@@ -72,7 +69,6 @@ class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
         """The options and one checkbox per style rule (guarantees are always on)."""
         col = self.layout.column()
         col.prop(self, "use_config_file")
-        col.prop(self, "thorough")
         col.label(text="Style rules (guarantees NF001-NF005 are always on):")
         for code in rules.STYLE:
             col.prop(self, "rule_" + code)
@@ -771,12 +767,11 @@ class NODEFMT_PT_rules(bpy.types.Panel):
         return _prefs(context) is not None
 
     def draw(self, context):
-        """Use nodefmt.toml, Thorough search, one checkbox per style rule."""
+        """Use nodefmt.toml and one checkbox per style rule."""
         p = _prefs(context)
         cfg = config(context)
         col = self.layout.column()
         col.prop(p, "use_config_file")
-        col.prop(p, "thorough")
         sub = col.column(align=True)
         sub.enabled = not cfg.source
         for code in rules.STYLE:

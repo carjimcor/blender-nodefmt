@@ -10,7 +10,6 @@ repository root; the first one found wins; [tool.nodefmt] in a pyproject.toml wo
 
     select = ["ALL"]          # or a list of codes; prefixes work: "NF03" selects NF030-NF039
     ignore = ["NF011"]        # codes or prefixes to switch off
-    thorough = false          # true: search with several seeds (slower, not needed)
     ui-scale = 1.4            # optional: the Resolution Scale to format for (default: Blender's)
 """
 import os
@@ -126,12 +125,11 @@ DEFAULT = resolve()
 
 
 class Config:
-    """Settings of one run: enabled rules, thorough search, UI scale (None: Blender's)."""
+    """Settings of one run: enabled rules and UI scale (None: Blender's)."""
 
-    def __init__(self, rules=DEFAULT, thorough=False, ui_scale=None, source=None):
-        """Enabled rule codes, search mode, UI scale and the file the settings came from."""
+    def __init__(self, rules=DEFAULT, ui_scale=None, source=None):
+        """Enabled rule codes, UI scale and the file the settings came from."""
         self.rules = frozenset(rules)
-        self.thorough = thorough
         self.ui_scale = ui_scale
         self.source = source
 
@@ -142,8 +140,7 @@ class Config:
     def __repr__(self):
         """Short text: the rules that are off, and the options."""
         off = [c for c in STYLE if c not in self.rules]
-        return (f"Config(off={off}, thorough={self.thorough}, ui_scale={self.ui_scale}, "
-                f"source={self.source})")
+        return f"Config(off={off}, ui_scale={self.ui_scale}, source={self.source})"
 
 
 def _parse_toml(text):
@@ -200,15 +197,14 @@ def find_config(start):
         d = up
 
 
-def load(start=None, select=None, ignore=None, extend_ignore=None, thorough=None, ui_scale=None):
+def load(start=None, select=None, ignore=None, extend_ignore=None, ui_scale=None):
     """A Config from the first config file found from folder `start` upwards, with command line
     values on top (select replaces the file's select; ignore adds to the file's ignore)."""
     path, data = find_config(start)
     sel = select if select else data.get("select")
     ign = list(data.get("ignore", [])) + list(ignore or []) + list(extend_ignore or [])
-    th = thorough if thorough is not None else bool(data.get("thorough", False))
     sc = ui_scale if ui_scale is not None else data.get("ui-scale", data.get("ui_scale"))
-    return Config(resolve(sel, ign), th, float(sc) if sc else None, path)
+    return Config(resolve(sel, ign), float(sc) if sc else None, path)
 
 
 class applied:
@@ -226,7 +222,6 @@ class applied:
         from . import params as P
         on = self.cfg.on
         new = {
-            "SEEDS": 8 if self.cfg.thorough else 1,
             "SATELLITES": on("NF021"),
             "ZONE_OUT": ('level', 'median', 'mean') if on("NF020") else ('level',),
             "PLACERS": ('blocks', 'balanced', 'relax') if on("NF022") else ('blocks', 'relax'),

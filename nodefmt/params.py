@@ -33,7 +33,7 @@ TRACK_TOUCH = 8.0   # a wire that runs into another wire's corner counts this mu
 
 # ---------------------------------------------------------------- search budgets (engine.py, search.py)
 CANDIDATES = 3      # orders of the crossing reduction laid out in full (each with every placement)
-SEEDS = 1           # runs with differently seeded orders and moves (1: one deterministic pass; thorough: 8)
+SEEDS = 1           # runs with differently seeded orders and moves (1: one deterministic pass; more: experiments)
 SEED_ONLY = None    # tests: run this one seed only (None: all SEEDS)
 SEARCH_SEED = 40    # layouts tried by the local search of each seed
 SEARCH = 120        # layouts tried by the final local search of the best seed

@@ -7,7 +7,6 @@ too.
 ```toml
 select = ["ALL"]        # codes, prefixes ("NF03") or names
 ignore = ["NF011"]      # rules switched off
-thorough = false        # true: search with several seeds (slower)
 ui-scale = 1.4          # the Resolution Scale to sort for (default: Blender's)
 ```
 
@@ -16,8 +15,6 @@ ui-scale = 1.4          # the Resolution Scale to sort for (default: Blender's)
   NF035 fanned-multi-inputs, which are off unless selected (by code, prefix, name or `"ALL"`).
 - `ignore`: rules to switch off, in the same forms. Guarantees (NF001-NF005) cannot be switched
   off.
-- `thorough`: search with several seeds and keep the best layout: about 3 times slower, never
-  worse, sometimes clearly better. The default is one deterministic pass.
 - `ui-scale`: the Resolution Scale the wires are made exact for. By default, the scale Blender
   runs at.
 

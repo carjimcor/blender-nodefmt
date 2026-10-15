@@ -13,9 +13,8 @@
   blocks and their constraints up to date instead of rebuilding them for every merge, the
   wire checks of the tidy pass look only at wires nearby, and the copy plan of input nodes no
   longer routes the wires it does not use.
-- Thorough search is never worse than the default and about twice as fast as before: the copy
-  plan of input nodes always runs one seed (with eight it could pick other copies and give a
-  worse tree).
+- Removed the "Thorough search" option (`thorough` in nodefmt.toml, `--thorough`): it took about
+  three times as long for layouts hard to tell apart. The copy plan of input nodes runs one seed.
 - `tools/bench.py`: time the offline layout on a folder of dumped trees and compare the output
   with a saved baseline.
 

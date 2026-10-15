@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
 
 - New rule NF035 fanned-multi-inputs, off by default: the links into a multi-input socket (Join
   Geometry, Join Strings, ...) arrive a widget unit apart and converge in a short fan right

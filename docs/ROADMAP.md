@@ -27,24 +27,14 @@ today, and its children can change order. The children should keep the order you
 line up on a common axis, side by side or centred on one vertical line, instead of being
 reshuffled. To be explored.
 
-## 3. Curved mode (experimental)
-
-An alternative to the orthogonal style for people who prefer Blender's curved links. Wires would
-use few reroutes and rely on Blender's own curves; wires that go to the same place or to nearby
-places would run parallel, like pipes, both on straight runs and through their curves. A curve is
-never built from many reroutes.
-
-The curvature of links is a theme setting (Preferences > Themes > Node Editor > Noodle Curving),
-so the result depends on each user's theme; this mode would be tuned for the default curvature.
-
-## 4. Capture: faint long wires
+## 3. Capture: faint long wires
 
 Blender dims a wire whose two ends are both outside the view, and this cannot be switched off. A
 capture is made of screen-sized tiles, so a straight run longer than a tile can look faint in the
 middle of the image. It rarely shows at zoom 1.0. Possible fixes: larger tiles (full-screen window
 without the top and status bars), and a warning before capturing when some wires would be dimmed.
 
-## 5. Lint rules for Check
+## 4. Lint rules for Check
 
 Linters for programming languages report more than formatting: code that works but is hard to
 read or maintain. Check could do the same for node trees, with a second family of rules that are

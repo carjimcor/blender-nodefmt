@@ -6,6 +6,7 @@ Blender only lays out a node (its size, its socket positions) while drawing it i
 synchronous redraw; after it returns, node.dimensions and socket positions are valid. Needs a UI
 session (not `blender -b`). `close()` puts the editor back as it was, including the group path.
 """
+
 from itertools import pairwise
 
 import bpy
@@ -13,19 +14,20 @@ import bpy
 
 class Editor:
     """A node editor that draws trees on demand (see the module docstring)."""
+
     def __init__(self, area=None):
         """Use `area` (default: a node editor of the current window, else its largest area);
         remember what it showed so close() can put it back."""
         win = bpy.context.window or bpy.context.window_manager.windows[0]
         if area is None:
-            areas = [a for a in win.screen.areas if a.type == 'NODE_EDITOR']
+            areas = [a for a in win.screen.areas if a.type == "NODE_EDITOR"]
             area = areas[0] if areas else max(win.screen.areas, key=lambda a: a.width * a.height)
         self.win, self.area = win, area
         self.ui_type = area.ui_type
         self.space = None
         self.active = None  # active object and modifiers, if show() changed them
         self.current = None  # the tree show() drew last
-        if area.type == 'NODE_EDITOR':
+        if area.type == "NODE_EDITOR":
             sp = area.spaces.active
             self.space = (sp.pin, sp.node_tree, [p.node_tree for p in sp.path])
 
@@ -41,7 +43,7 @@ class Editor:
             self.redraw()
             return
         self.current = tree.as_pointer()
-        hit = _modifier_path(tree) if tree.bl_idname == 'GeometryNodeTree' else None
+        hit = _modifier_path(tree) if tree.bl_idname == "GeometryNodeTree" else None
         if hit:
             vl = bpy.context.view_layer
             if self.active is None:
@@ -68,9 +70,9 @@ class Editor:
 
     def redraw(self):
         """Force one synchronous redraw of the editor, so node sizes and sockets are up to date."""
-        region = next(r for r in self.area.regions if r.type == 'WINDOW')
+        region = next(r for r in self.area.regions if r.type == "WINDOW")
         with bpy.context.temp_override(window=self.win, area=self.area, region=region):
-            bpy.ops.wm.redraw_timer(type='DRAW_WIN', iterations=1)
+            bpy.ops.wm.redraw_timer(type="DRAW_WIN", iterations=1)
 
     def close(self):
         """Put the editor (and the active object and modifiers) back as they were."""
@@ -86,7 +88,7 @@ class Editor:
         area = self.area
         if area.ui_type != self.ui_type:
             area.ui_type = self.ui_type
-        if self.space is None or area.type != 'NODE_EDITOR':
+        if self.space is None or area.type != "NODE_EDITOR":
             return
         pin, tree, path = self.space
         sp = area.spaces.active
@@ -108,7 +110,7 @@ def _modifier_path(tree):
     shortest list of (parent tree, group node name) from the modifier's tree down to `tree`."""
     for o in sorted(bpy.context.view_layer.objects, key=lambda o: o.name):
         for m in o.modifiers:
-            root = m.node_group if m.type == 'NODES' else None
+            root = m.node_group if m.type == "NODES" else None
             if root is None:
                 continue
             seen, level = {root.as_pointer()}, [(root, [])]
@@ -118,7 +120,7 @@ def _modifier_path(tree):
                     if t == tree:
                         return o, m, path
                     for n in sorted(t.nodes, key=lambda n: n.name):
-                        g = getattr(n, "node_tree", None) if n.bl_idname == 'GeometryNodeGroup' else None
+                        g = getattr(n, "node_tree", None) if n.bl_idname == "GeometryNodeGroup" else None
                         if g is not None and g.as_pointer() not in seen:
                             seen.add(g.as_pointer())
                             nxt.append((g, path + [(t, n.name)]))

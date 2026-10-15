@@ -1,0 +1,17 @@
+# pre-commit hooks for working on nodefmt: `pip install pre-commit`, then `pre-commit install`.
+# They run the same checks as CI. Keep the ruff version the same as in .github/workflows/ci.yml.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: layouts-unchanged
+        name: layouts unchanged
+        # sorts the dumped examples without Blender (about a second) and compares with the baseline
+        entry: python -I tools/bench.py tests/layout/trees --runs 1 --compare tests/layout/baseline.json
+        language: system
+        files: ^(nodefmt/|tests/layout/)
+        pass_filenames: false

@@ -9,6 +9,7 @@ the input of tools/bench.py. Then save the layout baseline the CI compares again
 
     python tools/bench.py tests/layout/trees --runs 1 --save tests/layout/baseline.json
 """
+
 import glob
 import json
 import os
@@ -19,7 +20,7 @@ import bpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 OUT = argv[0] if argv else os.path.join(ROOT, "tests", "layout", "trees")
 
 
@@ -27,6 +28,7 @@ def main():
     """Append each example's node group, read it as nodefmt does and write it as JSON."""
     from nodefmt import api
     from nodefmt.draw import Editor
+
     bpy.context.preferences.view.ui_scale = 1.0  # in memory only
     os.makedirs(OUT, exist_ok=True)
     ed = Editor()
@@ -35,7 +37,7 @@ def main():
             with bpy.data.libraries.load(path, link=False) as (src, dst):
                 dst.node_groups = list(src.node_groups)
             for nt in [g for g in dst.node_groups if g is not None]:
-                if nt.users > 1 or nt.bl_idname != 'GeometryNodeTree':
+                if nt.users > 1 or nt.bl_idname != "GeometryNodeTree":
                     continue  # a group used inside the example's tree
                 data = api.read_tree(nt, ed)
                 name = os.path.splitext(os.path.basename(path))[0]

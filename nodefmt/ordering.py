@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Ordering: the vertical order of the items in each column (crossing reduction)."""
+
 from . import params as P
 from .graph import Cand, _name
 
@@ -42,7 +43,7 @@ class OrderingMixin:
         for i in self.items:
             layers[i.rank].append(i)
         self.layers = layers
-        if self.mode == 'keep':
+        if self.mode == "keep":
             # initial order: original positions; dummies and ports follow their source socket
             for k, layer in enumerate(layers):
                 for i in layer:
@@ -59,23 +60,24 @@ class OrderingMixin:
 
                     def key(i, pos=pos):
                         """Initial sort key of an item in its column."""
-                        ks = [pos[e.v] + e.v.ins.get(e.vk, (0, 0))[1] / 1e4 for e in self.succ_edges[i]
-                              if e.v in pos]
+                        ks = [pos[e.v] + e.v.ins.get(e.vk, (0, 0))[1] / 1e4 for e in self.succ_edges[i] if e.v in pos]
                         jit = rng.uniform(-P.JITTER, P.JITTER) if rng is not None else 0.0
                         return (sum(ks) / len(ks) + jit if ks else 1e9, _name(i))
                 else:
+
                     def key(i):
                         """Initial sort key of an item in its column."""
                         return (0, _name(i))
+
                 layer.sort(key=key)
                 y = 0.0
                 for i in layer:
                     i.y = y
                     y += i.h + self._gap(i, i)
-        fixed_real = self.mode == 'keep'
+        fixed_real = self.mode == "keep"
         self.swapped = []
         for e in self.edges:  # vk0: the input as it is in the tree
-            if not hasattr(e, 'vk0'):
+            if not hasattr(e, "vk0"):
                 e.vk0 = e.vk
             e.vk = e.vk0
         comm = self._comm_units()
@@ -89,9 +91,10 @@ class OrderingMixin:
         def note():
             """Remember the current order (and its crossings) as a candidate."""
             c = self._crossings()
-            key = (tuple(tuple(id(i) for i in l) for l in layers), tuple(self._comm_state(comm)))
+            key = (tuple(tuple(id(i) for i in ly) for ly in layers), tuple(self._comm_state(comm)))
             if key not in seen:
-                seen[key] = (c, len(seen), [list(l) for l in layers], self._comm_state(comm))
+                seen[key] = (c, len(seen), [list(ly) for ly in layers], self._comm_state(comm))
+
         note()
         sweeps, first_down = (12, True) if rng is None else (rng.randint(8, 14), rng.random() < 0.7)
         for it in range(sweeps):
@@ -120,15 +123,18 @@ class OrderingMixin:
             note()
         ranked = sorted(seen.values(), key=lambda c: (c[0], c[1]))
         self.crossings_after_order = ranked[0][0]
-        return [Cand(self._zone_first(c[2]), c[3], frozenset(), placer) for c in ranked[:P.CANDIDATES]
-                for placer in P.PLACERS]
+        return [
+            Cand(self._zone_first(c[2]), c[3], frozenset(), placer)
+            for c in ranked[: P.CANDIDATES]
+            for placer in P.PLACERS
+        ]
 
     def _zone_first(self, layers):
         """An order with the zone input (and output) heading their columns."""
-        layers = [list(l) for l in layers]
+        layers = [list(ly) for ly in layers]
         if self._zone_input() is not None:
             for layer in (layers[0], layers[-1]):
-                for i in [i for i in layer if i.pin and i.kind == 'node' and getattr(i, 'zmatch', None) is not None]:
+                for i in [i for i in layer if i.pin and i.kind == "node" and getattr(i, "zmatch", None) is not None]:
                     layer.remove(i)
                     layer.insert(0, i)
         return layers
@@ -137,34 +143,34 @@ class OrderingMixin:
         """Make a candidate current: column orders (zone pins first, satellites at the ends), order
         indices, swapped inputs, self.above and self.outer, and provisional heights."""
         layers, comm_state, self.banned, self.placer, self.origin, self.zone = cand
-        self.layers = [list(l) for l in layers]
+        self.layers = [list(ly) for ly in layers]
         zin = self._zone_input()
         self.above = set()
         if zin is not None:  # the zone input and output head their columns
             for layer in (self.layers[0], self.layers[-1]):
-                for i in [i for i in layer if i.pin and i.kind == 'node' and getattr(i, 'zmatch', None) is not None]:
+                for i in [i for i in layer if i.pin and i.kind == "node" and getattr(i, "zmatch", None) is not None]:
                     # ports the search put above the zone input stay there (NF033)
                     lead = 0
                     if layer is self.layers[0] and P.PORTS_ABOVE:
-                        while lead < len(layer) and layer[lead].kind == 'pin_in':
+                        while lead < len(layer) and layer[lead].kind == "pin_in":
                             lead += 1
                     layer.remove(i)
                     layer.insert(min(lead, len(layer)), i)
-            todo = list(self.layers[0][:self.layers[0].index(zin)])
+            todo = list(self.layers[0][: self.layers[0].index(zin)])
             while todo:  # the ports above and the lanes that carry their wires on
                 i = todo.pop()
                 if i in self.above:
                     continue
                 self.above.add(i)
-                todo += [e.v for e in self.succ_edges[i] if e.v.kind == 'dummy']
+                todo += [e.v for e in self.succ_edges[i] if e.v.kind == "dummy"]
         for layer in self.layers:  # satellites (NF021) head or end their column
-            sats = [i for i in layer if getattr(i, 'sat', False)]
+            sats = [i for i in layer if getattr(i, "sat", False)]
             if sats:
                 n = len(layer)
                 top = [i for i in sats if layer.index(i) < n / 2]
                 bottom = [i for i in sats if i not in top]
                 rest = [i for i in layer if i not in sats]
-                k = 1 if rest and rest[0].pin and rest[0].kind == 'node' else 0
+                k = 1 if rest and rest[0].pin and rest[0].kind == "node" else 0
                 layer[:] = rest[:k] + top + rest[k:] + bottom
         self._set_comm_state(self.comm_items, comm_state)
         for k, layer in enumerate(self.layers):
@@ -177,11 +183,11 @@ class OrderingMixin:
                 reals = [n for n, i in enumerate(layer) if not i.is_point]
                 if not reals:
                     continue
-                f, l = reals[0], reals[-1]
+                f, last = reals[0], reals[-1]
                 if f > 0:
                     self.outer.add((id(layer[f - 1]), id(layer[f])))
-                if l + 1 < len(layer):
-                    self.outer.add((id(layer[l]), id(layer[l + 1])))
+                if last + 1 < len(layer):
+                    self.outer.add((id(layer[last]), id(layer[last + 1])))
         # provisional y for the order (ranks alignments): one pass of barycenters, rounded so tiny
         # float differences cannot change a decision
         for k, layer in enumerate(self.layers):
@@ -216,8 +222,11 @@ class OrderingMixin:
         """Crossings between columns k and k+1 (links compared by socket heights)."""
         if k < 0 or k >= self.R:
             return 0
-        pts = [(self._sock_y(e.u, e.uk, True), self._sock_y(e.v, e.vk, False))
-               for i in self.layers[k] for e in self.succ_edges[i]]
+        pts = [
+            (self._sock_y(e.u, e.uk, True), self._sock_y(e.v, e.vk, False))
+            for i in self.layers[k]
+            for e in self.succ_edges[i]
+        ]
         total = 0
         for a in range(len(pts)):
             p1, q1 = pts[a]
@@ -268,8 +277,8 @@ class OrderingMixin:
         (Add, Multiply, AND, Equal, ...); a frame or zone may have several (layout.py)."""
         units = []
         for i in self.items:
-            c = getattr(i, 'comm', None)
-            for pair in (c if isinstance(c, list) else [c] if c else []):
+            c = getattr(i, "comm", None)
+            for pair in c if isinstance(c, list) else [c] if c else []:
                 es = [e for e in self.pred_edges[i] if e.vk0 in pair]
                 if es:
                     units.append((i, tuple(pair), es))
@@ -303,7 +312,7 @@ class OrderingMixin:
 
     def _guess_oy(self, i):
         """Original height for a dummy or port (keep mode): that of the socket it carries."""
-        if i.kind == 'pin_in':
+        if i.kind == "pin_in":
             es = self.succ_edges[i]
             ys = [e.v.oy + e.v.ins.get(e.vk, (0, 0))[1] for e in es if e.v.oy is not None]
             return min(ys) if ys else 0.0

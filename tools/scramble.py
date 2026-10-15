@@ -9,6 +9,7 @@ random gaps and x jitter. The copy is saved only if the logic fingerprint (nodef
 unchanged. --blank-label LABEL (repeatable) empties the String nodes with that label in the copy
 (to keep private text out of the demo).
 """
+
 import argparse
 import os
 import random
@@ -19,7 +20,7 @@ import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 ap = argparse.ArgumentParser(prog="scramble.py")
 ap.add_argument("--tree", required=True)
 ap.add_argument("--out", required=True)
@@ -28,7 +29,7 @@ ap.add_argument("--seed", type=int, default=7)
 ap.add_argument("--ui-scale", type=float, default=None)
 ARGS = ap.parse_args(argv)
 
-REROUTE = 'NodeReroute'
+REROUTE = "NodeReroute"
 
 
 def real_source(sock):
@@ -47,12 +48,12 @@ def remove_reroutes(nt):
         if n.bl_idname == REROUTE:
             continue
         for s in n.inputs:
-            links = sorted(s.links, key=lambda l: l.multi_input_sort_id)
-            if not any(l.from_node.bl_idname == REROUTE for l in links):
+            links = sorted(s.links, key=lambda lk: lk.multi_input_sort_id)
+            if not any(lk.from_node.bl_idname == REROUTE for lk in links):
                 continue
-            srcs = [real_source(l.from_socket) for l in links]
-            for l in links:
-                nt.links.remove(l)
+            srcs = [real_source(lk.from_socket) for lk in links]
+            for lk in links:
+                nt.links.remove(lk)
             for src in srcs:  # in their old order (a multi-input socket keeps it)
                 if src is not None:
                     nt.links.new(src, s)
@@ -62,11 +63,11 @@ def remove_reroutes(nt):
 
 def columns(nt):
     """Longest-path column of every node that is not a frame (empty columns removed)."""
-    nodes = [n for n in nt.nodes if n.bl_idname != 'NodeFrame']
+    nodes = [n for n in nt.nodes if n.bl_idname != "NodeFrame"]
     preds = {n.name: set() for n in nodes}
-    for l in nt.links:
-        if l.from_node.name in preds and l.to_node.name in preds and not l.is_hidden:
-            preds[l.to_node.name].add(l.from_node.name)
+    for lk in nt.links:
+        if lk.from_node.name in preds and lk.to_node.name in preds and not lk.is_hidden:
+            preds[lk.to_node.name].add(lk.from_node.name)
     col = {}
 
     def depth(name, seen=()):
@@ -74,11 +75,12 @@ def columns(nt):
         if name not in col:
             col[name] = 1 + max((depth(p, seen + (name,)) for p in preds[name] if p not in seen), default=-1)
         return col[name]
+
     for n in nodes:
         depth(n.name)
     # a node with nothing linked in sits right before its first consumer, as people place them
     for n in nodes:
-        succ = [l.to_node.name for l in nt.links if l.from_node.name == n.name and l.to_node.name in col]
+        succ = [lk.to_node.name for lk in nt.links if lk.from_node.name == n.name and lk.to_node.name in col]
         if not preds[n.name] and succ:
             col[n.name] = max(0, min(col[m] for m in succ) - 1)
     used = sorted(set(col.values()))  # no empty columns
@@ -110,6 +112,7 @@ def main():
     """Scramble the tree, check its logic is unchanged and save a copy of the file."""
     from nodefmt import api, check
     from nodefmt.draw import Editor
+
     if ARGS.ui_scale:
         bpy.context.preferences.view.ui_scale = ARGS.ui_scale  # this session only, never saved
     nt = bpy.data.node_groups[ARGS.tree]
@@ -126,12 +129,15 @@ def main():
     blanked = 0
     for tree in bpy.data.node_groups:
         for n in tree.nodes:
-            if n.bl_idname == 'FunctionNodeInputString' and n.label in ARGS.blank_label:
+            if n.bl_idname == "FunctionNodeInputString" and n.label in ARGS.blank_label:
                 n.string = ""
                 blanked += 1
     bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(ARGS.out), copy=True)
-    print(f"SCRAMBLED {ARGS.tree!r} seed {ARGS.seed}: {len(nt.nodes)} nodes, {len(nt.links)} links, "
-          f"{blanked} String nodes emptied -> {ARGS.out}", flush=True)
+    print(
+        f"SCRAMBLED {ARGS.tree!r} seed {ARGS.seed}: {len(nt.nodes)} nodes, {len(nt.links)} links, "
+        f"{blanked} String nodes emptied -> {ARGS.out}",
+        flush=True,
+    )
 
 
 def tick():

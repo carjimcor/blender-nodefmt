@@ -3,6 +3,7 @@
 
 Entry points: assign_x() (columns, track order, satellites) and shelf() (items with no link).
 """
+
 from . import params as P
 from .graph import _name, snap_down, snap_up
 
@@ -32,10 +33,11 @@ class ColumnsMixin:
         each of its bends; where that text would reach a node beside it, the gap widens so the
         text clears it by LABEL_CLEAR."""
         from . import labels as L
-        lw = getattr(self, 'label_w', None)
+
+        lw = getattr(self, "label_w", None)
         if not lw:
             return 0.0, 0.0
-        near = [i for layer in getattr(self, 'layers', [])[k:k + 2] for i in layer if not i.is_point]
+        near = [i for layer in getattr(self, "layers", [])[k : k + 2] for i in layer if not i.is_point]
         left = right = 0.0
         for t in tags:
             n = slot[t]
@@ -54,14 +56,14 @@ class ColumnsMixin:
         """Satellites (ranking.py, NF021) that head or end their column: {item: 'top' | 'bottom'}.
         One that ended up between other items is laid out as a plain item of its column."""
         out = {}
-        for layer in getattr(self, 'layers', []):
+        for layer in getattr(self, "layers", []):
             for n, i in enumerate(layer):
-                if not getattr(i, 'sat', False):
+                if not getattr(i, "sat", False):
                     continue
-                if all(getattr(j, 'sat', False) for j in layer[:n]):
-                    out[i] = 'top'
-                elif all(getattr(j, 'sat', False) for j in layer[n + 1:]):
-                    out[i] = 'bottom'
+                if all(getattr(j, "sat", False) for j in layer[:n]):
+                    out[i] = "top"
+                elif all(getattr(j, "sat", False) for j in layer[n + 1 :]):
+                    out[i] = "bottom"
         return out
 
     def _place_sats(self, sats):
@@ -69,22 +71,22 @@ class ColumnsMixin:
         below (bottom) everything there, items and wires, with a node gap."""
         segs = self._route()
         for k, layer in enumerate(self.layers):
-            top = [i for i in layer if sats.get(i) == 'top']
-            bottom = [i for i in layer if sats.get(i) == 'bottom']
+            top = [i for i in layer if sats.get(i) == "top"]
+            bottom = [i for i in layer if sats.get(i) == "bottom"]
             for group, up in ((top[::-1], True), (bottom, False)):
                 prev = None
                 for s in group:
                     # the part that reaches over earlier columns (its own column is stacked)
                     x0, x1 = s.x - P.COL_GAP / 2, self.col_x[s.rank]
                     lo, hi = [], []
-                    for j in (self.items if x0 < x1 else ()):
+                    for j in self.items if x0 < x1 else ():
                         if j.rank >= s.rank:
                             continue
                         jx1 = j.x + (0 if j.is_point else j.w)
                         if j.x < x1 and jx1 > x0:
                             lo.append(j.y)
                             hi.append(j.y + (0 if j.is_point else j.h))
-                    for tag, p, q in (segs if x0 < x1 else ()):
+                    for tag, p, q in segs if x0 < x1 else ():
                         if min(p[0], q[0]) < x1 and max(p[0], q[0]) > x0:
                             lo.append(min(p[1], q[1]))
                             hi.append(max(p[1], q[1]))
@@ -151,8 +153,8 @@ class ColumnsMixin:
         reach_r, reach_l = [0.0] * (self.R + 1), [0.0] * (self.R + 1)
         for i in self.items:
             if not i.is_point and i not in hang and i not in sats:
-                reach_r[i.rank] = max(reach_r[i.rank], i.w + getattr(i, 'reach_r', 0.0) - colw[i.rank])
-                reach_l[i.rank] = max(reach_l[i.rank], getattr(i, 'reach_l', 0.0))
+                reach_r[i.rank] = max(reach_r[i.rank], i.w + getattr(i, "reach_r", 0.0) - colw[i.rank])
+                reach_l[i.rank] = max(reach_l[i.rank], getattr(i, "reach_l", 0.0))
         for k in range(self.R + 1):
             if k == 0:
                 col_x[0] = 0.0
@@ -187,7 +189,7 @@ class ColumnsMixin:
     def _order_tracks(self, segs):
         """Memoised _order_tracks_ (the same gap is ordered many times during the search)."""
         key = tuple(sorted((t, tuple(v)) for t, v in segs.items()))
-        memo = self.__dict__.setdefault('_track_memo', {})
+        memo = self.__dict__.setdefault("_track_memo", {})
         if key not in memo:
             memo[key] = self._order_tracks_(segs)
         return list(memo[key])
@@ -218,11 +220,11 @@ class ColumnsMixin:
             sb, _ob, lo_b, hi_b, vb = info[b]
             w = P.TRACK_BUNDLE if (a[0] == b[0] or va & vb) else 1.0
             c = 0.0
-            if lo_a + P.EPS < sb < hi_a - P.EPS:      # b's entry passes a's vertical
+            if lo_a + P.EPS < sb < hi_a - P.EPS:  # b's entry passes a's vertical
                 c += w
             elif lo_a - P.EPS <= sb <= hi_a + P.EPS and hi_a - lo_a > P.EPS:
-                c += P.TRACK_TOUCH                   # b's entry runs into a's corner
-            for y in oa:                             # a's exits pass b's vertical
+                c += P.TRACK_TOUCH  # b's entry runs into a's corner
+            for y in oa:  # a's exits pass b's vertical
                 if lo_b + P.EPS < y < hi_b - P.EPS:
                     c += w
                 elif lo_b - P.EPS <= y <= hi_b + P.EPS and hi_b - lo_b > P.EPS:
@@ -261,8 +263,11 @@ class ColumnsMixin:
             y0 = min(r[1] for r in occ)
             x1 = max(r[2] for r in occ)
             y1 = max(r[3] for r in occ)
-            xs = ({snap_up(x0)} | {snap_up(r[2] + P.COL_GAP) for r in occ}
-                  | {snap_up(c) for c in getattr(self, 'col_x', ())})
+            xs = (
+                {snap_up(x0)}
+                | {snap_up(r[2] + P.COL_GAP) for r in occ}
+                | {snap_up(c) for c in getattr(self, "col_x", ())}
+            )
             inside = [x for x in xs if x0 <= x and x + i.w <= x1]
             xs = inside or [snap_up(x0)]
             best = None
@@ -327,8 +332,9 @@ def _heuristic_order(W, tags, info):
     """Order for many tracks: sorted by how far they drop, then single tracks moved to the first
     position that lowers the cost, while one does."""
     n = len(W)
-    order = sorted(range(n), key=lambda i: (info[tags[i]][0] - sum(info[tags[i]][1]) / len(info[tags[i]][1]),
-                                            repr(tags[i])))
+    order = sorted(
+        range(n), key=lambda i: (info[tags[i]][0] - sum(info[tags[i]][1]) / len(info[tags[i]][1]), repr(tags[i]))
+    )
 
     def total(o):
         """Cost of a whole order."""
@@ -337,12 +343,12 @@ def _heuristic_order(W, tags, info):
     cur = total(order)
     # with whole-number weights (the defaults) partial sums are exact, so a move is costed
     # incrementally (what the track adds where it goes minus where it is); else total() in full
-    exact = all(float(w).is_integer() and abs(w) < 2 ** 40 for row in W for w in row)
+    exact = all(float(w).is_integer() and abs(w) < 2**40 for row in W for w in row)
     for _ in range(4 * n):
         improved = False
         for x in range(n):
             t = order[x]
-            rest = order[:x] + order[x + 1:]
+            rest = order[:x] + order[x + 1 :]
             if exact:
                 # what t adds when inserted at y in rest: tracks before it, and after it
                 adds, before, after = [], 0.0, sum(W[t][b] for b in rest)

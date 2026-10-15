@@ -24,6 +24,7 @@ units) so two runs can be compared exactly.
 The layout is deterministic and its search budgets are counted in layouts, not seconds, so a
 change that only makes the code faster must keep every fingerprint.
 """
+
 import argparse
 import glob
 import hashlib
@@ -52,7 +53,7 @@ def format_once(data):
     formatter, seconds of the copy plan)."""
     with rules.applied(rules.Config()):
         t0 = time.perf_counter()
-        plan = dup.plan(data, 'relayout')
+        plan = dup.plan(data, "relayout")
         tp = time.perf_counter() - t0
         if dup.changes(plan, data):
             data, _ = dup.apply_model(data, plan)
@@ -81,7 +82,7 @@ def fingerprint(plan, f):
     geo = f.geometry()
     for k in ("nodes", "reroutes", "links"):
         geo[k] = sorted((_canon(x) for x in geo[k]), key=lambda x: json.dumps(x, sort_keys=True))
-    labels = sorted([repr(k), _canon(v)] for k, v in getattr(f, 'label_pts', {}).items())
+    labels = sorted([repr(k), _canon(v)] for k, v in getattr(f, "label_pts", {}).items())
     blob = json.dumps([_canon(plan), _canon(geo), _canon(labels)], sort_keys=True)
     return hashlib.sha1(blob.encode()).hexdigest()[:12]
 
@@ -105,8 +106,14 @@ def bench_one(path, runs, slow):
         if times[0] > slow:
             break
     fp = fps.pop() if len(fps) == 1 else "NONDETERMINISTIC"
-    return {"tree": os.path.basename(path)[:-5], "nodes": nodes_of(data), "seconds": round(statistics.median(times), 3),
-            "plan": round(statistics.median(tps), 3), "runs": len(times), "fp": fp}
+    return {
+        "tree": os.path.basename(path)[:-5],
+        "nodes": nodes_of(data),
+        "seconds": round(statistics.median(times), 3),
+        "plan": round(statistics.median(tps), 3),
+        "runs": len(times),
+        "fp": fp,
+    }
 
 
 def _bench_args(a):
@@ -119,6 +126,7 @@ def profile_one(path, top):
     import cProfile
     import io
     import pstats
+
     data = load(path)
     pr = cProfile.Profile()
     t0 = time.perf_counter()
@@ -130,7 +138,7 @@ def profile_one(path, top):
         s = io.StringIO()
         pstats.Stats(pr, stream=s).strip_dirs().sort_stats(key).print_stats(top)
         lines = s.getvalue().splitlines()
-        start = next((n for n, l in enumerate(lines) if l.strip().startswith("ncalls")), 0)
+        start = next((n for n, ln in enumerate(lines) if ln.strip().startswith("ncalls")), 0)
         print(f"--- by {key}")
         print("\n".join(lines[start:]))
 
@@ -163,6 +171,7 @@ def main(argv=None):
             base = {r["tree"]: r for r in json.load(f)["rows"]}
     if args.jobs > 1:
         from concurrent.futures import ProcessPoolExecutor
+
         with ProcessPoolExecutor(args.jobs) as ex:
             rows = list(ex.map(_bench_args, [(p, args.runs, args.slow) for p in paths]))
     else:
@@ -171,8 +180,11 @@ def main(argv=None):
             rows.append(bench_one(p, args.runs, args.slow))
             if base is None:
                 r = rows[-1]
-                print(f"{r['tree'][:44]:44} {r['nodes']:5d} {r['seconds']:9.3f} s  plan {r['plan']:7.3f} s"
-                      f"  x{r['runs']}  {r['fp']}", flush=True)
+                print(
+                    f"{r['tree'][:44]:44} {r['nodes']:5d} {r['seconds']:9.3f} s  plan {r['plan']:7.3f} s"
+                    f"  x{r['runs']}  {r['fp']}",
+                    flush=True,
+                )
     status = 0
     if base is not None:
         print(f"{'tree':44} {'nodes':>5} {'old s':>9} {'new s':>9} {'speedup':>8}  output")
@@ -187,10 +199,12 @@ def main(argv=None):
                 status = 1
             to += b["seconds"]
             tn += r["seconds"]
-            sp = b["seconds"] / r["seconds"] if r["seconds"] > 0 else float('inf')
+            sp = b["seconds"] / r["seconds"] if r["seconds"] > 0 else float("inf")
             print(f"{r['tree'][:44]:44} {r['nodes']:5d} {b['seconds']:9.3f} {r['seconds']:9.3f} {sp:7.2f}x  {same}")
-        print(f"{'TOTAL':44} {'':5} {to:9.3f} {tn:9.3f} {to / tn if tn else 0:7.2f}x  "
-              f"{'all same' if status == 0 else 'SOME DIFFERENT'}")
+        print(
+            f"{'TOTAL':44} {'':5} {to:9.3f} {tn:9.3f} {to / tn if tn else 0:7.2f}x  "
+            f"{'all same' if status == 0 else 'SOME DIFFERENT'}"
+        )
     else:
         print(f"TOTAL {sum(r['seconds'] for r in rows):.3f} s over {len(rows)} trees")
     if args.save:

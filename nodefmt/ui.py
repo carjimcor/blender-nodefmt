@@ -6,6 +6,7 @@ The rules come from a nodefmt.toml next to the .blend file (or in a folder above
 is one and "Use nodefmt.toml" is on, else from the toggles (also shown in the panel). The layout
 is made for the UI scale Blender runs at. Every sort is one undo step.
 """
+
 import math
 import os
 import time
@@ -17,12 +18,13 @@ from . import api, capture, check, lint, rules
 from .draw import Editor
 from .sockets import UnsupportedBlender
 
-MODES = [('relayout', "Relayout", "Build a new layout from scratch: columns, order and wires"),
-         ('keep', "Keep layout (experimental)", "Keep your columns and order; only straighten wires and fix reroutes")]
+MODES = [
+    ("relayout", "Relayout", "Build a new layout from scratch: columns, order and wires"),
+    ("keep", "Keep layout (experimental)", "Keep your columns and order; only straighten wires and fix reroutes"),
+]
 # the last check, for the panel and the overlay: the tree (name, pointer, _tree_key), the
 # violations and their points, the occurrence shown last per rule and overall
-_LAST = {"done": False, "tree": "", "ptr": 0, "key": None, "violations": [], "points": [], "index": {},
-         "shown": None}
+_LAST = {"done": False, "tree": "", "ptr": 0, "key": None, "violations": [], "points": [], "index": {}, "shown": None}
 
 
 def _prefs(context):
@@ -51,19 +53,22 @@ def _rule_props():
     props = {}
     for code in rules.STYLE:
         props["rule_" + code] = bpy.props.BoolProperty(
-            name=f"{code} {rules.NAMES[code]}", description=rules.SHORT[code],
-            default=code not in rules.OPT_IN)
+            name=f"{code} {rules.NAMES[code]}", description=rules.SHORT[code], default=code not in rules.OPT_IN
+        )
     return props
 
 
 class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
     """Rule toggles and options (Preferences > Add-ons > nodefmt)."""
+
     bl_idname = __package__
     __annotations__ = {
         **_rule_props(),
         "use_config_file": bpy.props.BoolProperty(
-            name="Use nodefmt.toml", default=True,
-            description="Use the rules in a nodefmt.toml next to the .blend file, if there is one"),
+            name="Use nodefmt.toml",
+            default=True,
+            description="Use the rules in a nodefmt.toml next to the .blend file, if there is one",
+        ),
     }
 
     def draw(self, context):
@@ -87,9 +92,9 @@ class SortJob:
         self.ed = Editor(area)
         self.i = 0
         self.gen = None
-        self.snaps = []      # (tree, check.Snapshot) of every tree started, to cancel
+        self.snaps = []  # (tree, check.Snapshot) of every tree started, to cancel
         self.stats, self.failed = [], []
-        self.factor = 0.0    # done, 0..1 (never goes back)
+        self.factor = 0.0  # done, 0..1 (never goes back)
         self.t0 = time.perf_counter()
         self.tree_factor = 0.0
         self.text = "Starting"
@@ -157,14 +162,15 @@ def _redraw_editors():
     """Redraw every node editor (the panel shows the progress)."""
     for win in bpy.context.window_manager.windows:
         for area in win.screen.areas:
-            if area.type == 'NODE_EDITOR':
+            if area.type == "NODE_EDITOR":
                 area.tag_redraw()
 
 
 class SortModal:
     """Mixin for the sort operators: runs in steps with progress (modal, Esc cancels), or at
     once (execute, for scripts). One undo step either way."""
-    bl_options = {'REGISTER', 'UNDO'}  # noqa: RUF012 - the bpy idiom
+
+    bl_options = {"REGISTER", "UNDO"}  # noqa: RUF012 - the bpy idiom
 
     def trees(self, context):
         """The trees to sort."""
@@ -186,29 +192,29 @@ class SortModal:
     def invoke(self, context, event):
         """Start the sort; a timer drives it."""
         if _JOB["job"] is not None:
-            self.report({'WARNING'}, "A sort is already running")
-            return {'CANCELLED'}
+            self.report({"WARNING"}, "A sort is already running")
+            return {"CANCELLED"}
         self.job = _JOB["job"] = self._job(context)
         self.workspace = context.workspace
         wm = context.window_manager
         self.timer = wm.event_timer_add(0.01, window=context.window)
         wm.modal_handler_add(self)
         self._show()
-        return {'RUNNING_MODAL'}
+        return {"RUNNING_MODAL"}
 
     def modal(self, context, event):
         """Run steps for up to 50 ms per timer tick; Esc cancels. Other events are held back,
         so nothing changes the trees while they are being sorted."""
         job = self.job
-        if event.type == 'ESC' and event.value == 'PRESS':
+        if event.type == "ESC" and event.value == "PRESS":
             try:
                 job.cancel()
             finally:
                 self._end(context)
-            self.report({'WARNING'}, "Sort cancelled: the trees are as they were")
-            return {'CANCELLED'}
-        if event.type != 'TIMER':
-            return {'RUNNING_MODAL'}
+            self.report({"WARNING"}, "Sort cancelled: the trees are as they were")
+            return {"CANCELLED"}
+        if event.type != "TIMER":
+            return {"RUNNING_MODAL"}
         t0 = time.perf_counter()
         try:
             while True:
@@ -224,13 +230,12 @@ class SortModal:
                 self._end(context)
             raise
         self._show()
-        return {'RUNNING_MODAL'}
+        return {"RUNNING_MODAL"}
 
     def _show(self):
         """The progress in the status bar and the panel."""
         job = self.job
-        self.workspace.status_text_set(
-            f"nodefmt: {job.text}  ({job.factor:.0%}, {job.elapsed()}, Esc to cancel)")
+        self.workspace.status_text_set(f"nodefmt: {job.text}  ({job.factor:.0%}, {job.elapsed()}, Esc to cancel)")
         _redraw_editors()
 
     def _end(self, context):
@@ -244,20 +249,23 @@ class SortModal:
     def _finish(self, job):
         """Report the result (one tree: its stats, else a count)."""
         for f in job.failed:
-            self.report({'WARNING'} if len(job.trees) > 1 else {'ERROR'}, f)
+            self.report({"WARNING"} if len(job.trees) > 1 else {"ERROR"}, f)
         if len(job.trees) == 1:
             if not job.stats:
-                return {'CANCELLED'}
+                return {"CANCELLED"}
             st = job.stats[0]
-            self.report({'INFO'}, f"Sorted {st['tree']} ({st['reroutes']} reroutes, {st['seconds']} s, "
-                                  f"UI scale {st['ui_scale']:g})")
+            self.report(
+                {"INFO"},
+                f"Sorted {st['tree']} ({st['reroutes']} reroutes, {st['seconds']} s, UI scale {st['ui_scale']:g})",
+            )
         else:
-            self.report({'INFO'}, f"Sorted {len(job.stats)} trees, {len(job.failed)} left unchanged")
-        return {'FINISHED'}
+            self.report({"INFO"}, f"Sorted {len(job.stats)} trees, {len(job.failed)} left unchanged")
+        return {"FINISHED"}
 
 
 class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
     """Sort (format) the tree shown in the node editor."""
+
     bl_idname = "node.nodefmt_sort_tree"
     bl_label = "Sort Current Tree"
     bl_description = "Sort the node tree in this editor. Esc cancels, Ctrl+Z undoes it"
@@ -266,9 +274,14 @@ class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
     def poll(cls, context):
         """Available in a node editor showing a tree of a supported type, when no sort runs."""
         sp = context.space_data
-        return (_JOB["job"] is None and _CAPTURE["job"] is None and sp and sp.type == 'NODE_EDITOR'
-                and sp.edit_tree
-                and api.formattable(sp.edit_tree))
+        return (
+            _JOB["job"] is None
+            and _CAPTURE["job"] is None
+            and sp
+            and sp.type == "NODE_EDITOR"
+            and sp.edit_tree
+            and api.formattable(sp.edit_tree)
+        )
 
     def trees(self, context):
         """The edited tree."""
@@ -277,10 +290,13 @@ class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
 
 class NODEFMT_OT_sort_all(SortModal, bpy.types.Operator):
     """Sort (format) every node tree of the file (Geometry Nodes, shader, compositor)."""
+
     bl_idname = "node.nodefmt_sort_all"
     bl_label = "Sort All Trees"
-    bl_description = ("Sort every node tree in the file: Geometry Nodes, materials, worlds and compositor. "
-                      "Esc cancels, Ctrl+Z undoes it")
+    bl_description = (
+        "Sort every node tree in the file: Geometry Nodes, materials, worlds and compositor. "
+        "Esc cancels, Ctrl+Z undoes it"
+    )
 
     @classmethod
     def poll(cls, context):
@@ -294,11 +310,14 @@ class NODEFMT_OT_sort_all(SortModal, bpy.types.Operator):
 
 class NODEFMT_OT_sort_selection(bpy.types.Operator):
     """Sort the selected nodes and reroutes, or the contents of a selected frame (part.py)."""
+
     bl_idname = "node.nodefmt_sort_selection"
     bl_label = "Sort Selection"
-    bl_description = ("Sort only the selected nodes and reroutes, or what is inside a selected frame; the rest "
-                      "stays where it is. Ctrl+Z undoes it")
-    bl_options = {'REGISTER', 'UNDO'}  # noqa: RUF012 - the bpy idiom
+    bl_description = (
+        "Sort only the selected nodes and reroutes, or what is inside a selected frame; the rest "
+        "stays where it is. Ctrl+Z undoes it"
+    )
+    bl_options = {"REGISTER", "UNDO"}  # noqa: RUF012 - the bpy idiom
 
     @classmethod
     def poll(cls, context):
@@ -308,48 +327,72 @@ class NODEFMT_OT_sort_selection(bpy.types.Operator):
     def execute(self, context):
         """Sort the selected part of the edited tree; on a logic change it is restored."""
         from . import part
+
         nt = context.space_data.edit_tree
         ed = Editor(context.area)
         try:
             st = part.sort_selection(nt, ed, config(context), context.window_manager.nodefmt_mode)
         except part.EmptySelection as e:
-            self.report({'WARNING'}, f"Nothing to sort: {e}")
-            return {'CANCELLED'}
+            self.report({"WARNING"}, f"Nothing to sort: {e}")
+            return {"CANCELLED"}
         except api.LogicChanged as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
         finally:
             ed.close()
         moved = " (moved to clear the nodes around it)" if any(st["moved"]) else ""
-        self.report({'INFO'}, f"Sorted {st['nodes']} nodes of {st['tree']}{moved}")
-        return {'FINISHED'}
+        self.report({"INFO"}, f"Sorted {st['nodes']} nodes of {st['tree']}{moved}")
+        return {"FINISHED"}
 
 
-SCOPES = [('TREE', "Whole Tree", "Capture every node of the tree"),
-          ('SELECTION', "Selection", "Capture the selected nodes, or a selected frame and everything in it")]
+SCOPES = [
+    ("TREE", "Whole Tree", "Capture every node of the tree"),
+    ("SELECTION", "Selection", "Capture the selected nodes, or a selected frame and everything in it"),
+]
 
 
 class NODEFMT_CaptureSettings(bpy.types.PropertyGroup):
     """The options of Capture Tree (WindowManager.nodefmt_capture)."""
+
     zoom: bpy.props.FloatProperty(
-        name="Zoom", default=1.0, min=0.1, max=4.0, soft_max=3.0, precision=2, step=10,
-        description="Screen pixels per node unit (1: node text as Blender draws it at UI scale 1)")
-    scope: bpy.props.EnumProperty(name="Capture", items=SCOPES, default='TREE')
+        name="Zoom",
+        default=1.0,
+        min=0.1,
+        max=4.0,
+        soft_max=3.0,
+        precision=2,
+        step=10,
+        description="Screen pixels per node unit (1: node text as Blender draws it at UI scale 1)",
+    )
+    scope: bpy.props.EnumProperty(name="Capture", items=SCOPES, default="TREE")
     margin: bpy.props.IntProperty(
-        name="Margin", default=40, min=0, max=2000, subtype='PIXEL',
-        description="Empty space around the tree, in pixels")
+        name="Margin",
+        default=40,
+        min=0,
+        max=2000,
+        subtype="PIXEL",
+        description="Empty space around the tree, in pixels",
+    )
     hide_overlays: bpy.props.BoolProperty(
-        name="Hide Overlays", default=True,
-        description="Hide what is not part of the tree: the context path, gizmos and the marks of Check")
+        name="Hide Overlays",
+        default=True,
+        description="Hide what is not part of the tree: the context path, gizmos and the marks of Check",
+    )
     filepath: bpy.props.StringProperty(
-        name="File", subtype='FILE_PATH', default="",
+        name="File",
+        subtype="FILE_PATH",
+        default="",
         description="The PNG file, or a folder for '<tree name>.png'. Empty: a 'captures' folder next to "
-                    "the .blend file (the temporary folder if the file is not saved)")
+        "the .blend file (the temporary folder if the file is not saved)",
+    )
     clipboard: bpy.props.BoolProperty(
-        name="Copy to Clipboard", default=False, description="Also copy the image to the clipboard")
+        name="Copy to Clipboard", default=False, description="Also copy the image to the clipboard"
+    )
     open_image: bpy.props.BoolProperty(
-        name="Open in Image Editor", default=False,
-        description="Show the image in an Image Editor of this window, or in a new window")
+        name="Open in Image Editor",
+        default=False,
+        description="Show the image in an Image Editor of this window, or in a new window",
+    )
 
 
 class NODEFMT_OT_capture_tree(bpy.types.Operator):
@@ -359,18 +402,27 @@ class NODEFMT_OT_capture_tree(bpy.types.Operator):
     maximises the editor and puts it back, and Blender must not change the screen while it is
     going through event handlers. The modal operator holds back other input, takes Esc and
     reports the result."""
+
     bl_idname = "node.nodefmt_capture_tree"
     bl_label = "Capture Tree"
-    bl_description = ("Save an image of the tree in this editor at the zoom set below, larger than the "
-                      "screen if needed. The tree does not change. Esc cancels")
-    bl_options = {'REGISTER'}  # noqa: RUF012 - the bpy idiom
+    bl_description = (
+        "Save an image of the tree in this editor at the zoom set below, larger than the "
+        "screen if needed. The tree does not change. Esc cancels"
+    )
+    bl_options = {"REGISTER"}  # noqa: RUF012 - the bpy idiom
 
     @classmethod
     def poll(cls, context):
         """Available in a node editor showing a tree, when no sort or capture runs."""
         sp = context.space_data
-        return (_JOB["job"] is None and _CAPTURE["job"] is None and sp is not None
-                and sp.type == 'NODE_EDITOR' and sp.edit_tree is not None and context.area is not None)
+        return (
+            _JOB["job"] is None
+            and _CAPTURE["job"] is None
+            and sp is not None
+            and sp.type == "NODE_EDITOR"
+            and sp.edit_tree is not None
+            and context.area is not None
+        )
 
     def _job(self, context):
         """A CaptureJob for the editor, with the panel's options."""
@@ -385,8 +437,8 @@ class NODEFMT_OT_capture_tree(bpy.types.Operator):
             job.opt.maximise = False
             job.run()
         except capture.CaptureError as e:
-            self.report({'ERROR'}, f"Capture Tree: {e}")
-            return {'CANCELLED'}
+            self.report({"ERROR"}, f"Capture Tree: {e}")
+            return {"CANCELLED"}
         return self._finish(job)
 
     def invoke(self, context, event):
@@ -394,42 +446,42 @@ class NODEFMT_OT_capture_tree(bpy.types.Operator):
         try:
             self.job = self._job(context)
         except capture.CaptureError as e:
-            self.report({'ERROR'}, f"Capture Tree: {e}")
-            return {'CANCELLED'}
+            self.report({"ERROR"}, f"Capture Tree: {e}")
+            return {"CANCELLED"}
         _CAPTURE.update(job=self.job, state=None, error=None, stop=False, workspace=context.workspace)
         wm = context.window_manager
         self.timer = wm.event_timer_add(0.05, window=context.window)
         wm.modal_handler_add(self)
         _capture_status()
         bpy.app.timers.register(_capture_tick, first_interval=0.01)
-        return {'RUNNING_MODAL'}
+        return {"RUNNING_MODAL"}
 
     def modal(self, context, event):
         """Esc asks the timer to stop; the end is reported once the timer is done. Other events
         are held back, so nothing changes the editor while it is being captured."""
-        if event.type == 'ESC' and event.value == 'PRESS':
+        if event.type == "ESC" and event.value == "PRESS":
             _CAPTURE["stop"] = True
-            return {'RUNNING_MODAL'}
-        if event.type != 'TIMER' or _CAPTURE["state"] is None:
-            return {'RUNNING_MODAL'}
+            return {"RUNNING_MODAL"}
+        if event.type != "TIMER" or _CAPTURE["state"] is None:
+            return {"RUNNING_MODAL"}
         state, error = _CAPTURE["state"], _CAPTURE["error"]
         context.window_manager.event_timer_remove(self.timer)
         _CAPTURE.update(job=None, state=None, error=None, stop=False, workspace=None)
         _redraw_editors()
-        if state == 'done':
+        if state == "done":
             return self._finish(self.job)
-        if state == 'cancelled':
-            self.report({'WARNING'}, "Capture cancelled: the editor is as it was")
+        if state == "cancelled":
+            self.report({"WARNING"}, "Capture cancelled: the editor is as it was")
         else:
-            self.report({'ERROR'}, f"Capture Tree: {error}")
-        return {'CANCELLED'}
+            self.report({"ERROR"}, f"Capture Tree: {error}")
+        return {"CANCELLED"}
 
     def _finish(self, job):
         """Report the file, its size and any warning."""
         for w in job.warnings:
-            self.report({'WARNING'}, f"Capture Tree: {w}")
-        self.report({'INFO'}, job.report())
-        return {'FINISHED'}
+            self.report({"WARNING"}, f"Capture Tree: {w}")
+        self.report({"INFO"}, job.report())
+        return {"FINISHED"}
 
 
 def _capture_status(clear=False):
@@ -454,12 +506,12 @@ def _capture_tick():
     try:
         if _CAPTURE.get("stop"):
             job.cancel()
-            _CAPTURE["state"] = 'cancelled'
+            _CAPTURE["state"] = "cancelled"
         else:
             while True:
                 if not job.step():
                     job.close()
-                    _CAPTURE["state"] = 'done'
+                    _CAPTURE["state"] = "done"
                     break
                 if time.perf_counter() - t0 > 0.05:
                     break
@@ -470,7 +522,7 @@ def _capture_tick():
             job.cancel()
         except Exception:  # noqa: BLE001 - keep the first error
             traceback.print_exc()
-        _CAPTURE.update(state='error', error=e)
+        _CAPTURE.update(state="error", error=e)
     if _CAPTURE["state"] is not None:
         _capture_status(clear=True)
         return None
@@ -480,8 +532,11 @@ def _capture_tick():
 
 def _tree_key(nt):
     """A cheap fingerprint of where everything is, to tell when a tree changed after a check."""
-    return (len(nt.nodes), len(nt.links),
-            round(sum(n.location_absolute.x + n.location_absolute.y for n in nt.nodes), 1))
+    return (
+        len(nt.nodes),
+        len(nt.links),
+        round(sum(n.location_absolute.x + n.location_absolute.y for n in nt.nodes), 1),
+    )
 
 
 def _point(nt, v):
@@ -514,10 +569,13 @@ def checked(context):
 
 class NODEFMT_OT_check(bpy.types.Operator):
     """Check the tree shown in the editor: the rules it breaks, by code; changes nothing."""
+
     bl_idname = "node.nodefmt_check"
     bl_label = "Check Current Tree"
-    bl_description = ("Find the rules this tree breaks, without changing it. The panel lists them by rule; "
-                      "click one to select and frame its places")
+    bl_description = (
+        "Find the rules this tree breaks, without changing it. The panel lists them by rule; "
+        "click one to select and frame its places"
+    )
 
     @classmethod
     def poll(cls, context):
@@ -531,28 +589,41 @@ class NODEFMT_OT_check(bpy.types.Operator):
         try:
             vs = api.check_tree(nt, context.window_manager.nodefmt_mode, ed, config(context))
         except UnsupportedBlender as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
         finally:
             ed.close()
-        _LAST.update(done=True, tree=api.tree_name(nt), ptr=nt.as_pointer(), key=_tree_key(nt),
-                     violations=vs, points=[_point(nt, v) for v in vs], index={}, shown=None)
+        _LAST.update(
+            done=True,
+            tree=api.tree_name(nt),
+            ptr=nt.as_pointer(),
+            key=_tree_key(nt),
+            violations=vs,
+            points=[_point(nt, v) for v in vs],
+            index={},
+            shown=None,
+        )
         for line in lint.report(vs):
             print(line)
         counts = ", ".join(f"{c} x{n}" for c, n in lint.counts(vs).items())
-        self.report({'WARNING'} if vs else {'INFO'},
-                    f"{api.tree_name(nt)}: {len(vs)} violations ({counts})" if vs
-                    else f"{api.tree_name(nt)}: no problems, the tree is sorted")
+        self.report(
+            {"WARNING"} if vs else {"INFO"},
+            f"{api.tree_name(nt)}: {len(vs)} violations ({counts})"
+            if vs
+            else f"{api.tree_name(nt)}: no problems, the tree is sorted",
+        )
         _redraw_editors()
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class NODEFMT_OT_show_violation(bpy.types.Operator):
     """Select the nodes and reroutes of the next place that breaks a rule, and frame them."""
+
     bl_idname = "node.nodefmt_show_violation"
     bl_label = "Show Violation"
-    bl_description = ("Select the next place that breaks this rule and frame it in the editor "
-                      "(click again for the next one)")
+    bl_description = (
+        "Select the next place that breaks this rule and frame it in the editor (click again for the next one)"
+    )
 
     code: bpy.props.StringProperty()
 
@@ -566,7 +637,7 @@ class NODEFMT_OT_show_violation(bpy.types.Operator):
         nt = context.space_data.edit_tree
         found = [k for k, v in enumerate(_LAST["violations"]) if v.code == self.code]
         if not found:
-            return {'CANCELLED'}
+            return {"CANCELLED"}
         k = (_LAST["index"].get(self.code, -1) + 1) % len(found)
         _LAST["index"][self.code] = k
         _LAST["shown"] = found[k]
@@ -574,24 +645,24 @@ class NODEFMT_OT_show_violation(bpy.types.Operator):
         x, y = _LAST["points"][found[k]]
         names = {n for n in v.nodes if n in nt.nodes}
         for n in nt.nodes:  # the reroutes at the place
-            if n.bl_idname == 'NodeReroute' and abs(n.location_absolute.x - x) + abs(n.location_absolute.y - y) < 16:
+            if n.bl_idname == "NodeReroute" and abs(n.location_absolute.x - x) + abs(n.location_absolute.y - y) < 16:
                 names.add(n.name)
         for n in nt.nodes:
             n.select = n.name in names
         temp = None
         if not names:  # nothing to select: frame the place itself
-            temp = nt.nodes.new('NodeReroute')
+            temp = nt.nodes.new("NodeReroute")
             temp.location_absolute = (x, y)
             temp.select = True
-        region = next((r for r in context.area.regions if r.type == 'WINDOW'), None)
+        region = next((r for r in context.area.regions if r.type == "WINDOW"), None)
         if region is not None:
             with context.temp_override(region=region):
                 bpy.ops.node.view_selected()
         if temp is not None:
             nt.nodes.remove(temp)
-        self.report({'INFO'}, f"{v.code} {k + 1}/{len(found)}: {v.msg}")
+        self.report({"INFO"}, f"{v.code} {k + 1}/{len(found)}: {v.msg}")
         _redraw_editors()
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 def _draw_overlay():
@@ -600,6 +671,7 @@ def _draw_overlay():
     import blf
     import gpu
     from gpu_extras.batch import batch_for_shader
+
     context = bpy.context
     if not getattr(context.window_manager, "nodefmt_overlay", False):
         return
@@ -609,13 +681,13 @@ def _draw_overlay():
     region = context.region
     v2d = region.view2d
     ui = context.preferences.system.ui_scale
-    shader = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR')
+    shader = gpu.shader.from_builtin("POLYLINE_UNIFORM_COLOR")
     shader.uniform_float("viewportSize", (region.width, region.height))
-    gpu.state.blend_set('ALPHA')
+    gpu.state.blend_set("ALPHA")
     blf.size(0, 12 * ui)
     seen = []
     for k, (v, (x, y)) in enumerate(zip(res["violations"], res["points"])):
-        bad = v.code in rules.GUARANTEES or v.code == 'NF900'
+        bad = v.code in rules.GUARANTEES or v.code == "NF900"
         color = (1.0, 0.3, 0.25, 0.95) if bad else (1.0, 0.7, 0.2, 0.95)
         cx, cy = v2d.view_to_region(x * ui, y * ui, clip=False)
         if not (-50 < cx < region.width + 50 and -50 < cy < region.height + 50):
@@ -624,20 +696,21 @@ def _draw_overlay():
         pts = [(cx + r * math.cos(t * math.pi / 16), cy + r * math.sin(t * math.pi / 16)) for t in range(33)]
         shader.uniform_float("lineWidth", 3.0 if k == res["shown"] else 2.0)
         shader.uniform_float("color", color)
-        batch_for_shader(shader, 'LINE_STRIP', {"pos": pts}).draw(shader)
+        batch_for_shader(shader, "LINE_STRIP", {"pos": pts}).draw(shader)
         if any(abs(cx - a) < 50 * ui and abs(cy - b) < 14 * ui for a, b in seen):
             continue  # one code for marks close together
         seen.append((cx, cy))
         blf.color(0, *color)
         blf.position(0, cx + r + 3, cy - 4 * ui, 0)
         blf.draw(0, v.code)
-    gpu.state.blend_set('NONE')
+    gpu.state.blend_set("NONE")
 
 
 class NODEFMT_PT_panel(bpy.types.Panel):
     """Sidebar panel (Node Editor > Sidebar > nodefmt)."""
-    bl_space_type = 'NODE_EDITOR'
-    bl_region_type = 'UI'
+
+    bl_space_type = "NODE_EDITOR"
+    bl_region_type = "UI"
     bl_category = "nodefmt"
     bl_label = "nodefmt"
 
@@ -652,31 +725,32 @@ class NODEFMT_PT_panel(bpy.types.Panel):
         job = _JOB["job"]
         if job is not None:
             box = col.box()
-            box.progress(factor=job.factor, type='BAR', text=f"Sorting: {job.factor:.0%}, {job.elapsed()}")
+            box.progress(factor=job.factor, type="BAR", text=f"Sorting: {job.factor:.0%}, {job.elapsed()}")
             box.label(text=job.text)
-            box.label(text="Esc cancels and puts the trees back", icon='CANCEL')
-        col.operator(NODEFMT_OT_sort_tree.bl_idname, icon='NODETREE')
-        col.operator(NODEFMT_OT_sort_selection.bl_idname, icon='RESTRICT_SELECT_OFF')
-        col.operator(NODEFMT_OT_sort_all.bl_idname, icon='FILE_BLEND')
-        col.operator(NODEFMT_OT_check.bl_idname, icon='VIEWZOOM')
+            box.label(text="Esc cancels and puts the trees back", icon="CANCEL")
+        col.operator(NODEFMT_OT_sort_tree.bl_idname, icon="NODETREE")
+        col.operator(NODEFMT_OT_sort_selection.bl_idname, icon="RESTRICT_SELECT_OFF")
+        col.operator(NODEFMT_OT_sort_all.bl_idname, icon="FILE_BLEND")
+        col.operator(NODEFMT_OT_check.bl_idname, icon="VIEWZOOM")
         col.prop(context.window_manager, "nodefmt_mode", text="")
         col.label(text=f"Wires exact at UI scale {context.preferences.system.ui_scale:g}")
         cfg = config(context)
         if cfg.source:
-            col.label(text=f"Rules: {os.path.basename(cfg.source)}", icon='FILE_TEXT')
+            col.label(text=f"Rules: {os.path.basename(cfg.source)}", icon="FILE_TEXT")
 
 
 class NODEFMT_PT_check(bpy.types.Panel):
     """The result of the last check, grouped by rule (a sub-panel of nodefmt)."""
-    bl_space_type = 'NODE_EDITOR'
-    bl_region_type = 'UI'
+
+    bl_space_type = "NODE_EDITOR"
+    bl_region_type = "UI"
     bl_category = "nodefmt"
     bl_label = "Check"
     bl_parent_id = "NODEFMT_PT_panel"
 
     def draw_header(self, context):
         """The overlay toggle."""
-        self.layout.prop(context.window_manager, "nodefmt_overlay", text="", icon='OVERLAY')
+        self.layout.prop(context.window_manager, "nodefmt_overlay", text="", icon="OVERLAY")
 
     def draw(self, context):
         """One row per rule broken: icon, code and name (click: select and frame the next place),
@@ -688,25 +762,29 @@ class NODEFMT_PT_check(bpy.types.Panel):
         res = checked(context)
         if res is None:
             col.label(text=f"Last check: {_LAST['tree']}")
-            col.label(text="The tree changed, or this is another tree:", icon='INFO')
+            col.label(text="The tree changed, or this is another tree:", icon="INFO")
             col.label(text="check again")
             return
         vs = res["violations"]
         if not vs:
-            col.label(text="No problems: the tree is sorted", icon='CHECKMARK')
+            col.label(text="No problems: the tree is sorted", icon="CHECKMARK")
             return
         counts = lint.counts(vs)
-        if 'NF900' not in counts and not any(c in rules.GUARANTEES for c in counts):
-            col.label(text="Sorted; these style rules could not be met:", icon='CHECKMARK')
-        elif 'NF900' in counts:
-            col.label(text="Not sorted: Sort Current Tree fixes it", icon='ERROR')
+        if "NF900" not in counts and not any(c in rules.GUARANTEES for c in counts):
+            col.label(text="Sorted; these style rules could not be met:", icon="CHECKMARK")
+        elif "NF900" in counts:
+            col.label(text="Not sorted: Sort Current Tree fixes it", icon="ERROR")
         shown = res["violations"][res["shown"]] if res["shown"] is not None else None
         for code, n in counts.items():
-            bad = code in rules.GUARANTEES or code == 'NF900'
+            bad = code in rules.GUARANTEES or code == "NF900"
             row = col.split(factor=0.86, align=True)
             name = rules.NAMES.get(code, "not-formatted")
-            op = row.operator(NODEFMT_OT_show_violation.bl_idname, text=f"{code} {name}",
-                              icon='ERROR' if bad else 'INFO', depress=shown is not None and shown.code == code)
+            op = row.operator(
+                NODEFMT_OT_show_violation.bl_idname,
+                text=f"{code} {name}",
+                icon="ERROR" if bad else "INFO",
+                depress=shown is not None and shown.code == code,
+            )
             op.code = code
             row.label(text=str(n))
             if shown is not None and shown.code == code:
@@ -716,7 +794,7 @@ class NODEFMT_PT_check(bpy.types.Panel):
                 for line in _wrap(f"{k + 1}/{n}: {shown.msg}", 44):
                     sub.label(text=line)
         col.separator()
-        col.label(text="Click a rule to select its next place", icon='RESTRICT_SELECT_OFF')
+        col.label(text="Click a rule to select its next place", icon="RESTRICT_SELECT_OFF")
 
 
 def _wrap(text, width):
@@ -733,8 +811,9 @@ def _wrap(text, width):
 
 class NODEFMT_PT_capture(bpy.types.Panel):
     """Capture Tree and its options (a sub-panel of nodefmt)."""
-    bl_space_type = 'NODE_EDITOR'
-    bl_region_type = 'UI'
+
+    bl_space_type = "NODE_EDITOR"
+    bl_region_type = "UI"
     bl_category = "nodefmt"
     bl_label = "Capture"
     bl_parent_id = "NODEFMT_PT_panel"
@@ -743,7 +822,7 @@ class NODEFMT_PT_capture(bpy.types.Panel):
         """The button, the zoom, what to capture, the margin, the file and the extras."""
         s = context.window_manager.nodefmt_capture
         col = self.layout.column()
-        col.operator(NODEFMT_OT_capture_tree.bl_idname, icon='IMAGE_DATA')
+        col.operator(NODEFMT_OT_capture_tree.bl_idname, icon="IMAGE_DATA")
         col.prop(s, "zoom")
         col.row().prop(s, "scope", expand=True)
         col.prop(s, "margin")
@@ -758,12 +837,13 @@ class NODEFMT_PT_capture(bpy.types.Panel):
 
 class NODEFMT_PT_rules(bpy.types.Panel):
     """The rule toggles and options (a sub-panel of nodefmt, closed at first)."""
-    bl_space_type = 'NODE_EDITOR'
-    bl_region_type = 'UI'
+
+    bl_space_type = "NODE_EDITOR"
+    bl_region_type = "UI"
     bl_category = "nodefmt"
     bl_label = "Rules"
     bl_parent_id = "NODEFMT_PT_panel"
-    bl_options = {'DEFAULT_CLOSED'}  # noqa: RUF012 - the bpy idiom
+    bl_options = {"DEFAULT_CLOSED"}  # noqa: RUF012 - the bpy idiom
 
     @classmethod
     def poll(cls, context):
@@ -782,9 +862,20 @@ class NODEFMT_PT_rules(bpy.types.Panel):
             sub.prop(p, "rule_" + code)
 
 
-CLASSES = (NODEFMT_AddonPreferences, NODEFMT_CaptureSettings, NODEFMT_OT_sort_tree, NODEFMT_OT_sort_selection,
-           NODEFMT_OT_sort_all, NODEFMT_OT_check, NODEFMT_OT_show_violation, NODEFMT_OT_capture_tree,
-           NODEFMT_PT_panel, NODEFMT_PT_check, NODEFMT_PT_capture, NODEFMT_PT_rules)
+CLASSES = (
+    NODEFMT_AddonPreferences,
+    NODEFMT_CaptureSettings,
+    NODEFMT_OT_sort_tree,
+    NODEFMT_OT_sort_selection,
+    NODEFMT_OT_sort_all,
+    NODEFMT_OT_check,
+    NODEFMT_OT_show_violation,
+    NODEFMT_OT_capture_tree,
+    NODEFMT_PT_panel,
+    NODEFMT_PT_check,
+    NODEFMT_PT_capture,
+    NODEFMT_PT_rules,
+)
 _HANDLE = []  # the overlay's draw handler
 
 
@@ -792,20 +883,23 @@ def register():
     """Register the preferences, operators, panels, the window manager properties (mode, overlay,
     capture options) and the overlay."""
     wm = bpy.types.WindowManager
-    wm.nodefmt_mode = bpy.props.EnumProperty(name="Mode", items=MODES, default='relayout')
+    wm.nodefmt_mode = bpy.props.EnumProperty(name="Mode", items=MODES, default="relayout")
     wm.nodefmt_overlay = bpy.props.BoolProperty(
-        name="Show in Editor", default=True, update=lambda self, context: _redraw_editors(),
-        description="Mark each place of the last check in the node editor with its rule code")
+        name="Show in Editor",
+        default=True,
+        update=lambda self, context: _redraw_editors(),
+        description="Mark each place of the last check in the node editor with its rule code",
+    )
     for c in CLASSES:
         bpy.utils.register_class(c)
     wm.nodefmt_capture = bpy.props.PointerProperty(type=NODEFMT_CaptureSettings)
-    _HANDLE.append(bpy.types.SpaceNodeEditor.draw_handler_add(_draw_overlay, (), 'WINDOW', 'POST_PIXEL'))
+    _HANDLE.append(bpy.types.SpaceNodeEditor.draw_handler_add(_draw_overlay, (), "WINDOW", "POST_PIXEL"))
 
 
 def unregister():
     """Unregister everything register() added."""
     while _HANDLE:
-        bpy.types.SpaceNodeEditor.draw_handler_remove(_HANDLE.pop(), 'WINDOW')
+        bpy.types.SpaceNodeEditor.draw_handler_remove(_HANDLE.pop(), "WINDOW")
     if bpy.app.timers.is_registered(_capture_tick):  # a capture still running: stop it
         bpy.app.timers.unregister(_capture_tick)
         try:

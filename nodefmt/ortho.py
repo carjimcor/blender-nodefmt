@@ -18,18 +18,19 @@ A drawn segment is orthogonal when |dx| <= TOL or |dy| <= TOL. With NF035 (fan=T
 stretch of a link from a reroute into a multi-input socket may be diagonal: it is never mended,
 and its reroute keeps the height of the wire into it, not the slot's (`fanned`).
 """
+
 import math
 
 import bpy
 
 from .sockets import socket_location
 
-TOL = 0.5        # a segment is horizontal (vertical) if its ends differ by at most this in y (x)
-NUDGE = 4.0      # the largest move of a node that `straighten` makes (rounding, not layout)
-MOVES = 3        # straighten: moves of one node at most (no endless back and forth)
-ROUNDS = 10      # straighten: rounds of read back and fix
-DEBUG = False    # tests: print what straighten finds and does
-REROUTE = 'NodeReroute'
+TOL = 0.5  # a segment is horizontal (vertical) if its ends differ by at most this in y (x)
+NUDGE = 4.0  # the largest move of a node that `straighten` makes (rounding, not layout)
+MOVES = 3  # straighten: moves of one node at most (no endless back and forth)
+ROUNDS = 10  # straighten: rounds of read back and fix
+DEBUG = False  # tests: print what straighten finds and does
+REROUTE = "NodeReroute"
 
 
 def ui_scale():
@@ -51,23 +52,26 @@ def to_px(v, s):
     return math.floor(v * s + 0.5 + 1e-6) / s
 
 
-def link_end(l, gap):
+def link_end(lk, gap):
     """Where a drawn link meets its input socket: links into a multi-input socket are spread `gap`
     units apart around the socket centre, the highest sort id on top (y up)."""
-    x, y = socket_location(l.to_socket)
-    s = l.to_socket
-    if s.is_multi_input and not l.to_node.hide:
+    x, y = socket_location(lk.to_socket)
+    s = lk.to_socket
+    if s.is_multi_input and not lk.to_node.hide:
         ids = sorted(k.multi_input_sort_id for k in s.links)
         if len(ids) > 1:
-            y = y - (len(ids) - 1) * gap / 2 + ids.index(l.multi_input_sort_id) * gap
+            y = y - (len(ids) - 1) * gap / 2 + ids.index(lk.multi_input_sort_id) * gap
     return x, y
 
 
 def drawn(nt, gap=None):
     """Every drawn link as (link, start, end) in node units, y up."""
     gap = slot_gap() if gap is None else gap
-    return [(l, socket_location(l.from_socket), link_end(l, gap)) for l in nt.links
-            if not l.is_hidden and l.to_node.bl_idname != 'NodeFrame' and l.from_node.bl_idname != 'NodeFrame']
+    return [
+        (lk, socket_location(lk.from_socket), link_end(lk, gap))
+        for lk in nt.links
+        if not lk.is_hidden and lk.to_node.bl_idname != "NodeFrame" and lk.from_node.bl_idname != "NodeFrame"
+    ]
 
 
 def bad(a, b):
@@ -75,18 +79,17 @@ def bad(a, b):
     return abs(a[0] - b[0]) > TOL + 1e-4 and abs(a[1] - b[1]) > TOL + 1e-4
 
 
-def fanned(l, a, b):
+def fanned(lk, a, b):
     """True if drawn link l (from a to b) may be a fan stretch (NF035): from a reroute on the
     left into a multi-input socket of an open node."""
-    s = l.to_socket
-    return (s.is_multi_input and not l.to_node.hide and l.from_node.bl_idname == REROUTE
-            and a[0] < b[0] - TOL)
+    s = lk.to_socket
+    return s.is_multi_input and not lk.to_node.hide and lk.from_node.bl_idname == REROUTE and a[0] < b[0] - TOL
 
 
 def faults(nt, gap=None, fan=False):
     """The drawn links that are not exactly horizontal or vertical: [(link, start, end)]. With
     fan (NF035), the stretches of fans into multi-input sockets are not faults."""
-    return [(l, a, b) for l, a, b in drawn(nt, gap) if bad(a, b) and not (fan and fanned(l, a, b))]
+    return [(lk, a, b) for lk, a, b in drawn(nt, gap) if bad(a, b) and not (fan and fanned(lk, a, b))]
 
 
 def count(nt):
@@ -103,33 +106,48 @@ def straighten(nt, editor, movable=None, fan=False):
     gap = slot_gap(s)
     st = {"snapped": 0, "nudged": 0, "bends": 0, "left": 0}
     moves = {}
-    mine = (lambda l: True) if movable is None else (
-        lambda l: l.from_node.name in movable or l.to_node.name in movable)
+    mine = (
+        (lambda lk: True)
+        if movable is None
+        else (lambda lk: lk.from_node.name in movable or lk.to_node.name in movable)
+    )
     for k in range(ROUNDS):
         editor.redraw()
         if _snap_reroutes(nt, drawn(nt, gap), st, movable, fan):
             editor.redraw()
         segs = [x for x in drawn(nt, gap) if mine(x[0])]
         if fan:
-            segs = [(l, a, b) for l, a, b in segs if not fanned(l, a, b)]
-        left = [(l, a, b) for l, a, b in segs if bad(a, b)]
+            segs = [(lk, a, b) for lk, a, b in segs if not fanned(lk, a, b)]
+        left = [(lk, a, b) for lk, a, b in segs if bad(a, b)]
         if DEBUG:
-            print(f"straighten {nt.name} round {k}: {len(left)} off", [
-                (l.from_node.name, l.from_socket.name, l.to_node.name, l.to_socket.name,
-                 [round(v, 3) for v in a], [round(v, 3) for v in b]) for l, a, b in left], flush=True)
+            print(
+                f"straighten {nt.name} round {k}: {len(left)} off",
+                [
+                    (
+                        lk.from_node.name,
+                        lk.from_socket.name,
+                        lk.to_node.name,
+                        lk.to_socket.name,
+                        [round(v, 3) for v in a],
+                        [round(v, 3) for v in b],
+                    )
+                    for lk, a, b in left
+                ],
+                flush=True,
+            )
         if not left:
             break
         if k < ROUNDS - 2 and _nudge(nt, segs, moves, s, st, movable):
             continue
         _bend(nt, left, s, st)
     editor.redraw()
-    st["left"] = sum(1 for l, _, _ in faults(nt, gap, fan) if mine(l))
+    st["left"] = sum(1 for lk, _, _ in faults(nt, gap, fan) if mine(lk))
     return st
 
 
 def _axis(a, b):
     """'h' if segment a-b is meant to be horizontal (it changes less in y than in x), else 'v'."""
-    return 'h' if abs(b[1] - a[1]) <= abs(b[0] - a[0]) else 'v'
+    return "h" if abs(b[1] - a[1]) <= abs(b[0] - a[0]) else "v"
 
 
 def _snap_reroutes(nt, segs, st, movable=None, fan=False):
@@ -148,22 +166,22 @@ def _snap_reroutes(nt, segs, st, movable=None, fan=False):
         return k
 
     anchors = {}
-    for l, a, b in segs:
-        if fan and fanned(l, a, b) and abs(a[1] - b[1]) > 2 * TOL:
+    for lk, a, b in segs:
+        if fan and fanned(lk, a, b) and abs(a[1] - b[1]) > 2 * TOL:
             continue
         ax = _axis(a, b)
-        c = 1 if ax == 'h' else 0
-        fa, tb = l.from_node.name, l.to_node.name
+        c = 1 if ax == "h" else 0
+        fa, tb = lk.from_node.name, lk.to_node.name
         if fa in rr and tb in rr:
             ra, rb = find((ax, fa)), find((ax, tb))
             if ra != rb:
                 parent[max(ra, rb)] = min(ra, rb)
         elif fa in rr:
-            anchors.setdefault((ax, fa), []).append((1, b[c]))   # an input socket
+            anchors.setdefault((ax, fa), []).append((1, b[c]))  # an input socket
         elif tb in rr:
-            anchors.setdefault((ax, tb), []).append((0, a[c]))   # the source socket comes first
+            anchors.setdefault((ax, tb), []).append((0, a[c]))  # the source socket comes first
     for name in rr:
-        for ax in ('h', 'v'):
+        for ax in ("h", "v"):
             find((ax, name))
     groups = {}
     for k in list(parent):
@@ -171,7 +189,7 @@ def _snap_reroutes(nt, segs, st, movable=None, fan=False):
     moved = 0
     for root, members in sorted(groups.items()):
         ax = root[0]
-        c = 1 if ax == 'h' else 0
+        c = 1 if ax == "h" else 0
         found = sorted(v for m in members for v in anchors.get(m, []))
         if found:
             best = [v for p, v in found if p == found[0][0]]
@@ -196,16 +214,16 @@ def _nudge(nt, segs, moves, s, st, movable=None):
     Links go left to right and count the moves made this round, so a chain of straight links
     lines up in one round. Returns True if anything moved."""
     shift = {}  # node name -> (dx, dy) of its move in this round
-    for l, a, b in sorted(segs, key=lambda x: (x[2][0], x[1][0], x[0].to_node.name, x[0].from_node.name)):
-        fa, tb = l.from_node, l.to_node
+    for lk, a, b in sorted(segs, key=lambda x: (x[2][0], x[1][0], x[0].to_node.name, x[0].from_node.name)):
+        fa, tb = lk.from_node, lk.to_node
         if tb.bl_idname == REROUTE:
             continue  # _snap_reroutes lines reroutes up
-        c = 1 if _axis(a, b) == 'h' else 0
+        c = 1 if _axis(a, b) == "h" else 0
         delta = (a[c] + shift.get(fa.name, (0.0, 0.0))[c]) - (b[c] + shift.get(tb.name, (0.0, 0.0))[c])
         if abs(delta) <= TOL or abs(delta) > NUDGE:
             continue
         for node, sign in ((tb, 1.0), (fa, -1.0)):
-            if node.bl_idname in ('NodeFrame', REROUTE) or node.name in shift or moves.get(node.name, 0) >= MOVES:
+            if node.bl_idname in ("NodeFrame", REROUTE) or node.name in shift or moves.get(node.name, 0) >= MOVES:
                 continue
             if movable is not None and node.name not in movable:
                 continue  # a node outside the part holds its line: the other end moves
@@ -236,12 +254,22 @@ def _bend(nt, left, s, st):
         return f"Reroute.{k:03d}"
 
     # sockets by index, looked up per link: Python references go stale as links change
-    todo = [(l.from_node.name, list(l.from_node.outputs).index(l.from_socket), l.to_node.name,
-             list(l.to_node.inputs).index(l.to_socket), l.is_muted, a, b)
-            for l, a, b in left if not l.to_socket.is_multi_input]
+    todo = [
+        (
+            lk.from_node.name,
+            list(lk.from_node.outputs).index(lk.from_socket),
+            lk.to_node.name,
+            list(lk.to_node.inputs).index(lk.to_socket),
+            lk.is_muted,
+            a,
+            b,
+        )
+        for lk, a, b in left
+        if not lk.to_socket.is_multi_input
+    ]
     for fn, fi, tn, ti, muted, a, b in todo:
         frm, to = nt.nodes[fn].outputs[fi], nt.nodes[tn].inputs[ti]
-        if _axis(a, b) == 'h':
+        if _axis(a, b) == "h":
             m = to_px((a[0] + b[0]) / 2, s)
             p1, p2 = (m, a[1]), (m, b[1])
         else:
@@ -264,8 +292,7 @@ def drop_straight(nt, movable=None):
     change). movable: only these reroutes (default all). Returns the number removed."""
     gap = slot_gap()
     out = 0
-    for r in [n for n in nt.nodes if n.bl_idname == REROUTE and not n.label
-              and (movable is None or n.name in movable)]:
+    for r in [n for n in nt.nodes if n.bl_idname == REROUTE and not n.label and (movable is None or n.name in movable)]:
         ins, outs = r.inputs[0].links, r.outputs[0].links
         if len(ins) != 1 or len(outs) != 1 or outs[0].to_socket.is_multi_input:
             continue

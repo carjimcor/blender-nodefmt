@@ -18,7 +18,10 @@ Open an issue with:
   zoom, and the `.blend` file or steps to reproduce. A change without them will not be reviewed.
 - Run the tests (below) and `--check` on the trees you tested, and say which rules (NF codes) the
   change affects.
-- Run `ruff check .` (ruff 0.17.1, configured in `ruff.toml`); CI runs it too.
+- Format and lint with ruff 0.17.1 (configured in `ruff.toml`): `ruff format .` and `ruff check .`.
+  Every pycodestyle rule is on, with no exceptions; CI fails on any error or unformatted file.
+  The easiest way is pre-commit, which runs ruff and the layout check on each commit:
+  `pip install pre-commit`, then `pre-commit install`.
 - The logic check must still pass: sorting must never change what a tree computes.
 - Code, comments and documentation are in English. New functions get a docstring.
 - New behaviour that changes the style gets a rule code, so it can be switched off, and an
@@ -29,7 +32,7 @@ Open an issue with:
 Every push to `main` and every pull request runs two checks on GitHub Actions
 (`.github/workflows/ci.yml`), without Blender:
 
-- **ruff**: `ruff check .`.
+- **ruff**: `ruff check .` and `ruff format --check .`.
 - **layouts unchanged**: the layout core is pure Python, so it sorts every example, dumped as
   JSON in `tests/layout/trees/`, and compares each result with `tests/layout/baseline.json`. A
   change that alters a layout by accident fails here.

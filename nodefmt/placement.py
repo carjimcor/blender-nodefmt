@@ -5,6 +5,7 @@ assign_y() dispatches on the placement method: 'relax' is in relax.py; 'blocks' 
 the items joined by straight links into blocks, then _compact() positions the blocks. 'balanced'
 (only with NF022) is 'blocks' without the pull to a common top line.
 """
+
 import math
 from heapq import heapify, heappop, heappush
 from itertools import pairwise
@@ -18,7 +19,7 @@ class PlacementMixin:
 
     def assign_y(self):
         """Vertical positions of all items, by the current placement method."""
-        if getattr(self, 'placer', 'blocks') == 'relax':
+        if getattr(self, "placer", "blocks") == "relax":
             self.relax_y()
         else:  # 'blocks' or 'balanced'
             self.blocks_y()
@@ -28,7 +29,7 @@ class PlacementMixin:
         inputs, bundles of parallel links, lanes) by merging the items they join into blocks,
         as far as column order and a height limit allow; then the blocks are compacted."""
         items = self.items
-        self.block = {i: i for i in items}       # union-find parent
+        self.block = {i: i for i in items}  # union-find parent
         self.members = {i: {i: 0.0} for i in items}  # root -> {item: rel y}
         # flat lookups of the same, kept in step by _try_merge: item -> root, item -> rel y
         self._root = {i: i for i in items}
@@ -44,8 +45,9 @@ class PlacementMixin:
             self._bsucc[a].add(b)
             self._bpred[b].add(a)
         # a topological order of that graph (block -> rank), kept in step by _try_merge
-        cells = sorted(((n, k, i) for k, layer in enumerate(self.layers) for n, i in enumerate(layer)),
-                       key=lambda t: t[:2])
+        cells = sorted(
+            ((n, k, i) for k, layer in enumerate(self.layers) for n, i in enumerate(layer)), key=lambda t: t[:2]
+        )
         self._ord = {t[2]: m for m, t in enumerate(cells)}
         for i in items:
             self._ord.setdefault(i, len(self._ord))
@@ -58,7 +60,7 @@ class PlacementMixin:
                 k = (e.u, e.v, round(e.u.outs.get(e.uk, (0, 0))[1] - e.v.ins.get(e.vk, (0, 0))[1], 1))
                 bundle[k] = bundle.get(k, 0) + 1
         for e in self.edges:
-            if e.u.kind == 'dummy' and e.v.kind not in ('dummy', 'label') and not e.geo:
+            if e.u.kind == "dummy" and e.v.kind not in ("dummy", "label") and not e.geo:
                 continue  # the end of a long data lane: the node stays near its consumers, the lane taps in
             n = 1
             if not e.u.is_point and not e.v.is_point:
@@ -124,7 +126,7 @@ class PlacementMixin:
     def _lead(self, k):
         """How many items head column k above a zone's content: ports above the zone input and
         the lanes of their wires (ordering.use)."""
-        above = getattr(self, 'above', ())
+        above = getattr(self, "above", ())
         n = 0
         for i in self.layers[k]:
             if i not in above:
@@ -147,15 +149,15 @@ class PlacementMixin:
         prio = {}
         for e in self.edges:
             v = e.v
-            if v.kind in ('dummy', 'label'):
+            if v.kind in ("dummy", "label"):
                 continue
-            if e.main and e.geo and (getattr(v, 'geo_out', False) or v.pin == 'last'):
+            if e.main and e.geo and (getattr(v, "geo_out", False) or v.pin == "last"):
                 p = 0
             elif e.main and e.geo:
                 p = 1
             elif e.main and not e.u.is_point:
                 p = 2
-            elif v.kind == 'pin_out':
+            elif v.kind == "pin_out":
                 p = 3
             elif e.u.is_point:
                 p = 4
@@ -163,8 +165,8 @@ class PlacementMixin:
                 p = 5
             prio[e] = p
         for k in range(self.R, -1, -1):
-            for d in self.layers[k] if hasattr(self, 'layers') else []:
-                if d.kind not in ('dummy', 'label'):
+            for d in self.layers[k] if hasattr(self, "layers") else []:
+                if d.kind not in ("dummy", "label"):
                     continue
                 best = min((prio[f] for f in self.succ_edges[d] if f in prio), default=3)
                 for e in self.pred_edges[d]:
@@ -183,7 +185,7 @@ class PlacementMixin:
         merged = dict(self.members[ra])
         for i, r in mb.items():
             merged[i] = r + off
-        above = getattr(self, 'above', ())
+        above = getattr(self, "above", ())
         if above and len({i in above for i in merged}) > 1:
             return False  # a wire entering a zone above its input drops to its node: no block
         # items of one block in one column: consecutive in the order and far enough apart
@@ -405,14 +407,15 @@ class PlacementMixin:
                 def phase(i):
                     """Grid phase of an item's relative height in its block."""
                     return round(rel[i] % P.GRID, 1) % P.GRID
+
                 count = {}
                 for i in reals:
-                    count[phase(i)] = count.get(phase(i), 0) + (100 if i.kind == 'compound' else 1)
-                a = max(reals, key=lambda i: (count[phase(i)], i.kind == 'compound', i.h, -i.rank))
+                    count[phase(i)] = count.get(phase(i), 0) + (100 if i.kind == "compound" else 1)
+                a = max(reals, key=lambda i: (count[phase(i)], i.kind == "compound", i.h, -i.rank))
                 anchor[r] = rel[a]
             else:  # a lane: on the grid too
                 anchor[r] = rel[next(iter(self.members[r]))]
-        strict = {r for r in roots if any(i.kind == 'compound' for i in self.members[r])}
+        strict = {r for r in roots if any(i.kind == "compound" for i in self.members[r])}
         if not P.SNAP:  # the grid does not matter: blocks go wherever their links want them
             anchor, strict = {}, set()
         # constraints between blocks: Y_b >= Y_a + c
@@ -428,7 +431,7 @@ class PlacementMixin:
         if zin is not None:
             Z = self._find(zin)
             rev = {}
-            for (a, b) in cons:
+            for a, b in cons:
                 rev.setdefault(b, []).append(a)
             anc, todo = set(), [Z]
             while todo:
@@ -437,7 +440,7 @@ class PlacementMixin:
                     if a not in anc:
                         anc.add(a)
                         todo.append(a)
-            above = getattr(self, 'above', set())
+            above = getattr(self, "above", set())
             for r in roots:
                 if r is Z or r in anc or all(i in above for i in self.members[r]):
                     continue
@@ -488,7 +491,7 @@ class PlacementMixin:
         for r in topo:
             lo = max([Y[a] + c for a, c in preds[r]], default=None)
             if lo is None:
-                lo = min((i.y - rel[i] for i in self.members[r]), default=0.0) if self.mode == 'keep' else 0.0
+                lo = min((i.y - rel[i] for i in self.members[r]), default=0.0) if self.mode == "keep" else 0.0
             Y[r] = snap(r, lo)
         # attraction targets: non-aligned edges between blocks
         pulls = {r: [] for r in roots}
@@ -501,13 +504,13 @@ class PlacementMixin:
             w = 8.0 if e.main else (3.0 if e.geo else 1.0)
             if e.u.is_point or e.v.is_point:
                 w *= 1.5
-            if e.u.is_point and not e.geo and e.v.kind != 'dummy':
+            if e.u.is_point and not e.geo and e.v.kind != "dummy":
                 w = 0.4  # a node fed by a long lane sits near its consumers; the lane taps up or down
             su = rel[e.u] + e.u.outs.get(e.uk, (0, 0))[1]
             sv = rel[e.v] + e.v.ins.get(e.vk, (0, 0))[1]
             # a source node (nothing linked in) stays close to the socket it feeds
-            slope = P.SRC_SLOPE if getattr(e.u, 'src', False) else P.BEND_SLOPE
-            pulls[rv].append((ru, su - sv, w, slope))   # Y_rv = Y_ru + su - sv makes it straight
+            slope = P.SRC_SLOPE if getattr(e.u, "src", False) else P.BEND_SLOPE
+            pulls[rv].append((ru, su - sv, w, slope))  # Y_rv = Y_ru + su - sv makes it straight
             pulls[ru].append((rv, sv - su, w, slope))
         # a zone's input and output like to be level (a soft pull: a free output follows its links)
         zp = self._zone_pair()
@@ -519,33 +522,33 @@ class PlacementMixin:
                 zout_root = rb
                 pulls[rb].append((ra, rel[a] + off - rel[b], P.ZONE_LEVEL, P.BEND_SLOPE))
                 pulls[ra].append((rb, rel[b] - off - rel[a], P.ZONE_LEVEL, P.BEND_SLOPE))
-        firsts = [i for i in self.items if i.pin == 'first' and i.kind == 'node']
-        lasts = [i for i in self.items if i.pin == 'last' and i.kind == 'node']
+        firsts = [i for i in self.items if i.pin == "first" and i.kind == "node"]
+        lasts = [i for i in self.items if i.pin == "last" and i.kind == "node"]
         if zp is None and len(firsts) == 1 and len(lasts) == 1:
             a, b = firsts[0], lasts[0]
             ra, rb = self._find(a), self._find(b)
             if ra is not rb:
                 pulls[rb].append((ra, rel[a] - rel[b], 6.0, P.BEND_SLOPE))
                 pulls[ra].append((rb, rel[b] - rel[a], 6.0, P.BEND_SLOPE))
-        if self.mode == 'keep':
+        if self.mode == "keep":
             for r in roots:
                 for i in self.members[r]:
                     if not i.is_point and i.oy is not None:
                         pulls[r].append((None, i.oy - rel[i], 0.5, None))
-        elif getattr(self, 'placer', 'blocks') != 'balanced':
+        elif getattr(self, "placer", "blocks") != "balanced":
             # gravity: every block drifts up to a common top line unless its links hold it
             # ('balanced', NF022, has none: a converging tree takes a ">" shape)
             top = min(Y.values(), default=0.0)
             for r in roots:
                 if r is zout_root:
                     continue  # a free zone output follows its inputs, not the top line
-                n = sum(1 for i in self.members[r] if not i.is_point and not getattr(i, 'src', False))
+                n = sum(1 for i in self.members[r] if not i.is_point and not getattr(i, "src", False))
                 if n:
                     pulls[r].append((None, top - min(rel[i] for i in self.members[r]), P.GRAVITY * n, None))
 
         # tidy rows: a block likes a node's top or bottom level with a node in the next column
         edges_of = {r: [] for r in roots}
-        for r in (roots if P.ALIGN_BONUS else ()):
+        for r in roots if P.ALIGN_BONUS else ():
             for i in self.members[r]:
                 if i.is_point:
                     continue
@@ -592,8 +595,13 @@ class PlacementMixin:
 
         def cost(Y):
             """Total cost of the pulls for block positions Y."""
-            return sum([pen(abs(((Y[o] + d) if o is not None else d) - Y[r]), w, sl)
-                        for r in roots for o, d, w, sl in pulls[r]]) + sum(tidy(r, Y[r], Y) for r in roots)
+            return sum(
+                [
+                    pen(abs(((Y[o] + d) if o is not None else d) - Y[r]), w, sl)
+                    for r in roots
+                    for o, d, w, sl in pulls[r]
+                ]
+            ) + sum(tidy(r, Y[r], Y) for r in roots)
 
         def satisfy(Y):
             """Each block at the median of what its links want; where two blocks collide they
@@ -603,8 +611,12 @@ class PlacementMixin:
             cl = {}
             for r in topo:
                 vals = sorted([((Y[o] + d) if o is not None else d, w) for o, d, w, _ in pulls[r]])
-                C = [{r: 0.0}, vals, snap_near(r, median_sorted(vals)) if vals else Y[r],
-                     [(r, a, c) for a, c in preds[r]]]
+                C = [
+                    {r: 0.0},
+                    vals,
+                    snap_near(r, median_sorted(vals)) if vals else Y[r],
+                    [(r, a, c) for a, c in preds[r]],
+                ]
                 cl[r] = C
                 while True:
                     worst = None
@@ -665,7 +677,7 @@ class PlacementMixin:
             dirty = set(roots)
             for it in range(rounds):
                 changed = False
-                for r in (topo if it % 2 == 0 else reversed(topo)):
+                for r in topo if it % 2 == 0 else reversed(topo):
                     if r not in dirty:
                         continue
                     dirty.discard(r)
@@ -687,17 +699,27 @@ class PlacementMixin:
                         if off and r in strict:
                             return 1e18  # a frame or zone stays on the grid
                         # pen() inlined: the same terms, summed in the same order
-                        return (sum([w * abs(v - c) if sl is None else
-                                     (0.0 if abs(v - c) <= EPS else w * (BEND + sl * abs(v - c)))
-                                     for v, w, sl in ws]) + (P.GRID_PRICE if off else 0.0)
-                                + (tidy(r, c, Y) if eo else 0.0))
+                        return (
+                            sum(
+                                [
+                                    w * abs(v - c)
+                                    if sl is None
+                                    else (0.0 if abs(v - c) <= EPS else w * (BEND + sl * abs(v - c)))
+                                    for v, w, sl in ws
+                                ]
+                            )
+                            + (P.GRID_PRICE if off else 0.0)
+                            + (tidy(r, c, Y) if eo else 0.0)
+                        )
 
                     # candidates: the median, every position that makes one link straight, grid
                     # steps, tops and bottoms level with the next columns
-                    opts = [c for c in (Y[rj] + rlj - ri for ri, _, rj, rlj, _ in eo)
-                            if lo - 1e-6 <= c <= hi + 1e-6]
-                    opts += [c for c in (Y[rj] + rlj + hj - ri - hi_ for ri, hi_, rj, rlj, hj in eo)
-                             if lo - 1e-6 <= c <= hi + 1e-6]
+                    opts = [c for c in (Y[rj] + rlj - ri for ri, _, rj, rlj, _ in eo) if lo - 1e-6 <= c <= hi + 1e-6]
+                    opts += [
+                        c
+                        for c in (Y[rj] + rlj + hj - ri - hi_ for ri, hi_, rj, rlj, hj in eo)
+                        if lo - 1e-6 <= c <= hi + 1e-6
+                    ]
                     for v in [want] + [v for v, _, sl in ws if sl is not None]:
                         t = min(max(v, lo), hi)
                         opts.append(t)
@@ -736,7 +758,7 @@ class PlacementMixin:
                     break
         Y = best[1]
         self.compact_cost = best[0]
-        if zout_root is not None and getattr(self, 'zone', 'level') == 'mean' and pulls[zout_root]:
+        if zout_root is not None and getattr(self, "zone", "level") == "mean" and pulls[zout_root]:
             # 'mean': the free zone output block at the weighted mean of what its links want
             ws = wants(zout_root, Y)
             t = sum(v * w for v, w, _ in ws) / sum(w for _, w, _ in ws)

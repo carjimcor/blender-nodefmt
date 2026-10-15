@@ -17,6 +17,7 @@ A link that is not straight turns on a vertical track in the gap after its sourc
 input's or slot's height), so every segment is horizontal or vertical and no link passes behind a
 node. In a zone, the zone input heads the first column and the content hangs below its top line.
 """
+
 import random
 import time
 from itertools import pairwise
@@ -44,10 +45,10 @@ from .relax import RelaxMixin
 from .search import SearchMixin
 
 GRID = P.GRID  # kept for callers (layout.py)
-__all__ = ['GRID', 'PORT_DIRECT', 'CycleError', 'Edge', 'Item', 'Result', 'layout', 'snapshot_state']
+__all__ = ["GRID", "PORT_DIRECT", "CycleError", "Edge", "Item", "Result", "layout", "snapshot_state"]
 
 
-def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, labels=None):
+def layout(items, edges, mode="relayout", pad=(0, 0, 0, 0), snapshot=None, labels=None):
     """Lay out the items of one container. pad = (left, top, right, bottom) is reserved around
     the content (frames). Returns a Result with item positions, route segments and the box.
 
@@ -65,7 +66,7 @@ def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, label
     snapshot_state() after each phase ('seed <n>: order', 'seed <n>', 'search', 'slide').
     labels: {source tag: text width} of the labelled wires (NF041)."""
     t0 = time.perf_counter()
-    border = [i for i in items if i.kind == 'compound' and getattr(i, 'comm', None)] if mode == 'relayout' else []
+    border = [i for i in items if i.kind == "compound" and getattr(i, "comm", None)] if mode == "relayout" else []
     if not border:
         return _choose(items, edges, mode, pad, snapshot, t0, labels)
     saved = {id(i): i.comm for i in border}
@@ -74,6 +75,7 @@ def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, label
         """The border pairs as the blocks left them (on) or free."""
         for i in border:
             i.comm = None if on else saved[id(i)]
+
     fix(True)
     fixed = _choose(items, edges, mode, pad, None, t0, labels, stable=False)
     fix(False)
@@ -88,16 +90,24 @@ def layout(items, edges, mode='relayout', pad=(0, 0, 0, 0), snapshot=None, label
 def _choose(items, edges, mode, pad, snapshot, t0, labels, stable=True):
     """layout() of the items as they are: with and without satellites (NF021, ranking.py), the
     cheaper is kept."""
-    sats = P.SATELLITES and mode == 'relayout' and any(
-        i.kind == 'compound' and getattr(i, 'big', False) and i.pin is None
-        and not any(e.v is i for e in edges) and any(e.u is i for e in edges) for i in items)
+    sats = (
+        P.SATELLITES
+        and mode == "relayout"
+        and any(
+            i.kind == "compound"
+            and getattr(i, "big", False)
+            and i.pin is None
+            and not any(e.v is i for e in edges)
+            and any(e.u is i for e in edges)
+            for i in items
+        )
+    )
     if not sats:
         return _layout(items, edges, mode, pad, snapshot, False, t0, stable=stable, labels=labels)
     # decided on fresh layouts only (no stability start), so toggling NF021 gives the same result
     plain = _layout(items, edges, mode, pad, None, False, t0, stable=False, labels=labels)
     res = _layout(items, edges, mode, pad, None, True, t0, stable=False, labels=labels)
-    return _layout(items, edges, mode, pad, snapshot, plain.cost >= res.cost - 1e-9, t0, stable=stable,
-                   labels=labels)
+    return _layout(items, edges, mode, pad, snapshot, plain.cost >= res.cost - 1e-9, t0, stable=stable, labels=labels)
 
 
 def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=None):
@@ -112,8 +122,8 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
     L.label_w = dict(labels or {})
     L.rank()
     L.add_dummies()
-    seeds = range(P.SEEDS if mode == 'relayout' else 1)
-    if P.SEED_ONLY is not None and mode == 'relayout':
+    seeds = range(P.SEEDS if mode == "relayout" else 1)
+    if P.SEED_ONLY is not None and mode == "relayout":
         seeds = [P.SEED_ONLY]
     best, seed_costs, crossings = {}, [], None  # best per zone output mode: (cost, Cand, seed)
     for seed in seeds:
@@ -121,10 +131,10 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         cands = L.order(rng)
         if crossings is None:
             crossings = L.crossings_after_order
-        if 'force' in P.ORDERS and mode == 'relayout':
+        if "force" in P.ORDERS and mode == "relayout":
             force = L.force_cands(cands[0], rng)
-            cands = (cands if 'cross' in P.ORDERS else []) + force
-        if mode == 'relayout' and L._zone_pair() is not None:  # a zone: each zone output mode
+            cands = (cands if "cross" in P.ORDERS else []) + force
+        if mode == "relayout" and L._zone_pair() is not None:  # a zone: each zone output mode
             cands = [c._replace(zone=z) for c in cands for z in P.ZONE_OUT]
         # the cheapest start of each group ('level', 'free'; one group outside zones) is searched
         # apart: the orders that suit one zone output height rarely suit another
@@ -132,7 +142,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         for c in cands:
             cost = L._evaluate(c)
             if snapshot and not first:
-                snapshot(f'seed {seed}: order', snapshot_state(L))
+                snapshot(f"seed {seed}: order", snapshot_state(L))
             g = _group(c.zone)
             if g not in first or cost < first[g][0] - 1e-9:
                 first[g] = (cost, c)
@@ -147,7 +157,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
                 best[z] = (cost, cand, seed)
         seed_costs.append(round(min(costs), 3))
         if snapshot:
-            snapshot(f'seed {seed}', snapshot_state(L))
+            snapshot(f"seed {seed}", snapshot_state(L))
     # the best of each group gets the full search and the slide (a free zone output can slide, a
     # level one cannot, so the groups are compared after both)
     finals = {}
@@ -155,7 +165,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         cost, cand = L.improve(best[z][1], best[z][0], P.SEARCH)
         finals[z] = (L.slide(), cand, best[z][2])
     last = z
-    if mode == 'relayout' and P.STABLE is not None and stable:
+    if mode == "relayout" and P.STABLE is not None and stable:
         # stability: the layout of the current order replaces the fresh one when it costs at most
         # STABLE more (0: as good or better), so a small edit does not reshuffle a formatted tree
         cur = {}
@@ -175,11 +185,11 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
             L._evaluate(c)
             cost = L.slide()
             if cost <= finals[z][0] + P.STABLE * max(1.0, abs(finals[z][0])) + 1e-9:
-                finals[z] = (cost, c, 'current')
+                finals[z] = (cost, c, "current")
         last = None  # realize() lays out the chosen candidate again
     if snapshot:
-        snapshot('search', snapshot_state(L))
-        snapshot('slide', snapshot_state(L))
+        snapshot("search", snapshot_state(L))
+        snapshot("slide", snapshot_state(L))
 
     def realize(z):
         """The finished Result of zone output mode z (its items moved to that layout)."""
@@ -201,6 +211,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
         # (cost, group) of every group, cheapest first, for the parent to compare (layout.py)
         res.alts = sorted(((round(c, 3), m) for m, (c, _, _) in finals.items()), key=lambda a: (a[0], _zone_rank(a[1])))
         return res
+
     win = min(finals, key=lambda z: (finals[z][0], _zone_rank(z)))
     return realize(win)
 
@@ -208,7 +219,7 @@ def _layout(items, edges, mode, pad, snapshot, sats, t0, stable=True, labels=Non
 def _as_now(L):
     """True if the layout of L puts its nodes where they are now, up to a translation (the
     blocks of frames and zones are checked by their own containers)."""
-    its = [i for i in L.items if i.kind == 'node' and i.ox is not None and i.oy is not None]
+    its = [i for i in L.items if i.kind == "node" and i.ox is not None and i.oy is not None]
     if not its:
         return False
     dx, dy = its[0].x - its[0].ox, its[0].y - its[0].oy
@@ -218,30 +229,41 @@ def _as_now(L):
 def _copy_edge(e):
     """A copy of an edge (each layout run changes the input keys of its edges)."""
     c = Edge(e.u, e.uk, e.v, e.vk, e.tag, e.geo)
-    c.route = getattr(e, 'route', None)
+    c.route = getattr(e, "route", None)
     return c
 
 
 def _group(z):
     """The search group of a zone output mode: 'level', or 'free' for the others."""
-    return 'level' if z == 'level' else 'free'
+    return "level" if z == "level" else "free"
 
 
 def _zone_rank(g):
     """Sort key of a search group: 'level' first."""
-    return 0 if g == 'level' else 1
+    return 0 if g == "level" else 1
 
 
 def snapshot_state(L):
     """Plain data of a layout in progress (for animations): items as [id, kind, x, y, w, h] in
     the container's own coordinates, edges as [source id, target id], and the cost parts."""
-    return {"items": [[repr(i.id), i.kind, round(i.x, 1), round(i.y, 1), i.w, i.h] for i in L.items],
-            "edges": [[repr(e.u.id), repr(e.v.id)] for e in L.edges],
-            "cost": dict(getattr(L, 'cost_parts', {}))}
+    return {
+        "items": [[repr(i.id), i.kind, round(i.x, 1), round(i.y, 1), i.w, i.h] for i in L.items],
+        "edges": [[repr(e.u.id), repr(e.v.id)] for e in L.edges],
+        "cost": dict(getattr(L, "cost_parts", {})),
+    }
 
 
-class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixin, ColumnsMixin, CostMixin,
-              SearchMixin, LayoutBase):
+class _Layout(
+    RankingMixin,
+    OrderingMixin,
+    ForceMixin,
+    PlacementMixin,
+    RelaxMixin,
+    ColumnsMixin,
+    CostMixin,
+    SearchMixin,
+    LayoutBase,
+):
     """The layout of one container, built step by step (see layout())."""
 
     def __init__(self, items, edges, mode):
@@ -277,13 +299,13 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         oy = {}
         for i in self.items:
             if not i.is_point:
-                oy[i] = (i.oy if i.oy is not None else 0.0) + (i.h / 2 if i.kind == 'compound' else 0.0)
+                oy[i] = (i.oy if i.oy is not None else 0.0) + (i.h / 2 if i.kind == "compound" else 0.0)
                 continue
-            rs = [r for r in getattr(i, 'routes', []) if r]
-            if i.kind in ('pin_in', 'pin_out'):
-                es = self.succ_edges[i] if i.kind == 'pin_in' else self.pred_edges[i]
-                rs = [e.route for e in es if getattr(e, 'route', None)]
-                x = colx[0] - 100.0 if i.kind == 'pin_in' else colx[-1] + 100.0
+            rs = [r for r in getattr(i, "routes", []) if r]
+            if i.kind in ("pin_in", "pin_out"):
+                es = self.succ_edges[i] if i.kind == "pin_in" else self.pred_edges[i]
+                rs = [e.route for e in es if getattr(e, "route", None)]
+                x = colx[0] - 100.0 if i.kind == "pin_in" else colx[-1] + 100.0
             else:
                 x = colx[i.rank]
             oy[i] = _sample(rs[0], x) if rs else 0.0
@@ -291,12 +313,12 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
             layer.sort(key=lambda i: (oy[i], _name_key(i)))
         layers = self._zone_first(layers)
         comm = [tuple(e.vk0 for e in es) for _, _, es in self.comm_items]
-        zones = P.ZONE_OUT if self._zone_pair() is not None else ('level',)
-        return [Cand(layers, comm, frozenset(), placer, 'current', z) for placer in P.PLACERS for z in zones]
+        zones = P.ZONE_OUT if self._zone_pair() is not None else ("level",)
+        return [Cand(layers, comm, frozenset(), placer, "current", z) for placer in P.PLACERS for z in zones]
 
     def out_pt(self, i, key):
         """Point where a link leaves item i (a port: the container's left edge)."""
-        if i.kind == 'pin_in':
+        if i.kind == "pin_in":
             return (self.left_edge, i.y)
         if i.is_point:
             return (i.x, i.y)
@@ -305,7 +327,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
 
     def in_pt(self, i, key):
         """Point where a link enters item i (a port: the container's right edge)."""
-        if i.kind == 'pin_out':
+        if i.kind == "pin_out":
             return (self.right_edge, i.y)
         if i.is_point:
             return (i.x, i.y)
@@ -317,7 +339,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         destination key) and the bounding box with `pad` around it."""
         reals = [i for i in self.items if not i.is_point]
         pts = [i for i in self.items if i.is_point]
-        xs = [i.x for i in reals] + [i.x + i.w for i in reals] + [i.x for i in pts if i.kind in ('dummy', 'label')]
+        xs = [i.x for i in reals] + [i.x + i.w for i in reals] + [i.x for i in pts if i.kind in ("dummy", "label")]
         ys = [i.y for i in reals] + [i.y + i.h for i in reals] + [i.y for i in pts]
         for g in self.track_x:
             xs += list(g.values())
@@ -331,7 +353,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         segs = []
         for e in self.edges:
             p, q = self.out_pt(e.u, e.uk), self.in_pt(e.v, e.vk)
-            dst = None if e.v.kind in ('dummy', 'pin_in', 'pin_out') else (e.v.id, e.vk)
+            dst = None if e.v.kind in ("dummy", "pin_in", "pin_out") else (e.v.id, e.vk)
             k = e.u.rank
             t = self._turn_y(e)
             if t is not None:
@@ -350,7 +372,7 @@ class _Layout(RankingMixin, OrderingMixin, ForceMixin, PlacementMixin, RelaxMixi
         res.ranks = self.R + 1
         res.crossings = self.crossings_after_order
         res.aligned = len(self.aligned)
-        res.swapped = list(getattr(self, 'swapped', []))
+        res.swapped = list(getattr(self, "swapped", []))
         return res
 
 

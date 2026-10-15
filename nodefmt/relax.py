@@ -9,6 +9,7 @@ moving whole groups of items, in order of link priority, as long as no column ov
 
 The search keeps whichever placement method gives the cheaper layout for each order.
 """
+
 import math
 
 from . import params as P
@@ -42,7 +43,7 @@ class RelaxMixin:
         zin = self._zone_input()
         zp = self._zone_pair()
         zout, zoff = (zp[1], zp[2]) if zp else (None, 0.0)
-        mode = getattr(self, 'zone', 'level')
+        mode = getattr(self, "zone", "level")
         iters = P.RELAX_ITERS
         if zin is not None and iters % 2 == 0:
             iters += 1  # a zone ends on a forward sweep: the zone input first, its content below it
@@ -56,17 +57,18 @@ class RelaxMixin:
                     for e in self.pred_edges[i]:
                         pulls.append((self._sock_y(e.u, e.uk, True) - i.ins.get(e.vk, (0, 0))[1], self._link_weight(e)))
                     for e in self.succ_edges[i]:
-                        pulls.append((self._sock_y(e.v, e.vk, False) - i.outs.get(e.uk, (0, 0))[1],
-                                      self._link_weight(e)))
+                        pulls.append(
+                            (self._sock_y(e.v, e.vk, False) - i.outs.get(e.uk, (0, 0))[1], self._link_weight(e))
+                        )
                     if zout is not None and i is zout:  # a zone's output and the zone input's line
-                        if mode == 'level':
+                        if mode == "level":
                             pulls = [(zin.y + zoff, 1000.0)]
                         else:
                             pulls.append((zin.y + zoff, P.ZONE_LEVEL))
                     ws = sum(w for _, w in pulls)
                     if not ws:
                         want[i] = i.y
-                    elif mode == 'median' and i is zout:
+                    elif mode == "median" and i is zout:
                         want[i] = _median(pulls)
                     else:
                         want[i] = sum(v * w for v, w in pulls) / ws
@@ -104,7 +106,7 @@ class RelaxMixin:
         if zin is not None:  # a zone's content hangs below the zone input's top line
             prev = None
             for i in layer:
-                lo = zin.y if i is not zin and i not in getattr(self, 'above', ()) else -1e18
+                lo = zin.y if i is not zin and i not in getattr(self, "above", ()) else -1e18
                 if prev is not None:
                     lo = max(lo, prev.y + prev.h + self._gap(prev, i))
                 i.y = max(i.y, lo)
@@ -143,5 +145,6 @@ class RelaxMixin:
                         break
             if not moved:
                 break
-        self.aligned = [e for e in self.edges
-                        if abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)) <= P.EPS]
+        self.aligned = [
+            e for e in self.edges if abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)) <= P.EPS
+        ]

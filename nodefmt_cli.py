@@ -35,6 +35,7 @@ tree is drawn. Wires are exactly orthogonal only at the UI scale the tree is for
 without --factory-startup to use your Resolution Scale, or set it with --ui-scale or ui-scale in
 nodefmt.toml (for this run only; preferences are never saved).
 """
+
 import argparse
 import os
 import sys
@@ -45,7 +46,7 @@ import bpy
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
 ap = argparse.ArgumentParser(prog="nodefmt_cli.py")
 g = ap.add_mutually_exclusive_group(required=True)
 g.add_argument("--check", action="store_true")
@@ -75,6 +76,7 @@ def _codes(text):
 def config():
     """The run's rules.Config: the config file, then the command line on top."""
     from nodefmt import rules
+
     start = os.path.dirname(bpy.data.filepath) if bpy.data.filepath else os.getcwd()
     if ARGS.config:
         start = os.path.dirname(os.path.abspath(ARGS.config))
@@ -108,6 +110,7 @@ def capture_main():
     """Save an image of one tree (--capture); returns the exit code."""
     from nodefmt import api, capture
     from nodefmt.draw import Editor
+
     prefs = bpy.context.preferences
     old_scale = prefs.view.ui_scale
     if ARGS.ui_scale:
@@ -137,6 +140,7 @@ def main():
     """Check or format the trees, or capture one; returns the exit code."""
     from nodefmt import api, lint, rules
     from nodefmt.draw import Editor
+
     if ARGS.capture:
         return capture_main()
     if ARGS.list_rules:
@@ -151,14 +155,17 @@ def main():
         prefs.view.ui_scale = cfg.ui_scale
     trees = [api.find_tree(n) for n in ARGS.tree] if ARGS.tree else api.all_trees()
     # tree edits re-evaluate modifiers; switch them off meanwhile (restored before saving)
-    mods = [(m, m.show_viewport) for o in bpy.data.objects for m in o.modifiers if m.type == 'NODES']
+    mods = [(m, m.show_viewport) for o in bpy.data.objects for m in o.modifiers if m.type == "NODES"]
     for m, _ in mods:
         m.show_viewport = False
     ed = Editor()
     ed.redraw()
     off = [c for c in rules.STYLE if not cfg.on(c)]
-    print(f"nodefmt: UI scale {prefs.system.ui_scale:g}; rules off: {', '.join(off) or 'none'}; "
-          f"config: {cfg.source or 'none'}", flush=True)
+    print(
+        f"nodefmt: UI scale {prefs.system.ui_scale:g}; rules off: {', '.join(off) or 'none'}; "
+        f"config: {cfg.source or 'none'}",
+        flush=True,
+    )
     code = 0
     found, bad_trees = [], 0
     name = os.path.basename(bpy.data.filepath) or "untitled"
@@ -188,12 +195,17 @@ def main():
             print(f"{n:5d}  {c}  {rules.NAMES.get(c, 'not-formatted')}")
     if ARGS.fix:
         bpy.ops.wm.save_mainfile()
-        print(f"nodefmt: {len(trees)} trees formatted in {time.perf_counter() - t0:.2f} s; "
-              f"{len(found)} violations left in {bad_trees} trees", flush=True)
+        print(
+            f"nodefmt: {len(trees)} trees formatted in {time.perf_counter() - t0:.2f} s; "
+            f"{len(found)} violations left in {bad_trees} trees",
+            flush=True,
+        )
     else:
-        print(f"nodefmt: {len(found)} violations in {bad_trees} of {len(trees)} trees "
-              f"({time.perf_counter() - t0:.2f} s)", flush=True)
-        failing = [v for v in found if ARGS.strict or v.code == 'NF900' or v.code in rules.GUARANTEES]
+        print(
+            f"nodefmt: {len(found)} violations in {bad_trees} of {len(trees)} trees ({time.perf_counter() - t0:.2f} s)",
+            flush=True,
+        )
+        failing = [v for v in found if ARGS.strict or v.code == "NF900" or v.code in rules.GUARANTEES]
         code = 1 if failing else 0
     return code
 

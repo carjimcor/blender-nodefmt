@@ -6,11 +6,12 @@ A label is drawn centred above its reroute's dot and, since Blender 5, repeated 
 later reroute of the same wire (reroute auto labels). Rule NF041 keeps all of them clear of each
 other, of nodes and of wires. Coordinates are node units, y down.
 """
-FONT_SIZE = 11      # Blender's widget text size: label text is this size in node units at any UI scale
-CHAR_W = 5.8        # average width of a character, when Blender's font is not available
-ABOVE = 5.0         # the text's box ends this far above the dot ...
-HEIGHT = 12.0       # ... and is this tall
-PAD = 2.0           # and this much wider than the text on each side
+
+FONT_SIZE = 11  # Blender's widget text size: label text is this size in node units at any UI scale
+CHAR_W = 5.8  # average width of a character, when Blender's font is not available
+ABOVE = 5.0  # the text's box ends this far above the dot ...
+HEIGHT = 12.0  # ... and is this tall
+PAD = 2.0  # and this much wider than the text on each side
 
 _widths = {}
 
@@ -21,6 +22,7 @@ def text_width(text):
     if w is None:
         try:
             import blf
+
             blf.size(0, FONT_SIZE)
             w = float(blf.dimensions(0, text)[0])
         except Exception:  # noqa: BLE001 - no UI font (background mode): the estimate
@@ -51,6 +53,7 @@ def shown(t, own):
     inherited)}. own: {point: text} of its labelled reroutes; each label also shows, greyed, on
     the reroutes after it, up to the next labelled one."""
     from .routes import reroute_points
+
     pts = set(reroute_points(t))
     out = {}
     todo = [(t.root, None)]
@@ -77,16 +80,16 @@ def faults(labels, nodes, segments):
     segments: [(p, q)] of the wires. A segment that starts or ends at a greyed copy's dot is not
     counted (a wire turning upwards there always crosses it); at a labelled reroute, which the
     layout chooses, it is."""
-    boxes = [box(l[0], text_width(l[1])) for l in labels]
+    boxes = [box(lb[0], text_width(lb[1])) for lb in labels]
     out = []
     for k, b in enumerate(boxes):
         if any(overlap(b, o) for j, o in enumerate(boxes) if j != k):
-            out.append((k, 'label'))
+            out.append((k, "label"))
         if any(overlap(b, n) for n in nodes):
-            out.append((k, 'node'))
+            out.append((k, "node"))
         p, copy = labels[k][0], labels[k][2] if len(labels[k]) > 2 else True
         if any(hits(b, s, e) and not (copy and (near(p, s) or near(p, e))) for s, e in segments):
-            out.append((k, 'wire'))
+            out.append((k, "wire"))
     return out
 
 

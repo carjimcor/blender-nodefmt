@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Lay out a whole tree (pure Python): containers (zones, frames) inside out, then absolute
 positions and reroute routes. Works on a model.Model; blend.py writes the result to Blender."""
+
 import math
 
 from . import engine, routes, wires
@@ -10,17 +11,26 @@ from .graph import Result, snap_up
 from .model import FLOW
 
 PORT_D = engine.PORT_DIRECT  # border port at a socket of a first-column item
-PORT_IN = '<port:in>'     # border port on the container's left edge
-GROUP_OUTPUT = 'NodeGroupOutput'
+PORT_IN = "<port:in>"  # border port on the container's left edge
+GROUP_OUTPUT = "NodeGroupOutput"
 # nodes that take the last column of the tree (the Group Output first: it anchors the layout)
-OUTPUTS = (GROUP_OUTPUT, 'ShaderNodeOutputMaterial', 'ShaderNodeOutputWorld', 'ShaderNodeOutputLight',
-           'ShaderNodeOutputAOV', 'ShaderNodeOutputLineStyle', 'CompositorNodeViewer', 'CompositorNodeOutputFile')
+OUTPUTS = (
+    GROUP_OUTPUT,
+    "ShaderNodeOutputMaterial",
+    "ShaderNodeOutputWorld",
+    "ShaderNodeOutputLight",
+    "ShaderNodeOutputAOV",
+    "ShaderNodeOutputLineStyle",
+    "CompositorNodeViewer",
+    "CompositorNodeOutputFile",
+)
 
 
 class Container:
     """A part of the tree laid out as one block: the root, a zone (input, output and everything
     between), a frame or a stack (rule NF023: a node and the chains of field nodes stacked above
     and below it). `all` holds its nodes, `direct` the ones not in a child container."""
+
     def __init__(self, kind, key, nodes):
         """A container of `kind` ('root', 'zone', 'frame', 'stack') named `key`."""
         self.kind, self.key, self.all = kind, key, set(nodes)
@@ -50,7 +60,7 @@ def containers(m, stacks=False):
                 if w not in seen:
                     seen.add(w)
                     todo.append(w)
-        z = Container('zone', n, seen)
+        z = Container("zone", n, seen)
         z.pair = (n, out)
         zones.append(z)
     zones.sort(key=lambda z: len(z.all))
@@ -62,8 +72,11 @@ def containers(m, stacks=False):
     for z in zones:
         inside = z.all - {z.pair[0]}  # a node feeding the zone input stays outside
         frame = m.parent(z.pair[0])
-        cand = {n for n in m.real if succ.get(n) and not any(n in w.all for w in zones)
-                and (n not in pred or m.parent(n) == frame)}
+        cand = {
+            n
+            for n in m.real
+            if succ.get(n) and not any(n in w.all for w in zones) and (n not in pred or m.parent(n) == frame)
+        }
         while True:  # keep the nodes fed only by candidates and used only inside the zone
             drop = {n for n in cand if not pred.get(n, set()) <= cand or not succ[n] <= inside | cand}
             if not drop:
@@ -82,7 +95,7 @@ def containers(m, stacks=False):
                     break
                 p = m.parent(p)
         if desc:
-            frames.append(Container('frame', f, desc))
+            frames.append(Container("frame", f, desc))
     kept = list(zones)
     for f in sorted(frames, key=lambda c: -len(c.all)):
         if all(not (f.all & c.all) or f.all <= c.all or c.all <= f.all for c in kept):
@@ -112,12 +125,15 @@ def _stacks(m):
 
     def plain(n):
         """True if node n can be a consumer: no zone node, output or reroute."""
-        return n not in zone and m.type(n) not in OUTPUTS and m.type(n) != 'NodeReroute'
+        return n not in zone and m.type(n) not in OUTPUTS and m.type(n) != "NodeReroute"
 
     def field(n):
         """True if node n can be part of a chain: plain, not a Group Input, no geometry socket."""
-        return plain(n) and m.type(n) != 'NodeGroupInput' and \
-            not any(s["type"] in FLOW for s in m.info[n]["socks"].values() if s["vis"])
+        return (
+            plain(n)
+            and m.type(n) != "NodeGroupInput"
+            and not any(s["type"] in FLOW for s in m.info[n]["socks"].values() if s["vis"])
+        )
 
     def chain(link, v):
         """The nodes of the chain that ends with `link` into v, first node first, or None."""
@@ -148,7 +164,7 @@ def _stacks(m):
         if not chains:
             continue
         chains.sort(key=lambda t: t[0])
-        st = Container('stack', v, {v})
+        st = Container("stack", v, {v})
         st.above, st.below = [], []
         if len(chains) == 1:
             y, c = chains[0]
@@ -173,23 +189,23 @@ def _stacks(m):
 
 def nest(m, conts):
     """Nest the containers into a tree under a root; returns (root, {node: innermost container})."""
-    root = Container('root', None, set(m.real))
+    root = Container("root", None, set(m.real))
     allc = [root] + conts
 
     def contains(a, b):
         """True if container a strictly contains container b."""
         if a is b:
             return False
-        if a.kind == 'root':
+        if a.kind == "root":
             return True
         if b.all < a.all:
             return True
-        return b.all == a.all and a.kind == 'frame' and b.kind == 'zone'
+        return b.all == a.all and a.kind == "frame" and b.kind == "zone"
 
     conts.sort(key=lambda c: (c.kind, c.key))
     for c in conts:
         cands = [a for a in allc if contains(a, c)]
-        c.parent = min(cands, key=lambda a: (len(a.all), a.kind == 'root', a.kind == 'zone'))
+        c.parent = min(cands, key=lambda a: (len(a.all), a.kind == "root", a.kind == "zone"))
         c.parent.children.append(c)
 
     def depth(c):
@@ -213,7 +229,7 @@ class Formatter:
     container in its own coordinates (engine.snapshot_state), then 'final' (geometry()). The
     original reroutes are not in the model (see tools/dump_tree.py)."""
 
-    def __init__(self, m, mode='relayout', swaps=True, record=False, rules=None):
+    def __init__(self, m, mode="relayout", swaps=True, record=False, rules=None):
         """Format model m in `mode` ('relayout' or 'keep'); swaps=False keeps commutative inputs as
         they are; record=True keeps snapshots of the phases; rules: the enabled rule codes
         (rules.py; default all)."""
@@ -221,11 +237,12 @@ class Formatter:
         self.m = m
         self.mode = mode
         self.rules = frozenset(rules if rules is not None else _rules.DEFAULT)
-        self.swaps_on = swaps and 'NF011' in self.rules
+        self.swaps_on = swaps and "NF011" in self.rules
         # NF041: the text width of the label of each labelled wire (by source socket)
         self.label_w = {}
-        if 'NF041' in self.rules:
+        if "NF041" in self.rules:
             from .labels import text_width
+
             for lab in m.data.get("labels", []):
                 tag = tuple(lab["src"])
                 w = lab.get("w") or text_width(lab["label"])
@@ -248,9 +265,8 @@ class Formatter:
         if self.snapshots is not None:
             self.snapshots.append({"phase": "direct", **self._direct()})
         while True:
-            stacks = 'NF023' in self.rules and self.mode == 'relayout'
-            conts = [c for c in containers(self.m, stacks)
-                     if not (c.kind == 'frame' and c.key in self.loose_frames)]
+            stacks = "NF023" in self.rules and self.mode == "relayout"
+            conts = [c for c in containers(self.m, stacks) if not (c.kind == "frame" and c.key in self.loose_frames)]
             self.root, self.home = nest(self.m, conts)
             try:
                 self.res, self.node_items, self.comp_items = {}, {}, {}
@@ -265,12 +281,12 @@ class Formatter:
                 break
             except engine.CycleError as e:
                 # a frame whose block would form a cycle is laid out as loose nodes
-                bad = [i.id for i in e.items if isinstance(i.id, tuple) and i.id[0] == 'frame']
+                bad = [i.id for i in e.items if isinstance(i.id, tuple) and i.id[0] == "frame"]
                 if not bad:
                     raise
                 self.loose_frames.add(bad[0][1])
         self.place(self.root, route)
-        yield ('routing', 1, 1)
+        yield ("routing", 1, 1)
         if self.snapshots is not None and route:
             self.snapshots.append({"phase": "final", **self.geometry()})
 
@@ -282,13 +298,13 @@ class Formatter:
         def record(phase, state):
             """Keep one engine phase of container c."""
             self.snapshots.append({"phase": phase, "container": [c.kind, c.key], **state})
+
         return record
 
     def _direct(self):
         """The tree as it was, drawn with direct links (no reroutes): nodes at their old boxes."""
         m = self.m
-        nodes = [{"name": n, "x": m.box[n][0], "y": m.box[n][1], "w": m.box[n][2], "h": m.box[n][3]}
-                 for n in m.real]
+        nodes = [{"name": n, "x": m.box[n][0], "y": m.box[n][1], "w": m.box[n][2], "h": m.box[n][3]} for n in m.real]
         links = []
         for s, d, _, sid in m.links:
             a, b = m.box[s[0]], m.box[d[0]]
@@ -315,9 +331,9 @@ class Formatter:
             yield from self.layout(ch)
         self._run(c)
         self._done += 1
-        yield ('layout', self._done, self._count)
+        yield ("layout", self._done, self._count)
         for ch in sorted(c.children, key=lambda ch: (ch.kind, str(ch.key))):
-            alts = getattr(self.res[id(ch)][1], 'alts', [])
+            alts = getattr(self.res[id(ch)][1], "alts", [])
             if len(alts) < 2:
                 continue
             cur = self.res[id(ch)][1]
@@ -327,20 +343,20 @@ class Formatter:
                     continue
                 self._use_alt(ch, mode)
                 self._run(c)
-                yield ('layout', self._done, self._count)
+                yield ("layout", self._done, self._count)
                 total = self.res[id(c)][1].cost + cost
                 if total < best[0] - 1e-9:
                     best = (total, mode)
             if self.res[id(ch)][1].zone_mode != best[1]:
                 self._use_alt(ch, best[1])
                 self._run(c)
-        if c.kind != 'root':
+        if c.kind != "root":
             self._compound(c)
 
     def _run(self, c):
         """Build the items and edges of container c (its children as compound items), run the
         engine, apply the input swaps it chose (undoing those of an earlier run of c)."""
-        if c.kind == 'stack':
+        if c.kind == "stack":
             self._run_stack(c)
             return
         for v, a, b in self.applied.pop(id(c), []):
@@ -350,23 +366,22 @@ class Formatter:
         for name in sorted(c.direct):
             x, y, w, h = m.box[name]
             pin = None
-            if c.kind == 'zone' and name == c.pair[0]:
-                pin = 'first'
-            elif (c.kind == 'zone' and name == c.pair[1]) or (m.type(name) in OUTPUTS and c.kind == 'root'):
-                pin = 'last'
-            elif m.info[name].get("pin") and c.kind == 'root':
+            if c.kind == "zone" and name == c.pair[0]:
+                pin = "first"
+            elif (c.kind == "zone" and name == c.pair[1]) or (m.type(name) in OUTPUTS and c.kind == "root"):
+                pin = "last"
+            elif m.info[name].get("pin") and c.kind == "root":
                 pin = m.info[name]["pin"]  # a link to the rest of the tree (sort of a part)
-            kind = 'label' if m.type(name) == 'NodeReroute' else 'node'  # a kept (labelled) reroute
-            it = engine.Item(name, kind, w, h, dict(m.ins[name]), dict(m.outs[name]), x, y,
-                             m.main.get(name), pin)
-            it.own_column = bool(m.info[name].get("pin")) and c.kind == 'root'  # see ranking.rank
+            kind = "label" if m.type(name) == "NodeReroute" else "node"  # a kept (labelled) reroute
+            it = engine.Item(name, kind, w, h, dict(m.ins[name]), dict(m.outs[name]), x, y, m.main.get(name), pin)
+            it.own_column = bool(m.info[name].get("pin")) and c.kind == "root"  # see ranking.rank
             it.geo_out = any(m.geo.get(g, False) for g in m.outs[name])
             it.src = not any(d[0] == name for _, d, _, _ in m.links)
             it.reach_l = m.fan_reach.get(name, 0.0)  # NF035: its fans, in the gap before its column
             if name in m.comm and self.swaps_on:
                 it.comm = it.comm_pair = m.comm[name]
-            if pin and c.kind == 'zone':  # zone input/output: sockets by identifier, to line them up
-                side = m.outs if pin == 'first' else m.ins
+            if pin and c.kind == "zone":  # zone input/output: sockets by identifier, to line them up
+                side = m.outs if pin == "first" else m.ins
                 it.zmatch = {m.info[g[0]]["socks"][f"{g[1]}{g[2]}"]["id"]: g for g in side[name] if len(g) == 3}
                 it.zgeo = {k: m.geo[g] for k, g in it.zmatch.items()}
             self.node_items[name] = it
@@ -375,7 +390,7 @@ class Formatter:
             comp = self.comp_items[id(ch)]
             comp.comm = list(comp.comm_pairs) if comp.comm_pairs and self.swaps_on else None
             items.append(comp)
-        inside = (lambda n: True) if c.kind == 'root' else (lambda n: n in c.all)
+        inside = (lambda n: True) if c.kind == "root" else (lambda n: n in c.all)
         # edges between children, and links crossing the container border
         edges, b_in, b_out = {}, [], []
         routes_of = {}
@@ -387,7 +402,7 @@ class Formatter:
                 a, b = self.item_of(c, s[0]), self.item_of(c, d[0])
                 if a is b:
                     continue
-                bk = d if b.kind in ('node', 'label') else self._port_key(self.cont_of[b.id], s, d)
+                bk = d if b.kind in ("node", "label") else self._port_key(self.cont_of[b.id], s, d)
                 e = engine.Edge(a, s, b, bk, s, m.geo[s])
                 e.route = m.old_route(s, d0, sid)
                 edges[(a.id, s, b.id, bk)] = e
@@ -405,7 +420,7 @@ class Formatter:
         all_edges = list(edges.values())
         for s, d in b_in:
             b = self.item_of(c, d[0])
-            bk = d if b.kind in ('node', 'label') else self._port_key(self.cont_of[b.id], s, d)
+            bk = d if b.kind in ("node", "label") else self._port_key(self.cont_of[b.id], s, d)
             if b.rank == 0:
                 key = (PORT_D, b.id, bk)
                 direct_in[key] = (b, bk)
@@ -413,37 +428,37 @@ class Formatter:
             else:
                 key = (PORT_IN, s)
                 if key not in ports_in:
-                    p = engine.Item(('pin', s, c.kind, c.key), 'pin_in', pin='first')
+                    p = engine.Item(("pin", s, c.kind, c.key), "pin_in", pin="first")
                     p.tag = s
                     ports_in[key] = p
                     items.append(p)
-                e = engine.Edge(ports_in[key], 'out', b, bk, s, m.geo[s])
+                e = engine.Edge(ports_in[key], "out", b, bk, s, m.geo[s])
                 e.route = routes_of.get((s, d))
                 if not any(x.u is e.u and x.v is b and x.vk == bk for x in all_edges):
                     all_edges.append(e)
         for s, d in b_out:
             a = self.item_of(c, s[0])
-            if a.rank == R or a.pin == 'last':
+            if a.rank == R or a.pin == "last":
                 direct_out[s] = a
             elif s not in ports_out:
-                p = engine.Item(('pout', s, c.kind, c.key), 'pin_out', pin='last')
+                p = engine.Item(("pout", s, c.kind, c.key), "pin_out", pin="last")
                 p.tag = s
                 ports_out[s] = p
                 items.append(p)
-                e = engine.Edge(a, s, p, 'in', s, m.geo[s])
+                e = engine.Edge(a, s, p, "in", s, m.geo[s])
                 e.route = routes_of.get((s, d))
                 all_edges.append(e)
         for it in items:
-            if it.kind == 'pin_in':
+            if it.kind == "pin_in":
                 it.ins = {}
-                it.outs = {'out': (0, 0)}
-            elif it.kind == 'pin_out':
-                it.ins = {'in': (0, 0)}
+                it.outs = {"out": (0, 0)}
+            elif it.kind == "pin_out":
+                it.ins = {"in": (0, 0)}
                 it.outs = {}
         pad = (0, 0, 0, 0)
-        if c.kind == 'frame':
+        if c.kind == "frame":
             pad = m.pads.get(c.key, (30, 40, 30, 30))
-        elif c.kind == 'zone':
+        elif c.kind == "zone":
             pad = (0, 20, 0, 20)
         linked = set(direct_in)
         self.exposed[id(c)] = self._border_pairs(c, items, all_edges, direct_in)
@@ -466,7 +481,7 @@ class Formatter:
         items, y = [], 0.0
         for name in order:
             bx, by, w, h = m.box[name]
-            it = engine.Item(name, 'node', w, h, dict(m.ins[name]), dict(m.outs[name]), bx, by)
+            it = engine.Item(name, "node", w, h, dict(m.ins[name]), dict(m.outs[name]), bx, by)
             it.x, it.y = x, y
             self.node_items[name] = it
             items.append(it)
@@ -499,7 +514,7 @@ class Formatter:
         res.w, res.h = width, y - P.STACK_GAP
         res.reach = (P.STACK_TRACK, right - width)
         res.ranks, res.cost, res.alts, res.swapped, res.zone_mode = 1, 0.0, [], [], None
-        res.placer, res.seconds, res.crossings, res.aligned = 'stack', 0.0, 0, 0
+        res.placer, res.seconds, res.crossings, res.aligned = "stack", 0.0, 0, 0
         self.rank0[id(c)] = set(c.all)
         self.exposed[id(c)] = {}
         self.ctx[id(c)] = ({}, direct_in, {}, direct_out, set())
@@ -518,13 +533,13 @@ class Formatter:
         The item may be a child block with border pairs of its own, so a pair passes up through
         nested frames and zones."""
         out = {}
-        if c.kind == 'root' or not self.swaps_on:
+        if c.kind == "root" or not self.swaps_on:
             return out
         for b in items:
-            pairs = getattr(b, 'comm_pair', None) if b.kind == 'node' else getattr(b, 'comm_pairs', None)
+            pairs = getattr(b, "comm_pair", None) if b.kind == "node" else getattr(b, "comm_pairs", None)
             if not pairs:
                 continue
-            for ka, kb in ([pairs] if b.kind == 'node' else pairs):
+            for ka, kb in [pairs] if b.kind == "node" else pairs:
                 if b.rank == 0:
                     if ka not in b.ins or kb not in b.ins:
                         continue
@@ -536,8 +551,7 @@ class Formatter:
                 into = {e.vk: e for e in edges if e.v is b and e.vk in (ka, kb)}
                 if len(into) != 2 or into[ka].u is into[kb].u:
                     continue
-                if not all(e.u.kind == 'pin_in' and sum(1 for f in edges if f.u is e.u) == 1
-                           for e in into.values()):
+                if not all(e.u.kind == "pin_in" and sum(1 for f in edges if f.u is e.u) == 1 for e in into.values()):
                     continue
                 ta, tb = into[ka].u.tag, into[kb].u.tag
                 out[((PORT_IN, ta), (PORT_IN, tb))] = (b.id, ka, kb, (ta, tb))
@@ -548,7 +562,7 @@ class Formatter:
         b = self.item_of(c, d[0])
         if b.id not in self.rank0[id(c)]:
             return (PORT_IN, s)
-        bk = d if b.kind in ('node', 'label') else self._port_key(self.cont_of[b.id], s, d)
+        bk = d if b.kind in ("node", "label") else self._port_key(self.cont_of[b.id], s, d)
         return (PORT_D, b.id, bk)
 
     def _apply(self, c, res):
@@ -588,21 +602,22 @@ class Formatter:
         res = self.res[id(c)][1]
         ins, outs = self._ports(c)
         nodes = [m.box[n] for n in c.all]
-        comp = engine.Item((c.kind, c.key), 'compound', res.w, res.h, ins, outs,
-                           min(b[0] for b in nodes), min(b[1] for b in nodes))
+        comp = engine.Item(
+            (c.kind, c.key), "compound", res.w, res.h, ins, outs, min(b[0] for b in nodes), min(b[1] for b in nodes)
+        )
         comp.comm_pairs = sorted(self.exposed.get(id(c), {}), key=repr) or None
         self.cont_of[comp.id] = c
         comp.geo_out = any(m.geo.get(s, False) for s in outs)
         comp.res = res
         comp.big = res.ranks >= 3
-        comp.reach_l, comp.reach_r = getattr(res, 'reach', (0.0, 0.0))  # a stack's side wires
+        comp.reach_l, comp.reach_r = getattr(res, "reach", (0.0, 0.0))  # a stack's side wires
         # NF035: the fans of the block's first column reach out on its left
         if m.fan:
             comp.reach_l = max([comp.reach_l] + [-dx for dx, _ in ins.values()])
         # main input: the zone input's main socket, else a geometry port, else the top port
         main = None
-        if c.kind in ('zone', 'stack'):  # the main socket of the zone input or the consumer
-            mk = m.main.get(c.pair[0] if c.kind == 'zone' else c.key)
+        if c.kind in ("zone", "stack"):  # the main socket of the zone input or the consumer
+            mk = m.main.get(c.pair[0] if c.kind == "zone" else c.key)
             for key in ins:
                 if key[0] == PORT_D and key[2] == mk:
                     main = key
@@ -679,8 +694,9 @@ class Formatter:
             if top < 0:
                 off = (off[0], off[1] + snap_up(-top))
         self.pos = {k: (x + off[0], y + off[1]) for k, (x, y) in self.pos.items()}
-        self.segments = [(t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d)
-                         for t, p, q, d in self.segments]
+        self.segments = [
+            (t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d) for t, p, q, d in self.segments
+        ]
         if not route:
             return
         if m.fan:  # NF035: a link laid out to its fan point goes on from there to its slot
@@ -701,21 +717,26 @@ class Formatter:
         self.trees = routes.build(self.segments, roots)
         # the whole drawing: almost level runs made level, runs moved to better heights (wires.py)
         d = self.drawing()
-        self.tidy = {"snapped": wires.snap_level(d) if 'NF034' in self.rules else 0,
-                     "moved": wires.tidy(d, self.rules) if self.mode == 'relayout' else 0}
-        boxes = [(x, y, x + m.box[n][2], y + m.box[n][3]) for n, (x, y) in self.pos.items()
-                 if m.type(n) != 'NodeReroute']
-        self.label_pts = routes.place_labels(self.trees, self.m.data.get("labels", []), boxes,
-                                             first='NF040' in self.rules, clear='NF041' in self.rules)
+        self.tidy = {
+            "snapped": wires.snap_level(d) if "NF034" in self.rules else 0,
+            "moved": wires.tidy(d, self.rules) if self.mode == "relayout" else 0,
+        }
+        boxes = [
+            (x, y, x + m.box[n][2], y + m.box[n][3]) for n, (x, y) in self.pos.items() if m.type(n) != "NodeReroute"
+        ]
+        self.label_pts = routes.place_labels(
+            self.trees, self.m.data.get("labels", []), boxes, first="NF040" in self.rules, clear="NF041" in self.rules
+        )
 
     def drawing(self):
         """The routed tree as a wires.Drawing: reroute trees, node boxes, zone and frame outlines."""
         m = self.m
-        boxes = {n: (x, y, x + m.box[n][2], y + m.box[n][3]) for n, (x, y) in self.pos.items()
-                 if m.type(n) != 'NodeReroute'}
+        boxes = {
+            n: (x, y, x + m.box[n][2], y + m.box[n][3]) for n, (x, y) in self.pos.items() if m.type(n) != "NodeReroute"
+        }
         outlines = []
         for c, _ in self.res.values():
-            if c.kind == 'zone':
+            if c.kind == "zone":
                 inp, out = c.pair
                 content = [boxes[n] for n in sorted(c.all) if n in boxes and n not in (inp, out)]
                 outlines.append((c.key, wires.zone_outline(boxes.get(inp), boxes.get(out), content)))
@@ -727,8 +748,9 @@ class Formatter:
     def lint(self):
         """Violations of the formatted layout (lint.py), for the enabled rules."""
         from . import lint
+
         labels = {k: v[1] for k, v in self.label_pts.items()}
-        groups = {c.key: set(c.all) for c, _ in self.res.values() if c.kind == 'frame'}
+        groups = {c.key: set(c.all) for c, _ in self.res.values() if c.kind == "frame"}
         return lint.lint(self.drawing(), self.rules, labels, groups)
 
     def _frame_rects(self):
@@ -736,12 +758,20 @@ class Formatter:
         m = self.m
         frames = []
         for c, res in self.res.values():
-            if c.kind == 'frame':
+            if c.kind == "frame":
                 xs = [self.pos[n][0] for n in c.all] + [self.pos[n][0] + m.box[n][2] for n in c.all]
                 ys = [self.pos[n][1] for n in c.all] + [self.pos[n][1] + m.box[n][3] for n in c.all]
                 pl, pt, pr, pb = m.pads.get(c.key, (30, 40, 30, 30))
-                frames.append({"name": c.key, "label": m.info[c.key]["label"], "x": min(xs) - pl, "y": min(ys) - pt,
-                               "w": max(xs) - min(xs) + pl + pr, "h": max(ys) - min(ys) + pt + pb})
+                frames.append(
+                    {
+                        "name": c.key,
+                        "label": m.info[c.key]["label"],
+                        "x": min(xs) - pl,
+                        "y": min(ys) - pt,
+                        "w": max(xs) - min(xs) + pl + pr,
+                        "h": max(ys) - min(ys) + pt + pb,
+                    }
+                )
         return frames
 
     def _place(self, c, off):
@@ -752,15 +782,16 @@ class Formatter:
         for ta, tb in self.flipped.get(id(c), ()):
             retag[ta], retag[tb] = tb, ta
         for it in res.items:
-            if it.kind in ('node', 'label'):
+            if it.kind in ("node", "label"):
                 self.pos[it.id] = (it.x + off[0], it.y + off[1])
-            elif it.kind == 'compound':
+            elif it.kind == "compound":
                 ch = next(ch for ch in c.children if (ch.kind, ch.key) == it.id)
                 cres = self.res[id(ch)][1]
                 self._place(ch, (it.x + off[0] - cres.origin[0], it.y + off[1] - cres.origin[1]))
         for tag, p, q, dst in res.segments:
-            self.segments.append((retag.get(tag, tag), (p[0] + off[0], p[1] + off[1]),
-                                  (q[0] + off[0], q[1] + off[1]), self._dst(dst)))
+            self.segments.append(
+                (retag.get(tag, tag), (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), self._dst(dst))
+            )
 
     def _dst(self, dst):
         """The real input socket a route segment ends at (None if the route continues)."""
@@ -777,23 +808,39 @@ class Formatter:
         (socket to socket), with the socket type. Used by tests and the offline metrics."""
         m = self.m
         sc = m.data.get("scale", 1.0)
+
         # node locations as blend.apply writes them: on the pixel grid of the UI scale
-        rnd = lambda v: math.floor(v * sc + 0.5 + 1e-6) / sc
+        def rnd(v):
+            return math.floor(v * sc + 0.5 + 1e-6) / sc
+
         nodes = []
         for n, (x, y) in self.pos.items():
             _, _, w, h = m.box[n]
-            nodes.append({"name": n, "type": m.type(n), "label": m.info[n]["label"], "x": rnd(x), "y": rnd(y),
-                          "w": w, "h": h, "src": not any(d[0] == n for _, d, _, _ in self.links),
-                          "dupkey": m.info[n].get("dupkey"), "title": m.info[n].get("title"),
-                          "socks": [[s["off"][0], s["off"][1], s["type"]] for s in m.info[n].get("socks", {}).values()
-                                    if s["vis"]]})
+            nodes.append(
+                {
+                    "name": n,
+                    "type": m.type(n),
+                    "label": m.info[n]["label"],
+                    "x": rnd(x),
+                    "y": rnd(y),
+                    "w": w,
+                    "h": h,
+                    "src": not any(d[0] == n for _, d, _, _ in self.links),
+                    "dupkey": m.info[n].get("dupkey"),
+                    "title": m.info[n].get("title"),
+                    "socks": [
+                        [s["off"][0], s["off"][1], s["type"]] for s in m.info[n].get("socks", {}).values() if s["vis"]
+                    ],
+                }
+            )
         links = []
         rr = []
         for s, t in self.trees.items():
             typ = m.sock_type[s]
             pts = set(routes.reroute_points(t))
-            rr += [{"x": p[0], "y": p[1], "src": list(s), "label": self.label_pts.get((s, p), (None, ""))[1]}
-                   for p in pts]
+            rr += [
+                {"x": p[0], "y": p[1], "src": list(s), "label": self.label_pts.get((s, p), (None, ""))[1]} for p in pts
+            ]
             for p, cs in t.children.items():
                 if p != t.root and p not in pts:
                     continue
@@ -801,20 +848,36 @@ class Formatter:
                     if q in t.dst:
                         x, y = self.pos[t.dst[q][0]]
                         dx, dy = m.slot_at(t.dst[q])
-                        links.append({"a": list(p), "b": [rnd(x) + dx, rnd(y) + dy], "type": typ,
-                                      "src": list(s), "dst": list(t.dst[q][:3]), "rr_a": p != t.root, "rr_b": False,
-                                      "multi": len(t.dst[q]) == 4})
+                        links.append(
+                            {
+                                "a": list(p),
+                                "b": [rnd(x) + dx, rnd(y) + dy],
+                                "type": typ,
+                                "src": list(s),
+                                "dst": list(t.dst[q][:3]),
+                                "rr_a": p != t.root,
+                                "rr_b": False,
+                                "multi": len(t.dst[q]) == 4,
+                            }
+                        )
                     else:
-                        links.append({"a": list(p), "b": list(q), "type": typ, "src": list(s),
-                                      "rr_a": p != t.root, "rr_b": True})
+                        links.append(
+                            {"a": list(p), "b": list(q), "type": typ, "src": list(s), "rr_a": p != t.root, "rr_b": True}
+                        )
         # sockets are placed from the rounded node locations
-        for l in links:
-            if not l["rr_a"]:
-                s = tuple(l["src"])
+        for lk in links:
+            if not lk["rr_a"]:
+                s = tuple(lk["src"])
                 x, y = self.pos[s[0]]
                 dx, dy = m.outs[s[0]][s]
-                l["a"] = [rnd(x) + dx, rnd(y) + dy]
+                lk["a"] = [rnd(x) + dx, rnd(y) + dy]
         frames = self._frame_rects()
-        zones = [{"name": c.key, "nodes": sorted(c.all)} for c, _ in self.res.values() if c.kind == 'zone']
-        return {"nodes": nodes, "reroutes": rr, "links": links, "frames": frames, "zones": zones,
-                "swapped": [[v, list(a), list(b)] for v, a, b in self.swapped]}
+        zones = [{"name": c.key, "nodes": sorted(c.all)} for c, _ in self.res.values() if c.kind == "zone"]
+        return {
+            "nodes": nodes,
+            "reroutes": rr,
+            "links": links,
+            "frames": frames,
+            "zones": zones,
+            "swapped": [[v, list(a), list(b)] for v, a, b in self.swapped],
+        }

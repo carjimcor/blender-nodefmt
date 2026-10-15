@@ -4,6 +4,7 @@
 Geometry: {"nodes": [{name, type, x, y, w, h, src, dupkey}], "reroutes": [{x, y}],
 "links": [{a: [x, y], b: [x, y], rr_a, rr_b}], "frames": [...]}, y DOWN, node (x, y) = top-left.
 """
+
 GRID = 20.0
 
 
@@ -34,9 +35,11 @@ def _seg_hits_box(a, b, bx, m=2.0):
 
 def _cross(p1, p2, p3, p4):
     """True if segments p1-p2 and p3-p4 cross at an inner point."""
+
     def ccw(a, b, c):
         """Signed area of the triangle a, b, c (orientation test)."""
         return (c[1] - a[1]) * (b[0] - a[0]) - (b[1] - a[1]) * (c[0] - a[0])
+
     return ccw(p3, p4, p1) * ccw(p3, p4, p2) < 0 and ccw(p1, p2, p3) * ccw(p1, p2, p4) < 0
 
 
@@ -46,13 +49,19 @@ def measure(g, copies=0, swaps=0):
     nodes = g["nodes"]
     links = g["links"]
     rr = g["reroutes"]
-    R = lambda p: (round(p[0], 1), round(p[1], 1))
-    for l in links:
-        l["a"], l["b"] = list(R(l["a"])), list(R(l["b"]))
+
+    def R(p):
+        return (round(p[0], 1), round(p[1], 1))
+
+    for lk in links:
+        lk["a"], lk["b"] = list(R(lk["a"])), list(R(lk["b"]))
     rr = [{**r, "x": round(r["x"], 1), "y": round(r["y"], 1)} for r in rr]
-    segs = [(tuple(l["a"]), tuple(l["b"])) for l in links]
-    bent = [l.get("multi", False) for l in links
-            if abs(l["a"][1] - l["b"][1]) > 0.5 and abs(l["a"][0] - l["b"][0]) > 0.5]
+    segs = [(tuple(lk["a"]), tuple(lk["b"])) for lk in links]
+    bent = [
+        lk.get("multi", False)
+        for lk in links
+        if abs(lk["a"][1] - lk["b"][1]) > 0.5 and abs(lk["a"][0] - lk["b"][0]) > 0.5
+    ]
     curved, curved_multi = bent.count(False), bent.count(True)
     nonortho = len(bent)  # strict: every segment with |dx| > 0.5 and |dy| > 0.5
     backward = sum(1 for a, b in segs if b[0] < a[0] - 0.5 and abs(a[1] - b[1]) <= 0.5)
@@ -66,7 +75,7 @@ def measure(g, copies=0, swaps=0):
                 crossings += 1
     boxes = [(n, (n["x"], n["y"], n["x"] + n["w"], n["y"] + n["h"])) for n in nodes]
     behind = 0
-    for (a, b) in segs:
+    for a, b in segs:
         for n, bx in boxes:
             if _seg_hits_box(a, b, bx):
                 behind += 1
@@ -92,18 +101,21 @@ def measure(g, copies=0, swaps=0):
         ins, outs = deg_in.get(p, []), deg_out.get(p, [])
         if len(ins) == 1 and len(outs) == 1:
             a, b = ins[0], outs[0]
-            if ((abs(a[1] - p[1]) < 0.5 and abs(b[1] - p[1]) < 0.5)
-                    or (abs(a[0] - p[0]) < 0.5 and abs(b[0] - p[0]) < 0.5)):
+            if (abs(a[1] - p[1]) < 0.5 and abs(b[1] - p[1]) < 0.5) or (
+                abs(a[0] - p[0]) < 0.5 and abs(b[0] - p[0]) < 0.5
+            ):
                 straight_rr += 1
     # source nodes: longest route (along the drawn links) to a real consumer
     far, far_node = 0.0, None
     for n in nodes:
         if not n.get("dupkey"):
             continue
-        starts = [l for l in links if l.get("src", [None])[0] == n["name"] or l.get("from") == n["name"]]
-        starts = [l for l in starts if not l["rr_a"]]
+        starts = [lk for lk in links if lk.get("src", [None])[0] == n["name"] or lk.get("from") == n["name"]]
+        starts = [lk for lk in starts if not lk["rr_a"]]
         best = 0.0
-        stack = [(tuple(l["b"]), abs(l["a"][0] - l["b"][0]) + abs(l["a"][1] - l["b"][1]), l["rr_b"]) for l in starts]
+        stack = [
+            (tuple(lk["b"]), abs(lk["a"][0] - lk["b"][0]) + abs(lk["a"][1] - lk["b"][1]), lk["rr_b"]) for lk in starts
+        ]
         seen = 0
         while stack and seen < 5000:
             seen += 1
@@ -112,7 +124,7 @@ def measure(g, copies=0, swaps=0):
                 best = max(best, d)
                 continue
             for q in deg_out.get(p, []):
-                lk = next((l for l in links if tuple(l["a"]) == p and tuple(l["b"]) == q), None)
+                lk = next((e for e in links if tuple(e["a"]) == p and tuple(e["b"]) == q), None)
                 stack.append((q, d + abs(p[0] - q[0]) + abs(p[1] - q[1]), lk["rr_b"] if lk else False))
         if best > far:
             far, far_node = best, n["name"]
@@ -130,24 +142,51 @@ def measure(g, copies=0, swaps=0):
     xs = [n["x"] for n in nodes] + [n["x"] + n["w"] for n in nodes]
     ys = [n["y"] for n in nodes] + [n["y"] + n["h"] for n in nodes]
     ends = _ends(links)
-    wf = wire_faults([(r["x"], r["y"]) for r in rr],
-                     [(tuple(l["a"]), tuple(l["b"]), tuple(l.get("src") or [l.get("from")]),
-                       not l["rr_a"], not l["rr_b"], ends[k], tuple(l["dst"]) if l.get("multi") else None)
-                      for k, l in enumerate(links)])
+    wf = wire_faults(
+        [(r["x"], r["y"]) for r in rr],
+        [
+            (
+                tuple(lk["a"]),
+                tuple(lk["b"]),
+                tuple(lk.get("src") or [lk.get("from")]),
+                not lk["rr_a"],
+                not lk["rr_b"],
+                ends[k],
+                tuple(lk["dst"]) if lk.get("multi") else None,
+            )
+            for k, lk in enumerate(links)
+        ],
+    )
     st, tot = straight_links(links)
     wf["label_overlap"] = label_overlaps([(r["x"], r["y"], r["label"]) for r in rr if r.get("label")])
-    return {**wf, "straight": f"{st}/{tot}", "nonortho": nonortho, "curved": curved, "curved_multi": curved_multi,
-            "behind": behind, "crossings": crossings, "overlaps": overlaps, "backward": backward,
-            "nodes_on_grid": f"{grid}/{len(nodes)}", "level": f"{level}/{len(nodes)}",
-            "rr_on_grid": f"{rr_grid}/{len(rr)}", "src_far": round(far), "src_far_node": far_node,
-            "duplicates": copies, "swaps": swaps, "reroutes": len(rr), "useless_rr": straight_rr, "links": len(links),
-            "size": f"{round(max(xs) - min(xs))}x{round(max(ys) - min(ys))}"}
+    return {
+        **wf,
+        "straight": f"{st}/{tot}",
+        "nonortho": nonortho,
+        "curved": curved,
+        "curved_multi": curved_multi,
+        "behind": behind,
+        "crossings": crossings,
+        "overlaps": overlaps,
+        "backward": backward,
+        "nodes_on_grid": f"{grid}/{len(nodes)}",
+        "level": f"{level}/{len(nodes)}",
+        "rr_on_grid": f"{rr_grid}/{len(rr)}",
+        "src_far": round(far),
+        "src_far_node": far_node,
+        "duplicates": copies,
+        "swaps": swaps,
+        "reroutes": len(rr),
+        "useless_rr": straight_rr,
+        "links": len(links),
+        "size": f"{round(max(xs) - min(xs))}x{round(max(ys) - min(ys))}",
+    }
 
 
-RR_CLEAR = 10.0    # two reroutes closer than this look like one (overlapping reroutes)
-ON_WIRE = 6.0      # a reroute this close to a wire it does not end looks like a junction on it
-NEAR_RR = 10.0     # a crossing this close to a reroute or bend is not clean
-NEAR_SOCK = 20.0   # a crossing this close to a node's socket is not clean
+RR_CLEAR = 10.0  # two reroutes closer than this look like one (overlapping reroutes)
+ON_WIRE = 6.0  # a reroute this close to a wire it does not end looks like a junction on it
+NEAR_RR = 10.0  # a crossing this close to a reroute or bend is not clean
+NEAR_SOCK = 20.0  # a crossing this close to a node's socket is not clean
 
 
 def _pt_seg(p, a, b):
@@ -186,10 +225,16 @@ def wire_faults(rr, segs):
     overlap = 0
     for i in range(len(rr)):
         for j in range(i + 1, len(rr)):
-            if (abs(rr[i][0] - rr[j][0]) < RR_CLEAR and abs(rr[i][1] - rr[j][1]) < RR_CLEAR and
-                    ((rr[i][0] - rr[j][0]) ** 2 + (rr[i][1] - rr[j][1]) ** 2) ** 0.5 < RR_CLEAR):
+            if (
+                abs(rr[i][0] - rr[j][0]) < RR_CLEAR
+                and abs(rr[i][1] - rr[j][1]) < RR_CLEAR
+                and ((rr[i][0] - rr[j][0]) ** 2 + (rr[i][1] - rr[j][1]) ** 2) ** 0.5 < RR_CLEAR
+            ):
                 overlap += 1
-    multi = lambda s: s[6] if len(s) > 6 else None
+
+    def multi(s):
+        return s[6] if len(s) > 6 else None
+
     corner = {}  # reroute point -> the multi-input socket its last run enters
     for s in segs:
         if multi(s) is not None:
@@ -247,8 +292,15 @@ def wire_faults(rr, segs):
                 continue
             if hi - lo > 1.0:
                 collinear += 1
-    return {"rr_overlap": overlap, "rr_on_wire": on_wire, "cross_clean": clean, "cross_other": other,
-            "collinear": collinear, "cross_bundle": bundle, "marks": marks}
+    return {
+        "rr_overlap": overlap,
+        "rr_on_wire": on_wire,
+        "cross_clean": clean,
+        "cross_other": other,
+        "collinear": collinear,
+        "cross_bundle": bundle,
+        "marks": marks,
+    }
 
 
 def _dist(p, q):
@@ -265,15 +317,15 @@ def straight_links(links):
     """(straight, total): links from a source socket to an input socket whose whole drawn route
     (through reroutes) is one horizontal line. links: [{a, b, rr_a, rr_b}] as in measure()."""
     into = {}
-    for l in links:
-        if l["rr_b"]:
-            into[tuple(l["b"])] = l
+    for lk in links:
+        if lk["rr_b"]:
+            into[tuple(lk["b"])] = lk
     total = straight = 0
-    for l in links:
-        if l["rr_b"]:
+    for lk in links:
+        if lk["rr_b"]:
             continue
         total += 1
-        ok, cur, n = True, l, 0
+        ok, cur, n = True, lk, 0
         while ok and n < 1000:
             n += 1
             if abs(cur["a"][1] - cur["b"][1]) > 0.5:
@@ -290,12 +342,13 @@ def straight_links(links):
 def label_box(x, y, text):
     """Box of a reroute label as Blender draws it: centred above the dot (labels.box)."""
     from . import labels
+
     return labels.box((x, y), labels.text_width(text))
 
 
 def label_overlaps(labels):
     """Pairs of reroute labels [(x, y, text)] whose text boxes overlap."""
-    boxes = [label_box(*l) for l in labels]
+    boxes = [label_box(*lb) for lb in labels]
     n = 0
     for i in range(len(boxes)):
         for j in range(i + 1, len(boxes)):
@@ -308,8 +361,8 @@ def label_overlaps(labels):
 def _ends(links):
     """For each drawn link: (source node, destination nodes it leads to through reroutes)."""
     out_of = {}
-    for k, l in enumerate(links):
-        out_of.setdefault((tuple(l.get("src") or [l.get("from")]), tuple(l["a"])), []).append(k)
+    for k, lk in enumerate(links):
+        out_of.setdefault((tuple(lk.get("src") or [lk.get("from")]), tuple(lk["a"])), []).append(k)
     memo = {}
 
     def dsts(k):
@@ -317,13 +370,14 @@ def _ends(links):
         if k in memo:
             return memo[k]
         memo[k] = frozenset()
-        l = links[k]
-        src = tuple(l.get("src") or [l.get("from")])
-        if not l["rr_b"]:
-            d = l.get("dst") or [l.get("to")]
+        lk = links[k]
+        src = tuple(lk.get("src") or [lk.get("from")])
+        if not lk["rr_b"]:
+            d = lk.get("dst") or [lk.get("to")]
             res = frozenset([d[0]])
         else:
-            res = frozenset().union(*[dsts(j) for j in out_of.get((src, tuple(l["b"])), [])])
+            res = frozenset().union(*[dsts(j) for j in out_of.get((src, tuple(lk["b"])), [])])
         memo[k] = res
         return res
-    return [((l.get("src") or [l.get("from")])[0], dsts(k)) for k, l in enumerate(links)]
+
+    return [((lk.get("src") or [lk.get("from")])[0], dsts(k)) for k, lk in enumerate(links)]

@@ -22,10 +22,12 @@ Two ways to use it:
 def register():
     """Register the add-on (its operators and panels)."""
     from . import ui
+
     ui.register()
 
 
 def unregister():
     """Unregister the add-on."""
     from . import ui
+
     ui.unregister()

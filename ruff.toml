@@ -5,9 +5,5 @@ line-length = 120
 target-version = "py313"
 
 [lint]
-# Ruff's default rules, plus the line length.
-extend-select = ["E501"]
-
-[lint.per-file-ignores]
-# the scripts put the repository on sys.path before importing nodefmt
-"tools/*.py" = ["E402"]
+# Ruff's default rules, plus every pycodestyle error and warning (no exceptions).
+extend-select = ["E", "W"]

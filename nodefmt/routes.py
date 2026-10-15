@@ -5,6 +5,7 @@ Segments come from every container level in absolute coordinates (y down). Point
 several links of the same source become taps; points where a route does not turn are dropped,
 so a reroute exists only at a bend, a tap, or where a curve meets a straight run.
 """
+
 from itertools import pairwise
 
 
@@ -17,21 +18,22 @@ def _dir(p, q):
     """Direction of the step p -> q: ('h' | 'v', positive), or None for a diagonal."""
     dx, dy = q[0] - p[0], q[1] - p[1]
     if abs(dy) < 0.05 and abs(dx) >= 0.05:
-        return ('h', dx > 0)
+        return ("h", dx > 0)
     if abs(dx) < 0.05 and abs(dy) >= 0.05:
-        return ('v', dy > 0)
+        return ("v", dy > 0)
     return None
 
 
 class Tree:
     """The reroute tree of one source socket: points (reroutes, bends, taps) and the input sockets
     they lead to."""
+
     def __init__(self, tag):
         """An empty tree for source socket `tag`."""
         self.tag = tag
         self.children = {}  # point -> set(points)
-        self.parent = {}    # point -> point
-        self.dst = {}       # point -> destination key (a real input socket)
+        self.parent = {}  # point -> point
+        self.dst = {}  # point -> destination key (a real input socket)
         self.root = None
 
 
@@ -115,10 +117,12 @@ def _simplify(t):
                 del t.children[p]
                 del t.parent[p]
                 changed = True
+
     # drop branches that lead to no destination (should not happen)
     def alive(p):
         """True if point p leads to a destination."""
         return p in t.dst or any(alive(c) for c in t.children.get(p, ()))
+
     for p in list(t.children):
         if p in t.children:
             t.children[p] = {c for c in t.children[p] if alive(c)}
@@ -129,9 +133,8 @@ def reroute_points(t):
     return [p for p in t.children if p != t.root and p not in t.dst]
 
 
-
-MARGIN = 40.0     # a label's own reroute sits this far along the wire from its start
-CLEAR = 10.0      # a new label reroute keeps this far from other reroutes and wires
+MARGIN = 40.0  # a label's own reroute sits this far along the wire from its start
+CLEAR = 10.0  # a new label reroute keeps this far from other reroutes and wires
 
 
 def place_labels(trees, labels, boxes=(), first=True, clear=True):
@@ -152,6 +155,7 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
     trees: {source: Tree}; labels: label records from model.read; boxes: node boxes
     (x0, y0, x1, y1) that label text must not cover."""
     from . import labels as L
+
     out = {}
     texts = []  # boxes of the labels placed so far
     hsegs, vsegs = [], []
@@ -165,8 +169,11 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
         """True if the text of a label at point p overlaps no label placed so far, no node and
         no wire (the runs level with the dot are below the text)."""
         b = _label_box(p, text)
-        return not (any(_overlap(b, o) for o in texts) or any(_overlap(b, o) for o in boxes)
-                    or any(L.hits(b, a, c) for _, a, c in hsegs + vsegs))
+        return not (
+            any(_overlap(b, o) for o in texts)
+            or any(_overlap(b, o) for o in boxes)
+            or any(L.hits(b, a, c) for _, a, c in hsegs + vsegs)
+        )
 
     def free(tag, p, text):
         """True if a new reroute labelled `text` on wire `tag` at point p troubles nothing."""
@@ -193,8 +200,8 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
         t = trees.get(src)
         if t is None:
             continue
-        lab = min(labs, key=lambda l: (l["depth"], l["x"], l["name"]))  # the one nearest the source
-        dsts = {tuple(d) for l in labs for d in l["dsts"]}
+        lab = min(labs, key=lambda lb: (lb["depth"], lb["x"], lb["name"]))  # the one nearest the source
+        dsts = {tuple(d) for lb in labs for d in lb["dsts"]}
         pts = [p for p, d in t.dst.items() if d[:3] in dsts]
         if not pts:
             continue
@@ -223,14 +230,17 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
                 span = abs(b[0] - a[0])
                 ds = [MARGIN + 20.0 * k for k in range(int(span // 20))] + [span / 2]
                 if clear:  # any free spot along the run, the nearest to MARGIN first
-                    ds += sorted((CLEAR * k for k in range(1, int(span // CLEAR))),
-                                 key=lambda d: (abs(d - MARGIN), d))
+                    ds += sorted((CLEAR * k for k in range(1, int(span // CLEAR))), key=lambda d: (abs(d - MARGIN), d))
                 # the greyed copies Blender will show on the reroutes after it
                 copies = [_label_box(c, text) for c in _below(t, b)] if clear else []
                 for d in ds:
                     q = (round(a[0] + sign * d, 1), a[1])
-                    if (CLEAR <= d <= span - CLEAR and free(src, q, text)
-                            and not any(_overlap(_label_box(q, text), o) for o in copies) and _insert(t, a, b, q)):
+                    if (
+                        CLEAR <= d <= span - CLEAR
+                        and free(src, q, text)
+                        and not any(_overlap(_label_box(q, text), o) for o in copies)
+                        and _insert(t, a, b, q)
+                    ):
                         points.add((src, q))
                         return q
             return None
@@ -246,8 +256,9 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
                     break
         if p is None and own:  # the first one whose text overlaps no other label (and, better, no node)
             ok = [q for q in own if not any(_overlap(_label_box(q, text), o) for o in texts)]
-            p = next((q for q in ok if not any(_overlap(_label_box(q, text), b) for b in boxes)),
-                     ok[0] if ok else own[0])
+            p = next(
+                (q for q in ok if not any(_overlap(_label_box(q, text), b) for b in boxes)), ok[0] if ok else own[0]
+            )
         elif p is None:  # no reroute on the way: a new one near the start of the first horizontal run
             p = new(list(pairwise(path)))
             if p is None:
@@ -271,6 +282,7 @@ def _below(t, p):
 def _label_box(p, text):
     """Box of a reroute label: centred above the dot, as Blender draws it (labels.box)."""
     from . import labels
+
     return labels.box(p, labels.text_width(text))
 
 
@@ -300,6 +312,7 @@ def _subtree_dsts(t):
             s |= go(c)
         memo[p] = s
         return s
+
     go(t.root)
     for p in list(t.children):
         go(p)
@@ -308,12 +321,14 @@ def _subtree_dsts(t):
 
 def _lca(t, pts):
     """Lowest common ancestor of several points of a tree."""
+
     def chain(p):
         """Point p and its ancestors up to the root."""
         c = [p]
         while c[-1] in t.parent:
             c.append(t.parent[c[-1]])
         return c
+
     common = None
     for p in pts:
         c = chain(p)
@@ -328,9 +343,17 @@ def _insert(t, a, b, p):
     for _ in range(1000):
         if cur == b:
             return False
-        nxt = next((c for c in t.children.get(cur, ()) if abs(c[1] - a[1]) < 0.05
-                    and min(a[0], b[0]) - 0.05 <= c[0] <= max(a[0], b[0]) + 0.05 and c != cur
-                    and (c[0] - cur[0]) * (b[0] - a[0]) > 0), None)
+        nxt = next(
+            (
+                c
+                for c in t.children.get(cur, ())
+                if abs(c[1] - a[1]) < 0.05
+                and min(a[0], b[0]) - 0.05 <= c[0] <= max(a[0], b[0]) + 0.05
+                and c != cur
+                and (c[0] - cur[0]) * (b[0] - a[0]) > 0
+            ),
+            None,
+        )
         if nxt is None:
             return False
         if _between(cur, nxt, p):

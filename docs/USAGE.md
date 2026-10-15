@@ -154,8 +154,11 @@ Options, in the Capture section of the panel:
 
 The editor is maximised, its header, toolbar and sidebar hidden, and the view is moved across the
 tree with one screenshot per step. The screenshots overlap, are checked against each other and
-are joined inside Blender (no extra Python packages). Nodes are drawn unselected. Afterwards the
-editor is put back as it was.
+are joined inside Blender (no extra Python packages). Blender dims a wire whose ends are both far
+outside the view, except the wires of selected nodes, so while it captures every node is
+selected and the theme's selection colours are set to the normal ones: nodes look unselected and
+long wires keep their colour. Afterwards the selection, the theme and the editor are put back as
+they were.
 
 While it runs, the status bar shows the step ("tile 3/12") and Esc cancels; nothing is saved. The
 panel then reports the file, its size, the number of screenshots and the time. As a guide, a tree

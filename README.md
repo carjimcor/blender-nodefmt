@@ -4,7 +4,8 @@ A formatter for Blender node trees, in the spirit of code formatters such as
 [ruff](https://github.com/astral-sh/ruff) or [black](https://github.com/psf/black). It sorts a
 tree into columns, orders the nodes to remove crossings, lines links up and routes the rest as
 orthogonal wires on reroutes. It never changes what the tree computes, and sorting a sorted tree
-changes nothing.
+changes nothing. It can also save any node tree, sorted or not, as one image of the whole tree
+(see [Capture whole trees](#capture-whole-trees)).
 
 <p align="center"><img src="media/nodefmt-demo.webp" alt="A messy node tree being sorted step by step: links become direct lines, nodes slide into columns, columns are reordered, heights settle and orthogonal wires are drawn" width="960"></p>
 
@@ -50,6 +51,25 @@ In a Geometry Nodes, Shader or Compositor editor, open the sidebar (N) and the n
 
 Esc cancels a sort, and each sort is one undo step.
 
+## Capture whole trees
+
+Capture Tree saves the whole tree as one PNG at the zoom you choose, however large the tree:
+the editor is moved across it and the screenshots are joined into one image. It works on any
+tree, sorted or not, never changes it and adds no undo step. Long wires keep their colour (in an
+ordinary screenshot Blender dims a wire whose ends are both off screen). The image can also be
+copied to the clipboard, for an issue, a forum post or documentation.
+
+![A tree saved with Capture Tree](docs/images/capture.png)
+
+In the panel: the Capture section, then Capture Tree (zoom, margin, whole tree or selection,
+file). From the command line (Blender opens its window for a moment and closes itself):
+
+```
+blender file.blend --python nodefmt_cli.py -- --capture "Tree name" --out tree.png --zoom 1.0
+```
+
+Details in [Usage](docs/USAGE.md#capture) and [Command line](docs/CLI.md).
+
 ## Documentation
 
 - [Usage](docs/USAGE.md): the panel, Sort Selection, Check and Capture.
@@ -76,6 +96,8 @@ rules, reviewing the results in Blender and deciding what to change.
 ## Credits and license
 
 `nodefmt/sockets.py` is adapted from [Node Arrange](https://extensions.blender.org/add-ons/node-arrange/)
-1.12.1, licensed GPL-2.0-or-later; its notice is kept in the file.
+1.12.1 by Leonardo Pike-Excell, licensed GPL-2.0-or-later; its notice is kept in the file and the
+extension's manifest credits it. Node Arrange worked out how to read socket positions from
+Blender's runtime data, which nodefmt depends on: thank you.
 
 nodefmt is licensed under the GNU General Public License v3.0 or later ([LICENSE](LICENSE)).

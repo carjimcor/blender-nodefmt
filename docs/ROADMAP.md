@@ -50,3 +50,17 @@ First candidates:
 - **unlabelled-frames**: frames without a label.
 - **repeated-subtree**: the same group of nodes, with the same links and settings, appears more
   than once; a candidate for a node group.
+
+## 5. Sorting a part of a tree
+
+Sort Selection lays the selected nodes out on their own and then routes their links to the rest,
+which can cross other wires or take long detours. It should place the part with the rest in
+view, or be replaced by something narrower that works reliably. One candidate: **sort a
+branch**, the nodes that feed the selected node (its upstream), laid out in front of it while
+the rest stays where it is, as some other node editors do.
+
+## 6. Command line without a window
+
+The command line needs Blender's window, because socket positions only exist once a node editor
+has been drawn, so it cannot run with `blender -b`, for example in CI. To be explored: drawing
+off screen, or computing socket positions from Blender's node layout rules without drawing.

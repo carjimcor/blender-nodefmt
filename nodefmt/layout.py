@@ -236,17 +236,20 @@ class Formatter:
         self.loose_frames = set()
         self.swapped = []  # (node, gid a, gid b): links of a commutative pair exchanged
 
-    def run(self):
-        """Lay out the tree (run_steps() in one go). Returns self."""
-        for _ in self.run_steps():
+    def run(self, route=True):
+        """Lay out the tree (run_steps() in one go). Returns self. route=False stops at the node
+        positions (self.pos, self.home, self.node_items): no reroute trees, tidy pass or labels
+        (the copy plan of dup.py needs nothing more)."""
+        for _ in self.run_steps(route):
             pass
         return self
 
-    def run_steps(self):
+    def run_steps(self, route=True):
         """Lay out the tree, as a generator: yields ('layout', k, n) after each of the n
         containers (zones, frames, the tree itself; again with the same k when a zone's output
         mode is tried), then ('routing', 1, 1) once the routes are placed. A frame that would
-        form a cycle as one block is laid out as loose nodes (the count starts again)."""
+        form a cycle as one block is laid out as loose nodes (the count starts again).
+        route=False: see run()."""
         if self.snapshots is not None:
             self.snapshots.append({"phase": "direct", **self._direct()})
         while True:
@@ -271,9 +274,9 @@ class Formatter:
                 if not bad:
                     raise
                 self.loose_frames.add(bad[0][1])
-        self.place(self.root)
+        self.place(self.root, route)
         yield ('routing', 1, 1)
-        if self.snapshots is not None:
+        if self.snapshots is not None and route:
             self.snapshots.append({"phase": "final", **self.geometry()})
 
     def _recorder(self, c):
@@ -666,8 +669,9 @@ class Formatter:
         return False
 
     # ------------------------------------------------------------ placement
-    def place(self, root):
-        """Absolute positions: every container's local layout shifted to where its block sits."""
+    def place(self, root, route=True):
+        """Absolute positions: every container's local layout shifted to where its block sits;
+        then (route=True) the reroute trees, the tidy pass and the labels."""
         m = self.m
         self.pos, self.segments = {}, []
         self._place(root, (0.0, 0.0))
@@ -684,6 +688,8 @@ class Formatter:
         self.pos = {k: (x + off[0], y + off[1]) for k, (x, y) in self.pos.items()}
         self.segments = [(t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d)
                          for t, p, q, d in self.segments]
+        if not route:
+            return
         if m.fan:  # NF035: a link laid out to its fan point goes on from there to its slot
             segs = []
             for t, p, q, d in self.segments:

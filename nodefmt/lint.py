@@ -344,9 +344,8 @@ def _jogs(d, tag):
     """Reversals and landings of one tree that moving their run to another height removes
     without any other fault: [(kind, run, (level before, level after))]."""
     t = d.trees[tag]
-    others = [s for s in d.segments() if s[0] != tag]
-    other_rr = [(g, p) for g, p in d.reroutes() if g != tag]
-    base = wires.tree_faults(d, tag, others, other_rr)
+    rest = wires.Rest(d, tag)
+    base = wires.tree_faults(d, tag, rest=rest)
     if not base["reversals"] and not base["landings"]:
         return []
     rev, land = wires.jogs(t)
@@ -361,7 +360,7 @@ def _jogs(d, tag):
             old = ({k: set(v) for k, v in t.children.items()}, dict(t.parent))
             try:
                 wires._rebuild(t, [(ren.get(p, p), ren.get(q, q)) for p, q in edges])
-                f = wires.tree_faults(d, tag, others, other_rr)
+                f = wires.tree_faults(d, tag, rest=rest)
             except (ValueError, RecursionError):
                 f = None
             t.children, t.parent = old
@@ -377,9 +376,8 @@ def _avoidable(d, tag):
     """(crossings of tree `tag` that moving one of its runs to another height removes without
     any other fault, a point to report)."""
     t = d.trees[tag]
-    others = [s for s in d.segments() if s[0] != tag]
-    other_rr = [(g, p) for g, p in d.reroutes() if g != tag]
-    base = wires.tree_faults(d, tag, others, other_rr)
+    rest = wires.Rest(d, tag)
+    base = wires.tree_faults(d, tag, rest=rest)
     c0 = base["cross"] + base["cross_bad"]
     if not c0:
         return 0, (0.0, 0.0)
@@ -392,7 +390,7 @@ def _avoidable(d, tag):
             old = ({k: set(v) for k, v in t.children.items()}, dict(t.parent))
             try:
                 wires._rebuild(t, [(ren.get(p, p), ren.get(q, q)) for p, q in edges])
-                f = wires.tree_faults(d, tag, others, other_rr)
+                f = wires.tree_faults(d, tag, rest=rest)
             except (ValueError, RecursionError):
                 f = None
             t.children, t.parent = old

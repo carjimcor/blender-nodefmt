@@ -6,6 +6,15 @@
   Geometry, Join Strings, ...) arrive a widget unit apart and converge in a short fan right
   before the socket, clear of the wires into the node's other inputs, instead of running a
   quarter widget unit apart (examples `NF035` and `NF035-strings`).
+- Faster sorting, with exactly the same layouts: about 3x on a 115-node Geometry Nodes tree
+  (a sort in Blender from 96 s to 32 s), and up to 48x on trees with a gap crossed by many
+  wires (the order of the wires in a gap is now found without summing every pair again). The
+  local search reuses the cost of layouts it has tried before, the block placement keeps its
+  blocks and their constraints up to date instead of rebuilding them for every merge, the
+  wire checks of the tidy pass look only at wires nearby, and the copy plan of input nodes no
+  longer routes the wires it does not use.
+- `tools/bench.py`: time the offline layout on a folder of dumped trees and compare the output
+  with a saved baseline.
 
 ## 0.10.0
 

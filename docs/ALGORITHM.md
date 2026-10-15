@@ -338,6 +338,7 @@ tools/
   dump_tree.py  a tree as JSON: nodefmt's model data and Blender's theme colours
   animate.py    the demo animation, rendered offline from the snapshots
   make_demo.sh  scramble, dump and animate in one go
+  bench.py      time the offline layout on a folder of dumped trees, with an output fingerprint
   make_examples.py     the rule examples (examples/NF0xx.blend, NF0xx-<what>.blend)
   capture_examples.py  screenshots of the examples before and after a sort
   finish_images.py     crop and compress them into docs/rules/

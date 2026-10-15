@@ -13,6 +13,8 @@ The cost is a weighted sum of faults of the routed wires (weights W_* in params.
 - bends (each costs two reroutes), small jogs, vertical run, the drop of a source node's wire,
   height and width.
 """
+from bisect import bisect_left, bisect_right
+
 from . import params as P
 from .graph import slot_of
 
@@ -132,10 +134,14 @@ class CostMixin:
             return False
 
         clean = bad = inbundle = 0
+        # vertical segments by x: each horizontal one looks only at those within its span (a
+        # window a little wider than the test below, which decides as before)
+        vs_x = sorted(vs, key=lambda s: s[1][0])
+        xs = [s[1][0] for s in vs_x]
         for h in hs:
             y = h[1][1]
             x1, x2 = sorted((h[1][0], h[2][0]))
-            for v in vs:
+            for v in vs_x[bisect_left(xs, x1):bisect_right(xs, x2)]:
                 if v[0] == h[0]:
                     continue
                 x = v[1][0]
@@ -183,14 +189,19 @@ class CostMixin:
                 if abs(pts[b][1] - pts[a][1]) < P.RR_CLEAR:
                     clash += 1
         on_wire = 0
+        # segments by height (horizontal) and by x (vertical): each bend looks only at those
+        # within a window a little wider than ON_WIRE (the test below decides as before)
+        hs_y = sorted(hs, key=lambda s: s[1][1])
+        ys = [s[1][1] for s in hs_y]
+        near = P.ON_WIRE + 1.0
         for pt, tags in bends.items():
             mine = multi.get(pt, ())
-            for s in hs:
+            for s in hs_y[bisect_left(ys, pt[1] - near):bisect_right(ys, pt[1] + near)]:
                 if s[0] in tags or abs(s[1][1] - pt[1]) >= P.ON_WIRE or _multi(s) in mine:
                     continue
                 if min(s[1][0], s[2][0]) + 1 < pt[0] < max(s[1][0], s[2][0]) - 1:
                     on_wire += 1
-            for s in vs:
+            for s in vs_x[bisect_left(xs, pt[0] - near):bisect_right(xs, pt[0] + near)]:
                 if s[0] in tags or abs(s[1][0] - pt[0]) >= P.ON_WIRE:
                     continue
                 if min(s[1][1], s[2][1]) + 1 < pt[1] < max(s[1][1], s[2][1]) - 1:

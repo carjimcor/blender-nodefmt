@@ -314,13 +314,31 @@ def _heuristic_order(W, tags, info):
         return sum(W[o[x]][o[y]] for x in range(n) for y in range(x + 1, n))
 
     cur = total(order)
+    # with whole-number weights (the default ones) every partial sum is exact, so the cost of a
+    # move is the cost now minus what the moved track adds where it is plus what it adds where
+    # it goes, the same number total() gives; other weights are summed in full as before
+    exact = all(float(w).is_integer() and abs(w) < 2 ** 40 for row in W for w in row)
     for _ in range(4 * n):
         improved = False
         for x in range(n):
             t = order[x]
             rest = order[:x] + order[x + 1:]
+            if exact:
+                # what t adds when inserted at y in rest: tracks before it, and after it
+                adds, before, after = [], 0.0, sum(W[t][b] for b in rest)
+                for y in range(n):
+                    adds.append(before + after)
+                    if y < n - 1:
+                        before += W[rest[y]][t]
+                        after -= W[t][rest[y]]
             for y in range(n):
                 if y == x:
+                    continue
+                if exact:
+                    c = cur - adds[x] + adds[y]
+                    if c < cur - 1e-9:
+                        order, cur, improved = rest[:y] + [t] + rest[y:], c, True
+                        break
                     continue
                 cand = rest[:y] + [t] + rest[y:]
                 c = total(cand)

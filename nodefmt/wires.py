@@ -290,21 +290,73 @@ def multi_of(d, s):
     return k[:3] if k is not None and len(k) == 4 else None
 
 
-def tree_faults(d, tag, others=None, other_rr=None):
+class Rest:
+    """The segments and reroutes of every tree of a drawing but one (`tag`), bucketed on a grid
+    so that tree_faults compares the tree only with what is near it. Every fault it counts
+    needs the two things within a few units of each other (COLLINEAR, ON_WIRE, RR_CLEAR), so
+    a query box a little wider than those finds everything that can count."""
+    CELL = 200.0
+
+    def __init__(self, d, tag):
+        """Index the segments and reroutes of the trees of d other than `tag`."""
+        self.segs = [s for s in d.segments() if s[0] != tag]
+        self.rr = [(g, p) for g, p in d.reroutes() if g != tag]
+        self._sg = self._grid([(min(s[1][0], s[2][0]), min(s[1][1], s[2][1]),
+                                max(s[1][0], s[2][0]), max(s[1][1], s[2][1])) for s in self.segs])
+        self._rg = self._grid([(p[0], p[1], p[0], p[1]) for _, p in self.rr])
+
+    def _cells(self, x0, y0, x1, y1):
+        """The grid cells a box covers."""
+        c = self.CELL
+        return [(i, j) for i in range(int(x0 // c), int(x1 // c) + 1) for j in range(int(y0 // c), int(y1 // c) + 1)]
+
+    def _grid(self, boxes):
+        """{cell: [index]} of boxes (x0, y0, x1, y1)."""
+        g = {}
+        for n, b in enumerate(boxes):
+            for cell in self._cells(*b):
+                g.setdefault(cell, []).append(n)
+        return g
+
+    def _query(self, g, items, x0, y0, x1, y1):
+        """Items of grid g in cells the box covers (a superset of those inside it), in order."""
+        found = set()
+        for cell in self._cells(x0, y0, x1, y1):
+            found.update(g.get(cell, ()))
+        return [items[n] for n in sorted(found)]
+
+    def segs_near(self, s, m):
+        """Other segments whose box comes within m of segment (or point pair) s."""
+        return self._query(self._sg, self.segs, min(s[1][0], s[2][0]) - m, min(s[1][1], s[2][1]) - m,
+                           max(s[1][0], s[2][0]) + m, max(s[1][1], s[2][1]) + m)
+
+    def rr_near(self, s, m):
+        """Other reroutes within m of the box of segment (or point pair) s."""
+        return self._query(self._rg, self.rr, min(s[1][0], s[2][0]) - m, min(s[1][1], s[2][1]) - m,
+                           max(s[1][0], s[2][0]) + m, max(s[1][1], s[2][1]) + m)
+
+
+def tree_faults(d, tag, others=None, other_rr=None, rest=None):
     """Faults of the wires of one tree against the rest of the drawing (and its own jogs):
-    a dict of counts. others: segments of the other trees; other_rr: their reroutes."""
+    a dict of counts. others: segments of the other trees; other_rr: their reroutes; or rest, a
+    Rest of d and tag, which gives the same counts faster (each segment and reroute of the tree
+    is compared only with what is near it)."""
     segs = d.tree_segments(tag)
-    if others is None:
-        others = [s for s in d.segments() if s[0] != tag]
-    if other_rr is None:
-        other_rr = [(g, p) for g, p in d.reroutes() if g != tag]
+    if rest is None:
+        if others is None:
+            others = [s for s in d.segments() if s[0] != tag]
+        if other_rr is None:
+            other_rr = [(g, p) for g, p in d.reroutes() if g != tag]
+    # margins of the near queries: wider than any distance a fault below needs
+    m_seg = max(P.COLLINEAR, P.ON_WIRE) + 2.0
+    m_rr = P.RR_CLEAR + 2.0
     mine_rr = routes.reroute_points(d.trees[tag])
     f = {"cross": 0, "cross_bad": 0, "collinear": 0, "on_wire": 0, "clash": 0, "behind": 0, "touch": 0,
          "near_node": 0, "near_outline": 0, "reversals": 0, "landings": 0, "vlen": 0.0, "reroutes": len(mine_rr)}
     for s in segs:
         if vert(s):
             f["vlen"] += abs(s[1][1] - s[2][1])
-        for o in others:
+        for o in (others if rest is None else rest.segs_near(s, m_seg)):
             x = None
             if horiz(s) and vert(o):
                 x = crossing(s, o)
@@ -318,7 +370,7 @@ def tree_faults(d, tag, others=None, other_rr=None):
             elif collinear(s, o):
                 f["collinear"] += 1
         ms = multi_of(d, s)
-        for g, p in other_rr:
+        for g, p in (other_rr if rest is None else rest.rr_near(s, m_seg)):
             if on_segment(p, s, P.ON_WIRE) and (ms is None or multi_at(d, g, p) != ms):
                 f["on_wire"] += 1
         for name, box in d.boxes.items():
@@ -338,10 +390,11 @@ def tree_faults(d, tag, others=None, other_rr=None):
             if _near(p, q, P.RR_CLEAR):
                 f["clash"] += 1  # two bends of one wire this close look like one blob
         mp = multi_at(d, tag, p)
-        for o in others:
+        pp = (None, p, p)
+        for o in (others if rest is None else rest.segs_near(pp, m_seg)):
             if on_segment(p, o, P.ON_WIRE) and (mp is None or multi_of(d, o) != mp):
                 f["on_wire"] += 1
-        for _, q in other_rr:
+        for _, q in (other_rr if rest is None else rest.rr_near(pp, m_rr)):
             if _near(p, q, P.RR_CLEAR):
                 f["clash"] += 1
     rev, land = jogs(d.trees[tag])
@@ -488,10 +541,9 @@ def tidy(d, rules, passes=4):
         changed = False
         for tag in sorted(d.trees, key=repr):
             t = d.trees[tag]
-            others = [s for s in d.segments() if s[0] != tag]
-            other_rr = [(g, p) for g, p in d.reroutes() if g != tag]
+            rest = Rest(d, tag)
             for _ in range(20):
-                f0 = tree_faults(d, tag, others, other_rr)
+                f0 = tree_faults(d, tag, rest=rest)
                 if not any(f0[k] for k in FAULTS):
                     break  # nothing to mend in this tree
                 base = score(f0, rules)
@@ -504,7 +556,7 @@ def tidy(d, rules, passes=4):
                         old = ({k: set(v) for k, v in t.children.items()}, dict(t.parent))
                         try:
                             _rebuild(t, [(ren.get(p, p), ren.get(q, q)) for p, q in edges])
-                            sc = score(tree_faults(d, tag, others, other_rr), rules)
+                            sc = score(tree_faults(d, tag, rest=rest), rules)
                         except (ValueError, RecursionError):
                             sc = None
                         t.children, t.parent = old

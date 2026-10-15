@@ -27,6 +27,27 @@ class SearchMixin:
         self.assign_x()
         return self.cost()
 
+    def _trial(self, cand):
+        """The cost of a candidate tried by the local search, laid out only the first time.
+
+        A layout depends on nothing but its candidate (the order of each column, the swap state,
+        the banned links, the placement method and the zone output mode; not the origin), so
+        the cost of a candidate seen before is taken from a memo instead (the searches go back
+        to many of the layouts they tried: moves that undo the last one, and the final search
+        starts where a seed's search stopped). It still counts against the budget, so the
+        search takes the same steps. The memo also gives back the links the layout aligned,
+        which the next moves are made from (the 'bend' moves of _moves); everything else of
+        the layout is only read after improve() lays out its result again."""
+        key = (tuple(map(tuple, cand.layers)), tuple(cand.comm), cand.banned, cand.placer, cand.zone)
+        memo = self.__dict__.setdefault('_eval_memo', {})
+        hit = memo.get(key)
+        if hit is not None:
+            self.aligned = list(hit[1])
+            return hit[0]
+        c = self._evaluate(cand)
+        memo[key] = (c, tuple(getattr(self, 'aligned', ())))
+        return c
+
     def _moves(self, cur):
         """Candidate moves from the current state, as functions returning a new Cand or None."""
         keep = self.mode == 'keep'
@@ -255,7 +276,7 @@ class SearchMixin:
                 trial = move(cur)
                 if trial is None:
                     continue
-                c = self._evaluate(trial)
+                c = self._trial(trial)
                 budget -= 1
                 if c < best - 1e-6:
                     best, cur, changed = c, trial, True

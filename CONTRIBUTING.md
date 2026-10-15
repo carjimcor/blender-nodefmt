@@ -81,3 +81,13 @@ blender --factory-startup --enable-event-simulate --python tests/test_operators.
 - `tools/make_demo.sh`: the demo animation in `media/` (`scramble.py` makes a messy copy of a
   tree, `dump_tree.py` reads it as JSON, `animate.py` runs nodefmt offline with its snapshot
   hook and draws each phase).
+- `tools/bench.py`: times the offline layout (copy plan and layout, as one pass of a sort)
+  on a folder of trees dumped with `dump_tree.py`, with a fingerprint of the output. Save a
+  baseline before a change that should only make the code faster, then check that every
+  fingerprint is the same (any Python 3, Blender's bundled one too):
+
+  ```
+  python tools/bench.py <corpus_dir> --save base.json
+  python tools/bench.py <corpus_dir> --compare base.json
+  python tools/bench.py <corpus_dir> --only <name> --profile
+  ```

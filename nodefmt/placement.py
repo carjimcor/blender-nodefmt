@@ -23,6 +23,18 @@ class PlacementMixin:
         items = self.items
         self.block = {i: i for i in items}       # union-find parent
         self.members = {i: {i: 0.0} for i in items}  # root -> {item: rel y}
+        # the same as a flat lookup (kept in step by _try_merge): item -> root, item -> rel y
+        self._root = {i: i for i in items}
+        self._rel = {i: 0.0 for i in items}
+        self._hs = [i.h for i in self._rel]  # heights, in the order of _rel
+        # neighbours in the columns (fixed while the blocks grow): (a, b, a.h, gap below a)
+        self._pairs = [(a, b, a.h, self._gap(a, b)) for layer in self.layers for a, b in zip(layer, layer[1:])]
+        # the block order constraints (_merge_cycle) as adjacency sets, kept in step by _try_merge
+        self._bsucc = {i: set() for i in items}
+        self._bpred = {i: set() for i in items}
+        for a, b, _, _ in self._pairs:
+            self._bsucc[a].add(b)
+            self._bpred[b].add(a)
         cands = []
         prio = self._priorities()
         # a bundle: several links between the same two nodes that one offset makes all straight
@@ -146,16 +158,15 @@ class PlacementMixin:
         return prio
 
     def _find(self, i):
-        """Root of the block that holds item i (union-find)."""
-        while self.block[i] is not i:
-            i = self.block[i]
-        return i
+        """Root of the block that holds item i."""
+        return self._root[i]
 
     def _try_merge(self, ra, rb, off, limit=None, cap=None):
         """Merge block rb into ra with rel(rb item) = rel_rb + off. Rejects overlaps, cycles, and
         merges that would make the layout taller than `limit` more than now."""
+        mb = self.members[rb]
         merged = dict(self.members[ra])
-        for i, r in self.members[rb].items():
+        for i, r in mb.items():
             merged[i] = r + off
         above = getattr(self, 'above', ())
         if above and len({i in above for i in merged}) > 1:
@@ -165,7 +176,7 @@ class PlacementMixin:
         for i in merged:
             bycol.setdefault(i.rank, []).append(i)
         zin = self._zone_input()
-        top_only = zin is not None and self._find(zin) in (ra, rb)
+        top_only = zin is not None and self._root[zin] in (ra, rb)
         if top_only and any(r < merged[zin] - 1e-6 for i, r in merged.items() if i not in above):
             return False  # a zone's content hangs below the zone input's top line
         for k, its in bycol.items():
@@ -181,87 +192,88 @@ class PlacementMixin:
             for a, b in zip(its, its[1:]):
                 if merged[b] < merged[a] + a.h + self._gap(a, b) - 1e-6:
                     return False
-        # tentatively apply and check the block graph has no cycle
-        old_rb = self.block[rb]
-        self.block[rb] = ra
-        if self._block_cycle():
-            self.block[rb] = old_rb
+        # the block graph must stay without a cycle
+        if self._merge_cycle(ra, rb):
             return False
-        old_a, old_b = self.members[ra], self.members[rb]
+        # tentatively apply (the height is measured with rb's items in ra)
+        root, rel = self._root, self._rel
+        for i in mb:
+            root[i] = ra
+            rel[i] = merged[i]
+        old_a = self.members[ra]
         self.members[ra] = merged
         del self.members[rb]
-        h = self._height() if limit is not None else None
+        h = self._height()
         if limit is not None and (h > self.height + limit or (cap is not None and h > cap)):
-            self.members[ra], self.members[rb] = old_a, old_b
-            self.block[rb] = old_rb
+            self.members[ra], self.members[rb] = old_a, mb
+            for i, r in mb.items():
+                root[i] = rb
+                rel[i] = r
             return False
-        self.height = self._height()
+        self.block[rb] = ra
+        # the block graph: rb's edges become ra's (an edge between the two disappears)
+        bsucc, bpred = self._bsucc, self._bpred
+        for x in bsucc.pop(rb):
+            bpred[x].discard(rb)
+            if x is not ra:
+                bpred[x].add(ra)
+                bsucc[ra].add(x)
+        for x in bpred.pop(rb):
+            bsucc[x].discard(rb)
+            if x is not ra:
+                bsucc[x].add(ra)
+                bpred[ra].add(x)
+        self.height = h
         return True
+
+    def _merge_cycle(self, ra, rb):
+        """True if merging blocks ra and rb would make the block order constraints cyclic (block
+        a must be above block b if a holds an item right above one of b in some column). The
+        graph has no cycle now (every merge keeps it so), so the merged one has one exactly when
+        a path leads from one block to the other through a third block."""
+        succ = self._bsucc
+        for a, b in ((ra, rb), (rb, ra)):
+            todo = [x for x in succ[a] if x is not b]
+            seen = set(todo)
+            while todo:
+                x = todo.pop()
+                for y in succ[x]:
+                    if y is b:
+                        return True
+                    if y not in seen:
+                        seen.add(y)
+                        todo.append(y)
+        return False
 
     def _height(self):
         """Height of the tightest stacking of the current blocks (longest path, top-packed)."""
-        rel, root = {}, {}
-        for r, mem in self.members.items():
-            for i, v in mem.items():
-                rel[i] = v
-                root[i] = r
-        cons = {}
-        for layer in self.layers:
-            for a, b in zip(layer, layer[1:]):
-                ra, rb = root[a], root[b]
-                if ra is not rb:
-                    c = rel[a] + a.h + self._gap(a, b) - rel[b]
-                    if c > cons.get((ra, rb), -1e18):
-                        cons[(ra, rb)] = c
-        succ, indeg = {}, {r: 0 for r in self.members}
-        for (a, b), c in cons.items():
-            succ.setdefault(a, []).append((b, c))
-            indeg[b] += 1
-        Y = {r: 0.0 for r in self.members}
-        todo = [r for r in self.members if indeg[r] == 0]
+        rel, root = self._rel, self._root
+        # separation constraints between blocks: Y_b >= Y_a + c for each two neighbours in a
+        # column (several between two blocks give the same longest path as their maximum)
+        succ, indeg = {}, dict.fromkeys(self.members, 0)
+        for a, b, ah, gap in self._pairs:
+            ra, rb = root[a], root[b]
+            if ra is not rb:
+                c = rel[a] + ah + gap - rel[b]
+                out = succ.get(ra)
+                if out is None:
+                    succ[ra] = [(rb, c)]
+                else:
+                    out.append((rb, c))
+                indeg[rb] += 1
+        Y = dict.fromkeys(self.members, 0.0)
+        todo = [r for r, n in indeg.items() if n == 0]
         while todo:
             a = todo.pop()
+            ya = Y[a]
             for b, c in succ.get(a, ()):
-                Y[b] = max(Y[b], Y[a] + c)
+                if ya + c > Y[b]:
+                    Y[b] = ya + c
                 indeg[b] -= 1
                 if indeg[b] == 0:
                     todo.append(b)
-        top = min(Y[root[i]] + rel[i] for i in rel)
-        bottom = max(Y[root[i]] + rel[i] + i.h for i in rel)
-        return bottom - top
-
-    def _block_graph(self):
-        """Block order constraints: block a must be above block b if a holds an item right above one
-        of b in some column."""
-        g = {}
-        for layer in self.layers:
-            for a, b in zip(layer, layer[1:]):
-                ra, rb = self._find(a), self._find(b)
-                if ra is not rb:
-                    g.setdefault(ra, set()).add(rb)
-        return g
-
-    def _block_cycle(self):
-        """True if the block order constraints have a cycle (a merge would be impossible)."""
-        g = self._block_graph()
-        state = {}
-        for s in list(g):
-            if s in state:
-                continue
-            stack = [(s, iter(g.get(s, ())))]
-            state[s] = 1
-            while stack:
-                n, it = stack[-1]
-                nxt = next(it, None)
-                if nxt is None:
-                    state[n] = 2
-                    stack.pop()
-                elif state.get(nxt) == 1:
-                    return True
-                elif nxt not in state:
-                    state[nxt] = 1
-                    stack.append((nxt, iter(g.get(nxt, ()))))
-        return False
+        tops = [Y[root[i]] + v for i, v in rel.items()]
+        return max([t + h for t, h in zip(tops, self._hs)]) - min(tops)
 
     def _compact(self):
         """Vertical positions of the blocks: separation constraints from each column's order, then
@@ -447,8 +459,11 @@ class PlacementMixin:
 
         def median(vals):
             """Weighted median of [(value, weight)]."""
-            vals = sorted(vals)
-            half = sum(w for _, w in vals) / 2
+            return median_sorted(sorted(vals))
+
+        def median_sorted(vals):
+            """median() of a list that is sorted already."""
+            half = sum([w for _, w in vals]) / 2
             acc = 0.0
             for v, w in vals:
                 acc += w
@@ -468,84 +483,128 @@ class PlacementMixin:
                 return w * dist
             return 0.0 if dist <= P.EPS else w * (P.BEND + slope * dist)
 
+        EPS, BEND = P.EPS, P.BEND
+
         def cost(Y):
             """Total cost of the pulls for block positions Y."""
-            return sum(pen(abs(((Y[o] + d) if o is not None else d) - Y[r]), w, sl)
-                       for r in roots for o, d, w, sl in pulls[r]) + sum(tidy(r, Y[r], Y) for r in roots)
+            return sum([pen(abs(((Y[o] + d) if o is not None else d) - Y[r]), w, sl)
+                        for r in roots for o, d, w, sl in pulls[r]]) + sum(tidy(r, Y[r], Y) for r in roots)
 
         def satisfy(Y):
             """Each block at the median of what its links want; where two blocks collide they
             merge and move together to the median of both (separation constraints, VPSC style)."""
-            want = {r: [(v, w) for v, w, _ in wants(r, Y)] for r in roots}
+            # a cluster of blocks: [offsets {block: offset}, wanted (value, weight), position]
             cl = {}
             for r in topo:
-                C = {'off': {r: 0.0}, 'vals': list(want[r])}
-                C['pos'] = snap_near(r, median(C['vals'])) if C['vals'] else Y[r]
+                vals = sorted([((Y[o] + d) if o is not None else d, w) for o, d, w, _ in pulls[r]])
+                C = [{r: 0.0}, vals, snap_near(r, median_sorted(vals)) if vals else Y[r]]
                 cl[r] = C
                 while True:
                     worst = None
-                    for m, off in C['off'].items():
+                    wv = 1e-6  # the worst violation so far (the first of equal ones wins)
+                    pos = C[2]
+                    for m, off in C[0].items():
+                        here = pos + off
                         for a, c in preds[m]:
                             Ca = cl.get(a)
                             if Ca is None or Ca is C:
                                 continue
-                            viol = (Ca['pos'] + Ca['off'][a] + c) - (C['pos'] + off)
-                            if viol > 1e-6 and (worst is None or viol > worst[0]):
+                            viol = (Ca[2] + Ca[0][a] + c) - here
+                            if viol > wv:
+                                wv = viol
                                 worst = (viol, Ca, a, m, c)
                     if worst is None:
                         break
                     _, Ca, a, m, c = worst
-                    shift = Ca['off'][a] + c - C['off'][m]
-                    for x, off in C['off'].items():
-                        Ca['off'][x] = off + shift
+                    offs = Ca[0]
+                    shift = offs[a] + c - C[0][m]
+                    for x, off in C[0].items():
+                        offs[x] = off + shift
                         cl[x] = Ca
-                    Ca['vals'] += [(v - shift, w) for v, w in C['vals']]
-                    if Ca['vals']:
-                        ref = next((x for x in Ca['off'] if x in anchor), None)
-                        p = median(Ca['vals'])
+                    # the wanted heights stay sorted: two sorted runs sort in about linear time
+                    Ca[1] += [(v - shift, w) for v, w in C[1]]
+                    Ca[1].sort()
+                    if Ca[1]:
+                        ref = next((x for x in offs if x in anchor), None) if anchor else None
+                        p = median_sorted(Ca[1])
                         if ref is not None:
-                            p = snap_near(ref, p + Ca['off'][ref]) - Ca['off'][ref]
-                        Ca['pos'] = p
+                            p = snap_near(ref, p + offs[ref]) - offs[ref]
+                        Ca[2] = p
                     C = Ca
-            return feasible({r: cl[r]['pos'] + cl[r]['off'][r] for r in roots})
+            return feasible({r: cl[r][2] + cl[r][0][r] for r in roots})
+
+        # the blocks whose best position (local) reads the position of a block: its pulls, its
+        # separation constraints and its rows (ALIGN_BONUS)
+        deps = {r: set() for r in roots}
+        for r in roots:
+            for o, _, _, _ in pulls[r]:
+                if o is not None:
+                    deps[o].add(r)
+            for x, _ in preds[r] + succs[r]:
+                deps[x].add(r)
+            for _, _, rj, _, _ in edges_of[r]:
+                deps[rj].add(r)
 
         def local(Y, rounds=10):
-            """Coordinate descent: each block in turn to its best position within its constraints."""
+            """Coordinate descent: each block in turn to its best position within its constraints.
+            A block is looked at again only when something it reads has moved since it was last
+            looked at: with the same inputs it would choose the same place, which it holds."""
+            dirty = set(roots)
             for it in range(rounds):
                 changed = False
                 for r in (topo if it % 2 == 0 else reversed(topo)):
-                    if not pulls[r]:
+                    if r not in dirty:
                         continue
-                    ws = wants(r, Y)
+                    dirty.discard(r)
+                    pr = pulls[r]
+                    if not pr:
+                        continue
+                    ws = [((Y[o] + d) if o is not None else d, w, sl) for o, d, w, sl in pr]
                     want = median([(v, w) for v, w, _ in ws])
                     lo = max([Y[a] + c for a, c in preds[r]], default=-1e18)
                     hi = min([Y[b] - c for b, c in succs[r]], default=1e18)
                     if lo > hi:
                         continue
+                    on_grid = r in anchor
+                    eo = edges_of[r]
 
                     def score(c):  # link cost, plus a price for leaving the grid
                         """Cost of block r at height c (its pulls and the grid price)."""
-                        off = r in anchor and abs(snap_near(r, c) - c) > 1e-6
+                        off = on_grid and abs(snap_near(r, c) - c) > 1e-6
                         if off and r in strict:
                             return 1e18  # a frame or zone stays on the grid
-                        return (sum(pen(abs(v - c), w, link) for v, w, link in ws) + (P.GRID_PRICE if off else 0.0)
-                                + tidy(r, c, Y))
+                        # pen() inlined: the same terms, summed in the same order
+                        return (sum([w * abs(v - c) if sl is None else
+                                     (0.0 if abs(v - c) <= EPS else w * (BEND + sl * abs(v - c)))
+                                     for v, w, sl in ws]) + (P.GRID_PRICE if off else 0.0)
+                                + (tidy(r, c, Y) if eo else 0.0))
 
                     # candidates: the median, every position that makes one link straight, grid
                     # steps, tops and bottoms level with the next columns
-                    opts = [c for c in (Y[rj] + rlj - ri for ri, _, rj, rlj, _ in edges_of[r])
+                    opts = [c for c in (Y[rj] + rlj - ri for ri, _, rj, rlj, _ in eo)
                             if lo - 1e-6 <= c <= hi + 1e-6]
-                    opts += [c for c in (Y[rj] + rlj + hj - ri - hi_ for ri, hi_, rj, rlj, hj in edges_of[r])
+                    opts += [c for c in (Y[rj] + rlj + hj - ri - hi_ for ri, hi_, rj, rlj, hj in eo)
                              if lo - 1e-6 <= c <= hi + 1e-6]
                     for v in [want] + [v for v, _, sl in ws if sl is not None]:
                         t = min(max(v, lo), hi)
                         opts.append(t)
-                        if r in anchor:
+                        if on_grid:
                             opts += [c for c in (snap(r, t, False), snap(r, t, True)) if lo - 1e-6 <= c <= hi + 1e-6]
-                    t = min(opts, key=score)
-                    if abs(t - Y[r]) > 1e-6 and score(t) < score(Y[r]) - 1e-6:
+                    # the first cheapest option (as min(opts, key=score)); an option equal to
+                    # one scored before has its score and cannot be strictly cheaper
+                    t, st = opts[0], score(opts[0])
+                    done = {t: st}
+                    for c in opts[1:]:
+                        if c in done:
+                            continue
+                        sc = done[c] = score(c)
+                        if sc < st:
+                            t, st = c, sc
+                    yr = Y[r]
+                    if abs(t - yr) > 1e-6 and st < (done[yr] if yr in done else score(yr)) - 1e-6:
                         Y[r] = t
                         changed = True
+                        dirty |= deps[r]
                 if not changed:
                     break
             return Y

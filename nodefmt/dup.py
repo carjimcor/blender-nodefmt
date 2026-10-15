@@ -218,7 +218,7 @@ def plan(data, mode='relayout'):
     from . import params as P
     stable, P.STABLE = P.STABLE, None  # the plan depends on the graph only, not on positions
     try:
-        f = Formatter(m, mode, swaps=False).run()
+        f = Formatter(m, mode, swaps=False).run(route=False)  # node positions are all it needs
     finally:
         P.STABLE = stable
     current = {}  # dst gid -> member feeding it now

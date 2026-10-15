@@ -133,21 +133,23 @@ def crossings(segs):
 class Demo:
     """The tree, the formatter's result and the keyframe states (node positions)."""
 
-    def __init__(self, path):
-        """Load a dumped tree (tools/dump_tree.py), format it offline and build the states."""
+    def __init__(self, path, select=None):
+        """Load a dumped tree (tools/dump_tree.py), format it offline with the rules `select`
+        (as in nodefmt.toml; default: the default rules) and build the states."""
         J = json.load(open(path))
         self.theme, self.tag, self.ztype = J["theme"], J["color_tag"], J.get("zone_type", {})
         data = J["data"]
         self.orig = json.loads(json.dumps(data["nodes"]))  # the tree as it is (before copies)
         self.osrc = {(tuple(d), sid): tuple(s) for s, d, _, sid in data["links"]}
         self.w = 1.0  # 0: draw nodes and links as they are, 1: as nodefmt models them (copies)
-        plan = dup.plan(data, 'relayout')
+        cfg = rules.Config(rules.resolve(select) if select else rules.DEFAULT)
         orig = set(data["nodes"])
         before = {n: (v["x"], v["y"]) for n, v in data["nodes"].items()}  # where the nodes are now
-        if dup.changes(plan, data):
-            data, _ = dup.apply_model(data, plan)
-        with rules.applied(rules.Config()):
-            self.F = F = Formatter(Model(data), record=True).run()
+        with rules.applied(cfg):
+            plan = dup.plan(data, 'relayout')
+            if dup.changes(plan, data):
+                data, _ = dup.apply_model(data, plan)
+            self.F = F = Formatter(Model(data), record=True, rules=cfg.rules).run()
         self.m = m = F.m
         self.final = next(s for s in F.snapshots if s["phase"] == "final")  # what Blender will draw
         self.names = sorted(m.real)
@@ -663,10 +665,11 @@ def main():
     ap.add_argument("--webp-quality", type=int, default=70)
     ap.add_argument("--gif-fps", type=int, default=15)
     ap.add_argument("--still", type=int, default=None, help="render only this frame to out/still.png")
+    ap.add_argument("--select", default=None, help="rules to sort with, as in nodefmt.toml (e.g. ALL)")
     a = ap.parse_args()
     import av
     os.makedirs(a.out, exist_ok=True)
-    demo = Demo(a.tree)
+    demo = Demo(a.tree, a.select.split(",") if a.select else None)
     tl = Timeline(demo, a.fps)
     # crossings of the direct lines, shown in the caption band
     cache = {}

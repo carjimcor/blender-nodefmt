@@ -108,11 +108,11 @@ def read_tree(nt, editor, part=None, pins=None):
     At a UI scale other than 1, Blender's node layout rounds each row's float height towards
     zero, row after row from the node's top: the rows of a node above y = 0 are a pixel taller
     than below it, so a tall node's sockets are several pixels apart between the two (and a
-    node across y = 0 mixes both). Every node is measured twice, drawn above 0 and below it
-    (then put back), and model.at gives its offsets for any height: here, where it is now; the
-    format lays the tree out again if the layout moves a node to where its rows differ. The
-    measures do not depend on where the nodes are, so each pass sees the same tree. part and
-    pins: read only a part of the tree (see model.read); only its nodes are touched."""
+    node across y = 0 mixes both). A whole tree is measured below 0 (each node drawn there, then
+    put back; data["below"]) and the sort puts it all below 0 (layout.Formatter.place), so the
+    measures hold wherever the nodes were. A part (Sort Selection: part and pins, see
+    model.read; only its nodes are touched) stays where it is: each node is measured below 0 and
+    above it, and model.at gives its offsets for where it is now."""
     editor.show(nt)
     s = ortho.ui_scale()
     blend.pixel_snap(nt, s, part)
@@ -123,7 +123,7 @@ def read_tree(nt, editor, part=None, pins=None):
              if n.bl_idname != 'NodeFrame' and (part is None or n.name in part)}
     try:
         measures = []
-        for y in (0.0, BIG):  # below y = 0, then above it
+        for y in ((0.0,) if part is None else (0.0, BIG)):  # below y = 0 (a part: and above it)
             for name in where:
                 nt.nodes[name].location_absolute = (0.0, y)
             editor.redraw()
@@ -132,8 +132,9 @@ def read_tree(nt, editor, part=None, pins=None):
         for name, p in where.items():
             nt.nodes[name].location_absolute = p
         editor.redraw()
-    data = model.with_modes(*measures)
-    return model.at(data, where)
+    if part is None:
+        return dict(measures[0], below=True)
+    return model.at(model.with_modes(*measures), where)
 
 
 class Step(namedtuple('Step', 'npass phase k n step steps')):
@@ -172,26 +173,6 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     f = Formatter(model.Model(data), mode, swaps, rules=cfg.rules)
     for phase, k, m in f.run_steps():
         yield step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == 'layout' else n + 3)
-    # a node the layout moves to where its rows are drawn otherwise (read_tree): lay out again
-    # with the offsets of where it goes, until a layout puts every node where its offsets hold;
-    # if the layouts go round in a circle (or no layout settles), the one made with the
-    # smallest offsets of the circle, so that the next pass makes the same choice
-    tried = [(_offsets_key(data), f)]
-    for _ in range(RELAYOUTS):
-        moved = _drawn_at(data, f)
-        if moved is None:
-            break
-        if any(key == _offsets_key(moved) for key, _ in tried):
-            f = min(tried, key=lambda t: t[0])[1]
-            break
-        data = moved
-        f = Formatter(model.Model(data), mode, swaps, rules=cfg.rules)
-        for phase, k, m in f.run_steps():
-            yield step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == 'layout' else n + 3)
-        tried.append((_offsets_key(data), f))
-    else:
-        if _drawn_at(data, f) is not None:
-            f = min(tried, key=lambda t: t[0])[1]
     made = blend.apply(nt, f)
     yield step._replace(phase="writing", step=n + 4)
     anchor = tuple(nt.nodes[f.anchor].location_absolute)
@@ -212,29 +193,6 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
         editor.redraw()
     yield step._replace(phase="straightening", step=n + 5)
     return made, copies, f, st
-
-
-RELAYOUTS = 2  # layouts again with the offsets of where the layout puts the nodes (read_tree)
-
-
-def _drawn_at(data, f):
-    """The data with each node's offsets for where layout f puts it (model.at), or None if no
-    node's offsets change: the layout was made with the offsets it will be drawn with."""
-    sc = data.get("scale", 1.0)
-    where = {k: (ortho.to_px(x, sc), ortho.to_px(-y, sc)) for k, (x, y) in f.pos.items()}
-    new = model.at(data, where)
-    for k, d in new["nodes"].items():
-        old = data["nodes"][k]
-        if "modes" in d and (abs(d["h"] - old["h"]) > 0.01 or any(
-                abs(s["off"][1] - old["socks"][g]["off"][1]) > 0.01 for g, s in d["socks"].items())):
-            return new
-    return None
-
-
-def _offsets_key(data):
-    """The heights of the nodes measured both ways (read_tree), as a key that orders the
-    offsets a layout was made with."""
-    return tuple(sorted((k, d["h"]) for k, d in data["nodes"].items() if "modes" in d))
 
 
 MAX_PASSES = 6  # full layout passes of one tree; a pass that moves nothing ends the sort

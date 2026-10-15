@@ -4,7 +4,7 @@ positions and reroute routes. Works on a model.Model; blend.py writes the result
 import math
 
 from . import engine, params as P, routes, rules as _rules, wires
-from .graph import Result
+from .graph import Result, snap_up
 from .model import FLOW
 
 PORT_D = engine.PORT_DIRECT  # border port at a socket of a first-column item
@@ -685,6 +685,12 @@ class Formatter:
         bx, by = m.box[ref][0], m.box[ref][1]
         px, py = self.pos[ref]
         off = (bx - px, by - py)  # exactly: two equal layouts land on the same spot
+        if m.data.get("below"):
+            # measured below y = 0 at a fractional UI scale (api.read_tree): the tree goes wholly
+            # below 0, where Blender draws its rows as measured; once there it stays put
+            top = min((y + off[1] for k, (_, y) in self.pos.items() if m.box[k][3] > 0), default=0.0)
+            if top < 0:
+                off = (off[0], off[1] + snap_up(-top))
         self.pos = {k: (x + off[0], y + off[1]) for k, (x, y) in self.pos.items()}
         self.segments = [(t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d)
                          for t, p, q, d in self.segments]

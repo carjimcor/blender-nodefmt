@@ -110,9 +110,9 @@ Images: before, the example as built; after, sorted with no style rules.
 
 Second example (`NF003-rows`, at UI scale 1.4): Blender rounds the float height of each row of a
 node towards zero, so the rows of a node above y = 0 are a pixel taller than below it. The sort
-measures every node both ways and uses the offsets of where the node is drawn; before, it
-measured them below 0, and the Scale input of this tall Instance on Points, drawn above 0, was
-4 units lower than measured: the wire from Multiply got a step too small to see, two reroutes on
+measures every node below 0 and puts the whole tree below 0, so the measures hold; measured
+below 0 but drawn above it, the Scale input of this tall Instance on Points was 4 units lower
+than measured: the wire from Multiply got a step too small to see, two reroutes on
 one spot that look like a slanted stub. After the sort the wire is straight. The test also checks
 that no wire is left with such a step.
 

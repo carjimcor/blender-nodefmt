@@ -44,7 +44,9 @@ In a node editor, open the sidebar (N) and the nodefmt tab.
   `nodefmt.toml` is found next to the .blend file or above it, the file wins over the checkboxes
   and the panel shows its name (see [Configuration](CONFIGURATION.md)).
 
-Each sort is one undo step: Ctrl+Z puts the tree back.
+Each sort is one undo step: Ctrl+Z puts the tree back. At a fractional UI scale (1.25, 1.4, ...)
+the first sort may move a tree down, so that it lies wholly below y = 0, where the sizes nodefmt
+measures hold (see [How it works](ALGORITHM.md#orthogonal-wires)); after that it stays put.
 
 ## Progress
 

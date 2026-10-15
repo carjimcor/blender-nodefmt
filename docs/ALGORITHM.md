@@ -146,10 +146,6 @@ steps.
     with NF041, on the first reroute where the text is clear of labels, nodes and wires (also the
     greyed copies Blender shows on the later reroutes, `labels.py`), else on a new reroute on the
     run into it.
-    If the layout put a node where Blender draws its rows otherwise than measured (across y = 0,
-    see "Orthogonal wires"), the tree is laid out again with the offsets of where the nodes go,
-    until the offsets hold (at most twice more; layouts that go round in a circle settle on the
-    one made with the smallest offsets).
 12. **Write back** (`blend.py`). Node locations (on the pixel grid), new reroutes and links are
     written to Blender. New links are made before old reroutes are removed, so no input is left
     unlinked on the way. Links into a multi-input socket are made again in their original order.
@@ -198,14 +194,15 @@ is several units taller above 0. No layout is exact at two scales at once, so:
 1. The layout is made at the UI scale of the session, which is the scale the user sees in the
    add-on. The command line uses the preferences Blender starts with: run it without
    `--factory-startup` so it uses yours, or give the scale with `--ui-scale`.
-2. Node locations go on that scale's pixel grid (`ortho.to_px`). Every node is measured twice,
-   drawn below y = 0 and above it (`api.read_tree`), and `model.at` gives its socket offsets for
-   where it is drawn (a node across 0 takes, for each stretch between two sockets, the heights
-   of the side its middle is on). The measures do not depend on where the nodes are, so each pass
-   sees the same tree; the layout uses the offsets of where each node is, and is made again when
-   it moves a node across 0 (step 11). Measured anywhere else, a link the layout made straight
-   into a low socket of a tall node could be off by more than straighten may nudge, and got a
-   step too small to see.
+2. Node locations go on that scale's pixel grid (`ortho.to_px`). Every node is measured drawn
+   below y = 0 (`api.read_tree`), and the sort puts the whole tree below 0, moving it down the
+   first time if it reached above (`Formatter.place`; once there it stays put). So the measures
+   hold wherever the nodes were and whatever the layout does: one layout per pass, and a sort
+   settles in two passes as at scale 1. Measured on the wrong side, a link the layout made
+   straight into a low socket of a tall node could be off by more than straighten may nudge,
+   and got a step too small to see. Sort Selection cannot move the tree: it measures the nodes
+   of the part both ways and `model.at` gives each its offsets for where it is (a node across 0
+   takes, for each stretch between two sockets, the heights of the side its middle is on).
 3. After writing, `ortho.straighten` reads back what Blender drew and removes what rounding
    left, until nothing is off: each reroute takes the exact height of the socket its horizontal
    wire runs to (the source first) and reroutes joined by a wire share one height or x; a

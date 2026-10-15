@@ -20,6 +20,11 @@
   the sort ended because a pass moved nothing, the check knows the tree is formatted as long as
   nothing changed since (layout, node sizes, labels, rules, UI scale), instead of sorting it
   again on a copy.
+- At a fractional UI scale (1.25, 1.4, ...) a sort puts the whole tree below y = 0, moving it
+  down the first time if it reached above. Blender draws the rows of a node a pixel taller above
+  0 than below, so measures changed with where the layout put each node and a sort could take
+  up to six passes; now every node is measured once, below 0, and a sort settles in two passes
+  (a 115-node tree at UI scale 1.4: 130 s to 28 s).
 - Faster sorting, with exactly the same layouts: about 3x on a 115-node Geometry Nodes tree
   (a sort in Blender from 96 s to 32 s), and up to 48x on trees with a gap crossed by many
   wires (the order of the wires in a gap is now found without summing every pair again). The

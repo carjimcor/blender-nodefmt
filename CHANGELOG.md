@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.1
+
+No change in how trees are sorted or checked: the layouts are the same as in 0.11.0.
+
+- New tagline in Blender's extension list: "A rule-based formatter for Blender node trees".
+- The code base passes a strict ruff configuration (every pycodestyle rule) and is formatted
+  with ruff format; CI on GitHub Actions checks it and that the example layouts are unchanged.
+
 ## 0.11.0
 
 - New rule NF035 fanned-multi-inputs, off by default: the links into a multi-input socket (Join

@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Format or check node trees. Used by the add-on buttons and by the command line."""
 
+import threading
 import time
-from collections import namedtuple
+from collections import deque, namedtuple
 
 import bpy
 
-from . import blend, check, dup, lint, model, ortho, rules
+from . import blend, check, dup, lint, model, ortho, rules, stop
 from .draw import Editor
 from .layout import Formatter
 
@@ -133,13 +134,11 @@ def read_tree(nt, editor, part=None, pins=None):
     try:
         measures = []
         for y in (0.0,) if part is None else (0.0, BIG):  # below y = 0 (a part: and above it)
-            for name in where:
-                nt.nodes[name].location_absolute = (0.0, y)
+            blend.set_locations(nt, dict.fromkeys(where, (0.0, y)))
             editor.redraw()
             measures.append(model.read(nt, where, part=part, pins=pins))
     finally:
-        for name, p in where.items():
-            nt.nodes[name].location_absolute = p
+        blend.set_locations(nt, where)
         editor.redraw()
     if part is None:
         return dict(measures[0], below=True)
@@ -154,6 +153,51 @@ class Step(namedtuple("Step", "npass phase k n step steps")):
         """The progress as text: 'pass 1 (of at most 6), layout 4/9 (step 6/14)'."""
         what = f"{self.phase} {self.k}/{self.n}" if self.n > 1 else self.phase
         return f"pass {self.npass} (of at most {MAX_PASSES}), {what} (step {self.step}/{self.steps})"
+
+
+POLL = 0.01  # seconds a sort step waits for its worker thread before it yields
+
+
+def _in_thread(fn, show):
+    """Run fn(report) in a worker thread and return its result (or raise its error). Yields
+    show(v) for every value v that fn reports, in order, and show(the last one, None before the
+    first) every POLL seconds while nothing new comes, so a modal sort shows each step, keeps
+    Blender responsive and takes Esc however long a step lasts. fn must not touch bpy. Closing
+    the generator (Esc) asks the worker to stop (stop.py) and gives up on it."""
+    out, reports, last = {}, deque(), None
+
+    def work():
+        """Run fn, keeping its result or its error."""
+        try:
+            out["value"] = fn(reports.append)
+        except BaseException as e:  # noqa: BLE001 - raised again in the caller's thread
+            out["error"] = e
+        finally:
+            stop.done(threading.get_ident())
+
+    t = threading.Thread(target=work, name="nodefmt sort", daemon=True)
+    t.start()
+    try:
+        while True:
+            t.join(POLL)
+            alive, new = t.is_alive(), bool(reports)
+            while reports:
+                last = reports.popleft()
+                yield show(last)
+            if not alive:
+                break
+            if not new:
+                yield show(last)
+    except GeneratorExit:
+        if t.is_alive():
+            stop.ask(t.ident)
+            t.join(1.0)  # it stops at its next check; a daemon thread never holds Blender open
+        if not t.is_alive():
+            stop.done(t.ident)
+        raise
+    if "error" in out:
+        raise out["error"]
+    return out["value"]
 
 
 def format_once(nt, mode, editor, duplicates=True, swaps=True, cfg=None):
@@ -173,16 +217,37 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     step = Step(npass, "reading", 1, 1, 1, steps + 1)
     yield step
     copies = 0
+    step = step._replace(phase="copies", step=2)
     if duplicates and cfg.on("NF010"):
-        plan = dup.plan(data, mode)
+        plan = yield from _in_thread(lambda report: dup.plan(data, mode), lambda _: step)
         if dup.changes(plan, data):
             copies = dup.realize(nt, editor, plan)
             data = read_tree(nt, editor)
-    yield step._replace(phase="copies", step=2)
+    yield step
     f = Formatter(model.Model(data), mode, swaps, rules=cfg.rules)
-    for phase, k, m in f.run_steps():
-        yield step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == "layout" else n + 3)
-    made = blend.apply(nt, f)
+
+    def layout(report):
+        """The layout, reporting each (phase, k, n) of Formatter.run_steps."""
+        for r in f.run_steps():
+            report(r)
+
+    def show(r):
+        """The Step of the last (phase, k, n) reported."""
+        if r is None:
+            return step
+        phase, k, m = r
+        return step._replace(phase=phase, k=k, n=m, step=min(2 + k, n + 2) if phase == "layout" else n + 3)
+
+    yield from _in_thread(layout, show)
+    w = step._replace(phase="writing", step=n + 4)
+    gen = blend.apply_steps(nt, f)
+    while True:
+        try:
+            next(gen)
+        except StopIteration as e:
+            made = e.value
+            break
+        yield w
     yield step._replace(phase="writing", step=n + 4)
     anchor = tuple(nt.nodes[f.anchor].location_absolute)
     editor.show(nt)
@@ -195,10 +260,8 @@ def format_once_steps(nt, mode, editor, duplicates=True, swaps=True, cfg=None, n
     a = nt.nodes[f.anchor].location_absolute
     dx, dy = a[0] - anchor[0], a[1] - anchor[1]
     if abs(dx) > 1e-6 or abs(dy) > 1e-6:
-        for nd in nt.nodes:
-            if nd.bl_idname != "NodeFrame":
-                x, y = nd.location_absolute
-                nd.location_absolute = (x - dx, y - dy)
+        moved = {nd.name: tuple(nd.location_absolute) for nd in nt.nodes if nd.bl_idname != "NodeFrame"}
+        blend.set_locations(nt, {k: (x - dx, y - dy) for k, (x, y) in moved.items()})
         editor.redraw()
     yield step._replace(phase="straightening", step=n + 5)
     return made, copies, f, st

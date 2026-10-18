@@ -2,23 +2,51 @@
 """Write a layout (layout.Formatter) back to a Blender node tree: node locations, reroutes,
 links, and the links of swapped commutative inputs."""
 
+import time
+
 from . import routes
 from .ortho import to_px
 
 REROUTE = "NodeReroute"
+SLICE = 0.05  # apply_steps: seconds of work between two yields (a modal sort takes Esc in between)
+
+
+def set_locations(nt, locs, key="location_absolute"):
+    """Move the nodes of tree nt to {name: (x, y)} (key: "location_absolute", or "location",
+    relative to the parent frame) in one call. Setting a location one node at a time updates the
+    tree each time, about a millisecond per node in a large tree; foreach_set does not, and a
+    location needs no update (it changes nothing the tree computes): Blender draws the same."""
+    if not locs:
+        return
+    nodes = nt.nodes
+    if not nt.is_editable:  # linked from a library (an asset): foreach_set does nothing there
+        for n in nodes:
+            p = locs.get(n.name)
+            if p is not None:
+                setattr(n, key, p)
+        return
+    flat = [0.0] * (2 * len(nodes))
+    nodes.foreach_get(key, flat)
+    for k, n in enumerate(nodes):
+        p = locs.get(n.name)
+        if p is not None:
+            flat[2 * k], flat[2 * k + 1] = p
+    nodes.foreach_set(key, flat)
 
 
 def pixel_snap(nt, s, part=None):
     """Put every node (of `part`, a set of names, if given) on the pixel grid of UI scale s
     (ortho.py), so its sockets are exactly where the model measures them; moves are under a
     pixel. Reroutes stay: ortho.straighten puts them at a socket's exact height, often off grid."""
+    moves = {}
     for n in nt.nodes:
         if n.bl_idname in ("NodeFrame", "NodeReroute") or (part is not None and n.name not in part):
             continue
         x, y = n.location_absolute
         px, py = to_px(x, s), to_px(y, s)
         if abs(px - x) > 1e-5 or abs(py - y) > 1e-5:
-            n.location_absolute = (px, py)
+            moves[n.name] = (px, py)
+    set_locations(nt, moves)
 
 
 def socket_of(nt, g):
@@ -34,6 +62,27 @@ def apply(nt, f):
     """Write layout f (layout.Formatter) to tree nt: node locations, reroutes and links. New
     links are made before old reroutes are removed, so no input is left unlinked on the way
     (some nodes, like the Viewer, drop unlinked items). Returns the number of reroutes made."""
+    gen = apply_steps(nt, f)
+    while True:
+        try:
+            next(gen)
+        except StopIteration as e:
+            return e.value
+
+
+def apply_steps(nt, f):
+    """apply as a generator that yields every SLICE seconds of work (each new reroute or link
+    costs milliseconds in a large tree) and returns what apply returns. Closing it early leaves
+    the tree half written: restore it from a check.Snapshot."""
+    t0 = [time.perf_counter()]
+
+    def due():
+        """True once SLICE seconds have passed since the last yield (then counts again)."""
+        if time.perf_counter() - t0[0] < SLICE:
+            return False
+        t0[0] = time.perf_counter()
+        return True
+
     m = f.m
     trees = f.trees
     muted = {(s, d): mu for s, d, mu, _ in f.links}
@@ -41,20 +90,20 @@ def apply(nt, f):
     for s, d, mu, sid in f.links:
         order.setdefault(d, []).append((sid, s))
     sc = m.data.get("scale", 1.0)  # node locations on the pixel grid of the UI scale (ortho.py)
-    for name, (x, y) in f.pos.items():
-        nt.nodes[name].location_absolute = (to_px(x, sc), to_px(-y, sc))
+    set_locations(nt, {name: (to_px(x, sc), to_px(-y, sc)) for name, (x, y) in f.pos.items()})
     names = {n.name for n in nt.nodes}
+    nxt = [1]
 
     def fresh():
-        """A reroute name that is not taken yet."""
-        k = 1
-        while f"Reroute.{k:03d}" in names:
-            k += 1
-        names.add(f"Reroute.{k:03d}")
-        return f"Reroute.{k:03d}"
+        """A reroute name that is not taken yet (the lowest number above the last one given)."""
+        while f"Reroute.{nxt[0]:03d}" in names:
+            nxt[0] += 1
+        names.add(f"Reroute.{nxt[0]:03d}")
+        return f"Reroute.{nxt[0]:03d}"
 
     made = 0
     nodes_of = {}
+    at = {}  # reroute name -> location, set in one call once they all exist
     for s, t in trees.items():
         rr = {}
         for p in routes.reroute_points(t):
@@ -64,9 +113,12 @@ def apply(nt, f):
                 r = nt.nodes.new(REROUTE)
                 r.name = fresh()
                 made += 1
-            r.location_absolute = (to_px(p[0], sc), to_px(-p[1], sc))
+                if due():
+                    yield
+            at[r.name] = (to_px(p[0], sc), to_px(-p[1], sc))
             rr[p] = r
         nodes_of[s] = rr
+    set_locations(nt, at)
     final = {}  # destination socket -> [(source gid, point)]
     for s, t in trees.items():
         rr = nodes_of[s]
@@ -80,6 +132,8 @@ def apply(nt, f):
                     frm = socket_of(nt, s) if p == t.root else rr[p].outputs[0]
                     if nt.links.new(frm, rr[q].inputs[0]) is None:
                         raise RuntimeError(f"could not link reroutes of {s}")
+                    if due():
+                        yield
 
     def from_socket(s, p):
         """The output a link starts from: source socket s itself, or the reroute at point p."""
@@ -97,6 +151,8 @@ def apply(nt, f):
                 if lk is None:
                     raise RuntimeError(f"could not link {s} -> {d}")
                 lk.is_muted = muted.get((s, d), False)
+            if due():
+                yield
             continue
         ((s, p, _),) = srcs
         frm = from_socket(s, p)
@@ -107,6 +163,8 @@ def apply(nt, f):
         if lk is None:
             raise RuntimeError(f"could not link {s} -> {d}")
         lk.is_muted = muted.get((s, d), False)
+        if due():
+            yield
     # unlink the inputs that lost their link to a swap
     for _, a, b in f.swapped:
         for g in (a, b):
@@ -119,4 +177,6 @@ def apply(nt, f):
         n = nt.nodes.get(name)
         if n is not None and name not in placed:
             nt.nodes.remove(n)
+            if due():
+                yield
     return made

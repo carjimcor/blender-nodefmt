@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.0
+
+No change in how trees are laid out: the layouts are the same as in 0.11.1.
+
+- Esc works during a sort of any size. The copy plan and the layout run in a worker thread, so
+  Blender stays responsive however long a step takes, and Esc puts the tree back and stops the
+  thread. Node locations are written in one call instead of one update per node, and new reroutes
+  and links are made in short slices (Blender's "Curve to Tube", 617 nodes: the window froze for
+  up to 78 s at a time; now never more than 0.7 s, and Esc cancels in about 3 s).
+- A tree linked from a library (such as an Essentials asset added as a link) is no longer sorted:
+  the file keeps only the link, so the sort would be lost on reload. Sort Current Tree and Sort
+  Selection are unavailable there, with the reason in their tooltip, and the panel says to make
+  the tree local first.
+- Fix: on macOS, Capture Tree saved tiles of an earlier frame (from a script, the whole screen
+  repeated), because a screenshot there reads the frame shown before the last one. The window is
+  now drawn twice before each tile on macOS; Windows and Linux are unchanged.
+
 ## 0.11.1
 
 No change in how trees are sorted or checked: the layouts are the same as in 0.11.0.

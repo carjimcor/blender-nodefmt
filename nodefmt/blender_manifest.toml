@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "nodefmt"
-version = "0.11.1"
+version = "0.12.0"
 name = "nodefmt"
 tagline = "A rule-based formatter for Blender node trees"
 maintainer = "Carlos Jimeno Cordero"

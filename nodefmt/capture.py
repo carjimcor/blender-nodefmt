@@ -19,6 +19,7 @@ must not change while Blender goes through event handlers); run() does every ste
 import math
 import os
 import struct
+import sys
 import tempfile
 import time
 import zlib
@@ -40,6 +41,7 @@ MAX_PIXELS = 200_000_000  # the largest image: about 800 MB while it is built
 REGIONS = ("show_region_header", "show_region_toolbar", "show_region_ui")
 OVERLAYS = ("show_context_path",)  # overlays of the editor that are not part of the tree
 GIZMOS = ("show_gizmo", "show_gizmo_active_node")
+SWAPS = 2 if sys.platform == "darwin" else 1  # window draws before a screenshot (see _redraw)
 
 
 class CaptureError(Exception):
@@ -331,9 +333,11 @@ class CaptureJob:
         return bpy.context.temp_override(window=self.win, area=self.area, region=self._region())
 
     def _redraw(self):
-        """Draw the window now and show it (swap), so the screenshot reads the current view."""
+        """Draw the window now and show it (swap), so the screenshot reads the current view. On
+        macOS (Metal) a screenshot reads the frame shown before the last swap, so the window is
+        drawn twice there."""
         with self._override():
-            bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
+            bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=SWAPS)
 
     def _view(self):
         """(x, y, zoom x, zoom y): where view point (0, 0) is in the region, and region pixels

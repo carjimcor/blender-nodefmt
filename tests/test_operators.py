@@ -100,10 +100,21 @@ def run():
 
     # Sort Current Tree with progress, then one undo step
     seen = []
+    every = []  # the text after every step: the layout of a small tree can run between two samples
+    step = ui.SortJob.step
+
+    def logged(job):
+        """SortJob.step, keeping the progress text."""
+        more = step(job)
+        every.append(job.text)
+        return more
+
+    ui.SortJob.step = logged
     with override():
         r = bpy.ops.node.nodefmt_sort_tree("INVOKE_DEFAULT", True)
     test("sort current tree starts", r == {"RUNNING_MODAL"}, str(r))
     yield from wait_job(ui, seen)
+    ui.SortJob.step = step
     after = state(names)
     test("sort current tree sorts", after[names[1]][0] != start[names[1]][0] and after[names[0]] == start[names[0]])
     test("logic unchanged", after[names[1]][1] == start[names[1]][1])
@@ -116,7 +127,7 @@ def run():
     )
     factors = [f for _, f in seen]
     test("progress never goes back", factors == sorted(factors), f"{factors[0]:.2f} .. {factors[-1]:.2f}")
-    test("layout steps counted", any(re.search(r"layout \d+/\d+", t) for t in texts))
+    test("layout steps counted", any(re.search(r"layout \d+/\d+", t) for t in every))
     test("status bar cleared", ui._JOB["job"] is None)
     with override():
         bpy.ops.ed.undo()

@@ -212,6 +212,7 @@ class Snapshot:
     def restore(self, nt, editor=None):
         """Put everything back. Inputs are relinked before anything is removed, so no socket is
         left unlinked on the way (the Viewer drops unlinked items)."""
+        from .blend import set_locations
         from .dup import _copy_node, source_keys
 
         current = [n for n in nt.nodes if n.bl_idname == "NodeReroute"]
@@ -235,22 +236,24 @@ class Snapshot:
             p = info["parent"]
             if (n.parent.name if n.parent else None) != p:
                 n.parent = nt.nodes[p] if p else None
+        locs = {}  # set in one call (blend.set_locations)
         for name, label, parent, loc in self.reroutes:
             r = nt.nodes.new("NodeReroute")
             r.name = name
             r.label = label
             if parent:
                 r.parent = nt.nodes[parent]
-            r.location = loc
+            locs[r.name] = loc
         for name, info in self.nodes.items():
             n = nt.nodes[name]
-            n.location = info["loc"]
+            locs[name] = info["loc"]
             if info["key"]:
                 for o, h in zip(n.outputs, info["hide"]):
                     if o.hide != h:
                         o.hide = h
             if info["size"]:
                 n.width, n.height = info["size"]
+        set_locations(nt, locs, "location")
         multi = {}
         for fn, fi, tn, ti, muted, sid in self.links:
             # look sockets up again for every link: Python references go stale as links change

@@ -24,6 +24,9 @@
   and may cross other wires or take long detours, and a part that grows may have to move to clear
   the nodes around it. Sort the whole tree for the best result.
 - **Unsupported trees.** Line style and texture node trees are not supported.
+- **Linked trees.** A tree linked from a library (such as an Essentials asset added as a link) is
+  not sorted: the file keeps only the link, so the sort would be lost on reload. Make it local
+  first; Sort All Trees skips linked trees.
 - **Capture Tree.** While it captures, every node is selected (Blender dims the wires of
   unselected nodes whose ends are far outside the view) and the theme's selection colours are set
   to the normal ones, then both are put back. In a tree with zones the margin is a little wider, to leave room for the zone outlines. Something the mouse hovers

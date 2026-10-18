@@ -13,6 +13,7 @@ cost drops.
 from itertools import pairwise
 
 from . import params as P
+from . import stop
 from .graph import _name as _key
 
 # the order in which _moves lists the kinds of move
@@ -35,6 +36,7 @@ class SearchMixin:
 
     def _evaluate(self, cand):
         """Lay out a candidate in full and return its cost."""
+        stop.check()  # a sort cancelled with Esc stops here (see stop.py)
         self.use(cand)
         self.assign_y()
         self.assign_x()

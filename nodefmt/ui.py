@@ -272,9 +272,11 @@ class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        """Available in a node editor showing a tree of a supported type, when no sort runs."""
+        """Available in a node editor showing a local tree of a supported type, when no sort runs.
+        A tree linked from a library is not sorted: the file keeps only the link, so the sort
+        would be lost on reload."""
         sp = context.space_data
-        return (
+        ok = (
             _JOB["job"] is None
             and _CAPTURE["job"] is None
             and sp
@@ -282,6 +284,10 @@ class NODEFMT_OT_sort_tree(SortModal, bpy.types.Operator):
             and sp.edit_tree
             and api.formattable(sp.edit_tree)
         )
+        if ok and not sp.edit_tree.is_editable:
+            cls.poll_message_set("This tree is linked from a library: make it local first (a sort is not saved)")
+            return False
+        return ok
 
     def trees(self, context):
         """The edited tree."""
@@ -728,6 +734,9 @@ class NODEFMT_PT_panel(bpy.types.Panel):
             box.progress(factor=job.factor, type="BAR", text=f"Sorting: {job.factor:.0%}, {job.elapsed()}")
             box.label(text=job.text)
             box.label(text="Esc cancels and puts the trees back", icon="CANCEL")
+        nt = context.space_data.edit_tree
+        if nt is not None and not nt.is_editable:
+            col.label(text="Linked tree: make it local to sort it", icon="LINKED")
         col.operator(NODEFMT_OT_sort_tree.bl_idname, icon="NODETREE")
         col.operator(NODEFMT_OT_sort_selection.bl_idname, icon="RESTRICT_SELECT_OFF")
         col.operator(NODEFMT_OT_sort_all.bl_idname, icon="FILE_BLEND")

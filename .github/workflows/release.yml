@@ -1,0 +1,48 @@
+name: Release
+
+# Publishes the version in nodefmt/blender_manifest.toml: the tag v<version>, a GitHub release
+# named "nodefmt <version>" with that version's CHANGELOG section, and the add-on zip.
+# Run it from the Actions tab (Run workflow, on main), or push the tag v<version>.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' nodefmt/blender_manifest.toml)
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the manifest version $version"; exit 1
+          fi
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "::error::release v$version already exists: bump the version in the manifest"; exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Notes
+        run: |
+          awk -v h="## $VERSION" '$0 == h {on = 1; next} on && /^## / {exit} on' CHANGELOG.md \
+            | sed -e '/./,$!d' | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section \"## $VERSION\""; exit 1
+          fi
+          blender=$(sed -n 's/^blender_version_min = "\(.*\)"/\1/p' nodefmt/blender_manifest.toml)
+          printf '\nInstall: Edit > Preferences > Get Extensions > the arrow menu > Install from Disk, and pick `nodefmt-%s.zip`. Requires Blender %s.\n' \
+            "$VERSION" "${blender%.0}" >> notes.md
+      # the same layout as Blender's `extension build`: the add-on's files at the root of the zip
+      - name: Zip
+        run: cd nodefmt && zip -X "../nodefmt-$VERSION.zip" blender_manifest.toml *.py
+      - name: Release
+        run: gh release create "v$VERSION" "nodefmt-$VERSION.zip" --target "$GITHUB_SHA" --title "nodefmt $VERSION" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

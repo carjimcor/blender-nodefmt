@@ -101,6 +101,20 @@ def apply_steps(nt, f):
         names.add(f"Reroute.{nxt[0]:03d}")
         return f"Reroute.{nxt[0]:03d}"
 
+    # a reroute that lies inside a frame belongs to it (the innermost one); only the frame's
+    # inner area counts, so a reroute never makes Blender grow the frame around it
+    rects = []
+    for r in sorted(f._frame_rects(), key=lambda r: r["w"] * r["h"]):
+        pl, pt, pr, pb = m.pads.get(r["name"], (30, 40, 30, 30))
+        rects.append((r["name"], r["x"] + pl, r["y"] + pt, r["x"] + r["w"] - pr, r["y"] + r["h"] - pb))
+
+    def frame_at(p):
+        """The innermost frame whose inner area holds layout point p, or None."""
+        for name, x0, y0, x1, y1 in rects:
+            if x0 <= p[0] <= x1 and y0 <= p[1] <= y1:
+                return nt.nodes.get(name)
+        return None
+
     made = 0
     nodes_of = {}
     at = {}  # reroute name -> location, set in one call once they all exist
@@ -115,6 +129,9 @@ def apply_steps(nt, f):
                 made += 1
                 if due():
                     yield
+            frame = frame_at(p)
+            if r.parent != frame:  # before the location: it is set as an absolute one below
+                r.parent = frame
             at[r.name] = (to_px(p[0], sc), to_px(-p[1], sc))
             rr[p] = r
         nodes_of[s] = rr

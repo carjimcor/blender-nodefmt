@@ -13,6 +13,7 @@ ZONE_LANE_GAP = 34.0  # NF032: in a zone, lane to first or last node of its colu
 COL_GAP = 60.0  # minimum horizontal space between columns
 TRACK = 20.0  # spacing of the vertical routing tracks in a gap
 EPS = 0.5  # links whose ends differ by no more than this are straight
+STRAIGHT = 0.0  # a drawn segment this far (units) off the horizontal or vertical needs no bend (rules.applied)
 OVERHANG = True  # the end of a side branch may stick out of its column
 SATELLITES = True  # NF021: a big block with no inputs sits right before its consumer
 STACK_MAX = 3  # NF023: the most nodes in a chain stacked above or below its consumer

@@ -190,7 +190,9 @@ def run_one(path, ed, prepare=None):
     if prepare:
         prepare(nt)
     dead = dead_ends(nt)
-    cfg = rules.Config(rules.DEFAULT | ({code} & rules.OPT_IN))  # an opt-in rule: on
+    # the NF003 examples show segments a pixel or two off: they are checked without a straight tolerance
+    straight = 0.0 if code == "NF003" else rules.STRAIGHT_PX
+    cfg = rules.Config(rules.DEFAULT | ({code} & rules.OPT_IN), straight=straight)  # an opt-in rule: on
     guarantees = frozenset(rules.GUARANTEES)
     vs = api.check_tree(nt, "relayout", ed, cfg)
     found = codes(vs)
@@ -203,7 +205,7 @@ def run_one(path, ed, prepare=None):
         for v in vs:
             print(f"  {code} before: {v.code} {v.msg} at ({v.x:g}, {v.y:g})", flush=True)
     # the example's rule on its own (a guarantee: no style rule at all), then every style rule off
-    own = rules.Config(guarantees | ({code} if code in rules.STYLE else set()))
+    own = rules.Config(guarantees | ({code} if code in rules.STYLE else set()), straight=straight)
     one = sorted_copy(path, ed, own, prepare)
     d = check.diff(check.fingerprint(nt), check.fingerprint(one))
     left = codes(api.check_tree(one, "relayout", ed, own, formatted=False))
@@ -218,7 +220,7 @@ def run_one(path, ed, prepare=None):
     else:
         out["only"] = (not bad and not d and loose <= 0, ", ".join(bad) or ("logic differs" if d else "clean"))
     if code in rules.STYLE:
-        off = sorted_copy(path, ed, rules.Config(guarantees), prepare)
+        off = sorted_copy(path, ed, rules.Config(guarantees, straight=straight), prepare)
         if code in EFFECT:
             what, measure = EFFECT[code]
             off_v = measure(off)

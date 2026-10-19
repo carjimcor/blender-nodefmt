@@ -23,6 +23,7 @@ blender file.blend --python nodefmt_cli.py -- --capture TREE [--out FILE.png] [-
 | `--ignore CODES` | Rules to switch off (added to the config file's `ignore`). |
 | `--config PATH` | A `nodefmt.toml` to use (default: the first one found from the .blend's folder up). |
 | `--ui-scale S` | The Resolution Scale to sort for (default: the config file's `ui-scale`, else Blender's). |
+| `--straight-tolerance PX` | Pixels a wire may be off straight without a bend (default: the config file's `straight-tolerance`, else 2). |
 | `--tree NAME` | Only this tree (repeatable): a group name, or `"Material: <name>"`, `"World: <name>"`, `"Light: <name>"`. |
 | `--mode keep` | Sort, or check, in Keep layout mode (experimental); the default is `relayout`. |
 | `--no-format-check` | `--check`: report rule violations only, without trying a sort (NF900). |

@@ -2,8 +2,8 @@
 """Placement: vertical positions of the items (blocks of straight links, compaction).
 
 assign_y() dispatches on the placement method: 'relax' is in relax.py; 'blocks' (blocks_y) merges
-the items joined by straight links into blocks, then _compact() positions the blocks. 'balanced'
-(only with NF022) is 'blocks' without the pull to a common top line.
+the items joined by straight links into blocks, then _compact() positions the blocks. With NF022,
+converge_y() then moves the node a tree converges on to the middle of its inputs.
 """
 
 import math
@@ -11,18 +11,122 @@ from heapq import heapify, heappop, heappush
 from itertools import pairwise
 
 from . import params as P
-from .graph import snap_down, snap_up
+from .graph import slot_of, snap_down, snap_up
 
 
 class PlacementMixin:
     """Blocks of aligned links, then a compaction that solves separation constraints."""
 
     def assign_y(self):
-        """Vertical positions of all items, by the current placement method."""
+        """Vertical positions of all items, by the current placement method, then the converging
+        shape (NF022). The input links of the converging node are free (self.free): they neither
+        line up nor pull, so each branch stays by its own inputs."""
+        self.conv, self.free = None, frozenset()
+        if P.CONVERGE and self.mode != "keep":
+            node, moved = self.converging()
+            if node is not None:
+                self.conv = (node, moved)
+                self.free = frozenset(e for e in self.pred_edges[node] if e.u not in moved)
         if getattr(self, "placer", "blocks") == "relax":
             self.relax_y()
-        else:  # 'blocks' or 'balanced'
+        else:
             self.blocks_y()
+        self.converge_y()
+
+    def converge_y(self):
+        """NF022: the node a tree converges on (converging()) and the items that move with it go
+        down or up until the node sits halfway between its inputs, as far as the columns allow: a
+        '>' shape. The slide pass leaves its input links (self.free) bent."""
+        if getattr(self, "conv", None) is None:
+            return
+        node, moved = self.conv
+        ins = list(self.free)
+        if len(ins) < 2:
+            return
+        # the node's middle halfway between the highest and the lowest socket that feeds it
+        ys = [self._sock_y(e.u, e.uk, True) for e in ins]
+        shift = (min(ys) + max(ys)) / 2 - (node.y + node.h / 2)
+        # the items that stay keep their places: neighbours in a column keep their gap
+        lo, hi = -1e18, 1e18
+        for layer in self.layers:
+            for a, b in pairwise(layer):
+                if b in moved and a not in moved:
+                    lo = max(lo, a.y + a.h + self._gap(a, b) - b.y)
+                elif a in moved and b not in moved:
+                    hi = min(hi, b.y - a.y - a.h - self._gap(a, b))
+        if P.SNAP:
+            shift, lo, hi = round(shift / P.GRID) * P.GRID, snap_up(lo), snap_down(hi)
+        else:
+            shift, lo, hi = round(shift), math.ceil(lo), math.floor(hi)
+        if lo > hi:
+            return
+        shift = min(max(shift, lo), hi)
+        if not shift:
+            return
+        for i in moved:
+            i.y += shift
+
+    def converging(self):
+        """NF022: (node, items that move with it) when the tree converges on one output, else
+        (None, set()). From the Group Output, the search follows the only input that comes from a
+        node with inputs of its own (source nodes such as Group Input copies do not count) to
+        the first node where two or more such inputs meet, unless they all enter one multi-input
+        socket. A geometry link on the way ends it: the geometry flow stays straight. The items
+        that move: the nodes on the way, the source nodes that feed only them, and the lanes
+        between them."""
+        lasts = [i for i in self.items if i.pin == "last" and i.kind == "node"]
+        if self._zone_pair() is not None or len(lasts) != 1:
+            return None, set()
+        path, node = [], lasts[0]
+        for _ in range(len(self.items)):
+            path.append(node)
+            if any(e.geo for e in self.pred_edges[node]):
+                return None, set()
+            fed = [e for e in self.pred_edges[node] if not getattr(self._origin(e), "src", False)]
+            feeders = {self._origin(e) for e in fed}
+            if len(feeders) >= 2:
+                # links that all enter one multi-input socket (Join Strings) meet there already
+                if len({slot_of(e.vk)[:3] if slot_of(e.vk) else e.vk for e in fed}) == 1:
+                    return None, set()
+                break
+            if len(feeders) != 1:
+                return None, set()
+            node = feeders.pop()
+            if node.kind != "node" or node.pin or node in path:
+                return None, set()
+        else:
+            return None, set()
+        moved = set(path)
+        for p in path:
+            for e in self.pred_edges[p]:
+                o = self._origin(e)
+                if getattr(o, "src", False) and not o.pin and self._reach(o)[1] <= moved:
+                    moved.add(o)
+        for o in list(moved):
+            lane, ends = self._reach(o)
+            if ends <= moved:
+                moved |= lane
+        return path[-1], moved
+
+    def _origin(self, e):
+        """The box a link comes from, through the lane (dummies, labels) that carries it."""
+        u = e.u
+        while u.kind in ("dummy", "label") and self.pred_edges[u]:
+            u = self.pred_edges[u][0].u
+        return u
+
+    def _reach(self, i):
+        """(the dummies and labels of the lanes that leave item i, the items they end at)."""
+        lane, ends, todo = set(), set(), [e.v for e in self.succ_edges[i]]
+        while todo:
+            v = todo.pop()
+            if v.kind in ("dummy", "label"):
+                if v not in lane:
+                    lane.add(v)
+                    todo += [e.v for e in self.succ_edges[v]]
+            else:
+                ends.add(v)
+        return lane, ends
 
     def blocks_y(self):
         """Block placement: links are made straight in order of priority (geometry flow, main
@@ -77,8 +181,8 @@ class PlacementMixin:
         self.aligned = []
         by_pair = {}
         for p, _, e in cands:
-            if e in self.banned:
-                continue  # the search found the layout better with this link bent
+            if e in self.banned or e in self.free:
+                continue  # the search found the layout better with this link bent (or NF022)
             u, v = e.u, e.v
             if v in aligned_in or (u, e.uk) in used_out:
                 continue
@@ -110,7 +214,7 @@ class PlacementMixin:
             merged = False
             for e in self.edges:
                 ru, rv = self._find(e.u), self._find(e.v)
-                if ru is rv or e in self.banned:
+                if ru is rv or e in self.banned or e in self.free:
                     continue
                 if abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)) > P.EPS:
                     continue
@@ -390,7 +494,7 @@ class PlacementMixin:
         """Vertical positions of the blocks: separation constraints from each column's order, then
         an iterative solution that pulls each block towards the heights that make its other links
         straight (weighted medians, VPSC-like merging of colliding blocks, coordinate descent),
-        with a small pull to a common top line (gravity) unless the placement is 'balanced'."""
+        with a small pull to a common top line (gravity)."""
         roots = list(self.members)
         rel = {}
         for r in roots:
@@ -496,7 +600,7 @@ class PlacementMixin:
         # attraction targets: non-aligned edges between blocks
         pulls = {r: [] for r in roots}
         for e in self.edges:
-            if e in self.aligned_set:
+            if e in self.aligned_set or e in self.free:
                 continue
             ru, rv = self._find(e.u), self._find(e.v)
             if ru is rv:
@@ -535,9 +639,8 @@ class PlacementMixin:
                 for i in self.members[r]:
                     if not i.is_point and i.oy is not None:
                         pulls[r].append((None, i.oy - rel[i], 0.5, None))
-        elif getattr(self, "placer", "blocks") != "balanced":
+        else:
             # gravity: every block drifts up to a common top line unless its links hold it
-            # ('balanced', NF022, has none: a converging tree takes a ">" shape)
             top = min(Y.values(), default=0.0)
             for r in roots:
                 if r is zout_root:

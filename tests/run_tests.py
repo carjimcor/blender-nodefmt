@@ -148,8 +148,14 @@ def track_xs(nt):
     return len(xs)
 
 
-# tests of one example (its file name): what, measure(tree) -> number that must be 0
-EXTRA = {"NF003-rows": ("tiny steps", tiny_steps)}
+def not_centred(nt):
+    """1 if the output of NF022's example is not between its inputs (centred), else 0."""
+    return int(not centred(nt))
+
+
+# tests of one example (its file name): what, measure(tree) -> number that must be 0. NF022: the
+# '>' shape also with the default rules, which used to hide it
+EXTRA = {"NF003-rows": ("tiny steps", tiny_steps), "NF022": ("output not between its inputs", not_centred)}
 
 # rules with no geometric check: what to measure instead (the rule must change the value, a
 # sort with the rule off must keep the example's)

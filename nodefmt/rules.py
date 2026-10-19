@@ -86,8 +86,8 @@ RULES = [
         "converging-shape",
         "style",
         (
-            "A tree that converges on one output may take a '>' shape with the output in the middle of "
-            "its inputs. Off by default."
+            "A tree that converges on one output takes a '>' shape: the node the output depends on "
+            "sits halfway between its inputs. Off by default."
         ),
     ),
     (
@@ -183,7 +183,7 @@ SHORT = {
     "NF011": "Swap the inputs of commutative nodes (Add, Multiply, AND, ...) to avoid crossings",
     "NF020": "Let a zone's output move to the height of its inputs",
     "NF021": "Place a self-contained frame right before the node it feeds",
-    "NF022": "Allow a '>' shape, with the output centred among its inputs (off by default)",
+    "NF022": "A '>' shape: the node the output depends on sits between its inputs (off by default)",
     "NF023": "Stack a short chain of field nodes above or below the node it feeds (off by default)",
     "NF030": "Nest the wires that leave or enter one node like stairs, without crossings",
     "NF031": "No U-turns or tiny steps in wires",
@@ -350,7 +350,7 @@ class applied:
         new = {
             "SATELLITES": on("NF021"),
             "ZONE_OUT": ("level", "median", "mean") if on("NF020") else ("level",),
-            "PLACERS": ("blocks", "balanced", "relax") if on("NF022") else ("blocks", "relax"),
+            "CONVERGE": on("NF022"),
             "TRACK_BUNDLE": 4.0 if on("NF030") else 1.0,
             "W_CROSS_BUNDLE": 15.0 if on("NF030") else 0.0,
             "W_CROSS": 4.0 if on("NF033") else 1.5,

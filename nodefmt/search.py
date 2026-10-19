@@ -318,6 +318,7 @@ class SearchMixin:
                 for e in self.edges
                 if abs(self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)) > P.EPS
                 and not (e.u.is_point and e.v.is_point)
+                and e not in getattr(self, "free", ())  # NF022: the inputs of the converging node stay bent
             ]
             prio = self._priorities()
             bent.sort(
@@ -347,6 +348,7 @@ class SearchMixin:
                     break
             if not done:
                 break
+        self.converge_y()  # NF022: back to the middle of its inputs if they moved
         self.assign_x()
         return self.cost()
 

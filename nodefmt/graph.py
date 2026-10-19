@@ -10,7 +10,7 @@ from . import params as P
 
 # Everything that decides the layout of a ranked container: the order of each column (lists of
 # items), the input keys of the commutative pairs, the links the placement must leave bent, the
-# placement method ('blocks', 'relax'; 'balanced' with NF022), where the order came from
+# placement method ('blocks', 'relax'), where the order came from
 # ('cross', 'force', 'current') and how a zone's output finds its height (params.ZONE_OUT).
 Cand = namedtuple("Cand", "layers comm banned placer origin zone", defaults=("cross", "level"))
 

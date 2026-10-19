@@ -18,7 +18,7 @@ by name or with `"ALL"`.
 | [NF011](#nf011-commutative-swaps) | commutative-swaps | style | The two inputs of a commutative node may be swapped to remove a crossing. |
 | [NF020](#nf020-free-zone-outputs) | free-zone-outputs | style | A zone's output may sit where its inputs are instead of level with the zone input. |
 | [NF021](#nf021-blocks-next-to-consumer) | blocks-next-to-consumer | style | A frame or zone with nothing linked into it sits right before the node it feeds; one with nothing linked at all sits compactly under the tree. |
-| [NF022](#nf022-converging-shape) | converging-shape | style, off by default | A tree that converges on one output may take a ">" shape. |
+| [NF022](#nf022-converging-shape) | converging-shape | style, off by default | A tree that converges on one output takes a ">" shape. |
 | [NF023](#nf023-stacked-fields) | stacked-fields | style, off by default | A short chain of field nodes is stacked above or below the node it feeds, in its column. |
 | [NF030](#nf030-staircase-bundles) | staircase-bundles | style | Wires leaving or entering one node are nested like stairs and do not cross. |
 | [NF031](#nf031-no-u-jogs) | no-u-jogs | style | No U-jogs, landings or tiny steps that a free height would remove. |
@@ -245,20 +245,25 @@ Check reports a frame with nothing linked that could sit more than 100 units hig
 
 ### NF022 converging-shape
 
-Off by default. A tree that converges on one output may take a ">" shape, with the output in the
-middle of its inputs, instead of everything hanging from a common top line. The sort tries this
-placement next to the others and keeps it only when it costs less.
+Off by default. A tree that converges on one output takes a ">" shape: the node the output
+depends on sits halfway between the inputs that meet there, instead of level with one of them.
+From the Group Output, the sort follows the only input that comes from a node with inputs of its
+own (Group Input copies and other source nodes do not count) to the first node where two or more
+of them meet (links that all enter one multi-input socket, as in Join Strings, meet there
+already and are left as they are). That node and the nodes after it move as one, as far as the
+columns allow. A geometry link on the way ends the search: the geometry flow stays straight, so
+the rule shapes trees that compute a value (Math, Vector Math, strings), not chains of geometry
+nodes.
 
-**Why:** in trees where branches of different lengths share inputs, the ">" shape is lower and
-has fewer bends. It is off by default because on the test trees it left more crossings than the
-layouts without it. In a plain tree of Math nodes the result is the same with the rule on and off.
+**Why:** the result of a tree reads as the point where its branches meet. It is off by default
+because both input links of that node bend, where the default layout keeps one straight.
 
 **Example:** a short branch (one Subtract) and a long one (three Subtracts) converge on a Divide;
 both use the two group inputs. Without the rule, Divide and the output hang from the top line and
-the long branch climbs up to them like a staircase. With it, Divide sits between its two inputs,
-and the tree is lower.
+the long branch climbs up to them like a staircase. With it, Divide sits between its two inputs.
 
-**Off:** the ">" placement is not tried.
+**Off:** the node the output depends on stays where the placement puts it, usually level with
+one of its inputs.
 
 | Before | After |
 |---|---|

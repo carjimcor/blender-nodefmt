@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- NF022 converging-shape now gives the ">" shape it describes. It used to try one more
+  placement, without the pull to the top line, and keep it when it cost less; with the default
+  rules on (NF010, NF030 or NF033 is enough) that placement gave the same layout as the others,
+  so the rule did nothing. Now each branch stays by its own inputs, and the node the output
+  depends on moves halfway between the branches that meet there, with the nodes after it, as far
+  as the columns allow. A geometry flow stays straight, and links that all enter one multi-input
+  socket are left alone. Layouts with NF022 off, the default, are unchanged.
+
 ## 0.12.0
 
 No change in how trees are laid out: the layouts are the same as in 0.11.1.

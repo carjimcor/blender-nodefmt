@@ -69,15 +69,19 @@ on trees saved as plain data. In the add-on, a sort runs one step at a time
    neighbours and swaps of commutative inputs, counting crossings between socket heights. A second
    order comes from a force-directed relaxation: links are springs, items in a column repel each
    other, and each column is sorted by the heights they settle at.
-8. **Placement** (`placement.py`, `relax.py`). Three ways to find heights for a given order:
+8. **Placement** (`placement.py`, `relax.py`). Two ways to find heights for a given order:
    - `blocks`: links are made straight in order of priority (geometry flow, main inputs, bundles,
      lanes) by merging the items they join into blocks, as long as no column overlaps and the
      layout does not grow too tall; then the blocks are compacted (separation constraints from
      the column order, each block pulled to the weighted median of what its links want), with a
      weak pull towards a common top line;
-   - `balanced` (NF022): the same without the pull to the top line;
    - `relax`: spring relaxation (each item moves to the weighted mean of what its links want, each
      column restacked by isotonic regression), then nearly straight links are straightened.
+
+   With NF022, the input links of the node a tree converges on neither line up nor pull, so each
+   branch stays by its own inputs; that node (and the nodes after it, up to the Group Output) then
+   moves halfway between the sockets that feed it, as far as the columns allow, and the slide pass
+   leaves its input links bent.
 
    In a zone, each placement runs with each zone output mode (`ZONE_OUT`): `level` keeps the zone
    output on the zone input's line; `median` and `mean` free it, with a soft pull to that line
@@ -223,7 +227,7 @@ modes.
 - Transposition of neighbours and long edges as chains of dummies: E. R. Gansner, E. Koutsofios,
   S. C. North, K.-P. Vo, "A technique for drawing directed graphs", IEEE Transactions on Software
   Engineering 19(3), 1993.
-- Blocks of aligned links and their compaction, and the balanced variant: U. Brandes, B. Köpf,
+- Blocks of aligned links and their compaction: U. Brandes, B. Köpf,
   "Fast and simple horizontal coordinate assignment", Graph Drawing 2001. nodefmt aligns by link
   priority instead of medians and compacts with its own constraint solver.
 - Compaction with separation constraints (merging colliding blocks): T. Dwyer, K. Marriott,
@@ -264,7 +268,7 @@ nodefmt/  (the extension)
   ranking.py    columns and lanes
   ordering.py   crossing reduction
   force.py      force-directed ordering
-  placement.py  block placement and compaction ('blocks', 'balanced')
+  placement.py  block placement and compaction ('blocks'), the '>' shape (NF022)
   relax.py      spring relaxation and straightening ('relax')
   columns.py    column and track positions, track order
   cost.py       routes and layout cost

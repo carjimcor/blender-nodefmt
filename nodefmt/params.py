@@ -41,7 +41,8 @@ SEARCH = 120  # layouts tried by the final local search of the best seed
 SLIDE = 40  # layouts tried by the final slide pass
 JITTER = 0.6  # seeds other than 0: random shift of an item's initial barycenter (in places)
 ORDERS = ("cross", "force")  # order generators: crossing reduction, force-directed
-PLACERS = ("blocks", "relax")  # placement methods tried for each order ('balanced': NF022)
+PLACERS = ("blocks", "relax")  # placement methods tried for each order
+CONVERGE = False  # NF022: the node a tree converges on goes to the middle of its inputs
 # zone output heights tried for each order and placement of a zone (the cheapest wins):
 #   'level'  level with the zone input's top line
 #   'median' a soft pull (ZONE_LEVEL) to that line plus the weighted median of what its links want
@@ -59,7 +60,7 @@ STABLE = 0.0
 # how much taller the layout may get to make a link straight, by link priority (0: geometry flow)
 ALIGN_LIMIT = {0: 400.0, 1: 300.0, 2: 200.0, 3: 120.0, 4: 80.0, 5: 60.0}
 BUNDLE = 3  # this many parallel links between two nodes are lined up first
-GRAVITY = 0.5  # 'blocks': pull of every block towards a common top line ('balanced': none)
+GRAVITY = 0.5  # 'blocks': pull of every block towards a common top line
 BEND = 40.0  # compaction: price of a link that is not straight (it needs two reroutes)
 SRC_SLOPE = 1.0  # compaction: plus this per unit of drop for a link from a source node
 BEND_SLOPE = 0.2  # compaction: plus this per unit of drop for other links

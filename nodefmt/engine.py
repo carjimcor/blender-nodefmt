@@ -7,7 +7,7 @@ The entry point is layout(); _Layout combines the steps of a Sugiyama-style laye
   ranking.py    columns (longest-path ranks), and lanes (dummies) for links spanning columns
   ordering.py   order of each column: barycenter sweeps, transposition, commutative swaps
   force.py      another order: force-directed relaxation of heights
-  placement.py  heights: blocks of straight links + compaction ('blocks'; 'balanced' with NF022)
+  placement.py  heights: blocks of straight links + compaction ('blocks'; with NF022 the '>' shape)
   relax.py      heights: spring relaxation + straightening ('relax')
   columns.py    x of the columns and of the routing tracks in each gap
   cost.py       routes and the weighted faults of a layout

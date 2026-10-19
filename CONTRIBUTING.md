@@ -74,7 +74,8 @@ Each example in `examples/` (a second example of a rule is `NF0xx-<what>.blend`)
   it is off by default) the rule is no longer reported, the logic fingerprint is unchanged, no
   reroute leads nowhere, and a second sort changes nothing.
 - **extra**: tests of single examples, such as NF003-rows: no wire is left with a step too small
-  to see (two reroutes closer than 10 units).
+  to see (two reroutes closer than 10 units); NF022: the output is between its inputs after both
+  sorts, also the one with the default rules.
 
 `examples/selection.blend` tests Sort Selection three ways (the frame, two nodes, two nodes with a
 third between them): the rest does not move, the part keeps its corner or moves just enough,

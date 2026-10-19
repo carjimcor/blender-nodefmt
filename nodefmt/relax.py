@@ -55,8 +55,12 @@ class RelaxMixin:
                 for i in layer:
                     pulls = []  # (height of i that makes the link straight, weight)
                     for e in self.pred_edges[i]:
+                        if e in self.free:  # NF022: the converging node's inputs do not pull
+                            continue
                         pulls.append((self._sock_y(e.u, e.uk, True) - i.ins.get(e.vk, (0, 0))[1], self._link_weight(e)))
                     for e in self.succ_edges[i]:
+                        if e in self.free:
+                            continue
                         pulls.append(
                             (self._sock_y(e.v, e.vk, False) - i.outs.get(e.uk, (0, 0))[1], self._link_weight(e))
                         )
@@ -120,7 +124,7 @@ class RelaxMixin:
             group = self._straight_groups()
             cands = []
             for e in self.edges:
-                if e in self.banned:
+                if e in self.banned or e in self.free:
                     continue
                 d = self._sock_y(e.u, e.uk, True) - self._sock_y(e.v, e.vk, False)
                 if P.EPS < abs(d) <= P.STRAIGHTEN:

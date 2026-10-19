@@ -1,7 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
 
+With the default rules, node positions are the same as in 0.12.0: some wires lose a tiny step
+and some reroutes change frame. NF022 (off by default) now changes layouts when it is on.
+
+- New setting `straight-tolerance` (screen pixels, default 2): a wire that close to the
+  horizontal or vertical is left as it is instead of getting a bend of two reroutes, and a
+  reroute left in the middle of such a run is removed (NF034). Rounding to whole pixels leaves
+  some sockets a pixel or two apart, and the tiny step looked worse than the wire a pixel off.
+  It is in `nodefmt.toml`, the `--straight-tolerance` option and the add-on preferences; 0 gives
+  every step its bend, as before. The NF003 check uses the same tolerance.
+- New reroutes belong to the frame they lie in: a reroute that nodefmt places inside a frame
+  becomes a child of the innermost frame that holds it, so it moves with the frame, and one
+  outside every frame has no parent. Only the frame's inner area counts, not its padding, so a
+  reroute never makes Blender grow the frame. A tree sorted with an earlier version is reported
+  as not formatted (NF900) until it is sorted again.
 - NF022 converging-shape now gives the ">" shape it describes. It used to try one more
   placement, without the pull to the top line, and keep it when it cost less; with the default
   rules on (NF010, NF030 or NF033 is enough) that placement gave the same layout as the others,
@@ -9,6 +23,11 @@
   depends on moves halfway between the branches that meet there, with the nodes after it, as far
   as the columns allow. A geometry flow stays straight, and links that all enter one multi-input
   socket are left alone. Layouts with NF022 off, the default, are unchanged.
+- Fix: Capture Tree could leave the node editor's selection colours changed for good. It sets
+  three theme colours while it runs, and the theme is part of the preferences: if Blender saved
+  them during a capture (auto-save on quit), the changed colours stayed. The capture now turns
+  the auto-save of preferences off while it runs, and afterwards puts it back and leaves the
+  preferences marked as unchanged if they were.
 
 ## 0.12.0
 

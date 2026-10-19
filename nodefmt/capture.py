@@ -416,7 +416,12 @@ class CaptureJob:
         # Blender dims a wire whose ends are both far outside the view, except the wires of
         # selected nodes: every node is selected, and the theme draws selected nodes and wires
         # like the others while the capture runs
-        th = bpy.context.preferences.themes[0].node_editor
+        # the theme lives in the preferences: while it is changed, Blender must not save them
+        # (auto-save on quit), and afterwards they must not look changed
+        prefs = bpy.context.preferences
+        self.saved["prefs"] = (prefs.use_preferences_save, prefs.is_dirty)
+        prefs.use_preferences_save = False
+        th = prefs.themes[0].node_editor
         self.saved["theme"] = {k: tuple(getattr(th, k)) for k in THEME_KEYS}
         th.node_selected = th.node_active = tuple(th.wire)[:3]  # the outline of unselected nodes
         th.wire_select = tuple(th.wire_select)[:3] + (0.0,)  # no highlight over the wire's own colour
@@ -437,6 +442,9 @@ class CaptureJob:
         th = bpy.context.preferences.themes[0].node_editor
         for k, v in s.get("theme", {}).items():
             setattr(th, k, v)
+        if "prefs" in s:
+            prefs = bpy.context.preferences
+            prefs.use_preferences_save, prefs.is_dirty = s["prefs"]
         if s["marks"] is not None:
             bpy.context.window_manager.nodefmt_overlay = s["marks"]
         if s["maximised"] and self.win.screen.show_fullscreen:

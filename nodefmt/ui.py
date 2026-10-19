@@ -45,7 +45,7 @@ def config(context):
         return rules.Config()
     on = [c for c in rules.STYLE if getattr(p, "rule_" + c, c not in rules.OPT_IN)]
     enabled = rules.resolve(on, []) if on else rules.resolve(None, ["ALL"])
-    return rules.Config(enabled)
+    return rules.Config(enabled, straight=p.straight_tolerance)
 
 
 def _rule_props():
@@ -69,12 +69,22 @@ class NODEFMT_AddonPreferences(bpy.types.AddonPreferences):
             default=True,
             description="Use the rules in a nodefmt.toml next to the .blend file, if there is one",
         ),
+        "straight_tolerance": bpy.props.FloatProperty(
+            name="Straight tolerance",
+            default=rules.STRAIGHT_PX,
+            min=0.0,
+            max=10.0,
+            subtype="PIXEL",
+            description="Pixels a wire may be off the horizontal or vertical without a bend of two reroutes "
+            "(0: every step gets a bend)",
+        ),
     }
 
     def draw(self, context):
         """The options and one checkbox per style rule (guarantees are always on)."""
         col = self.layout.column()
         col.prop(self, "use_config_file")
+        col.prop(self, "straight_tolerance")
         col.label(text="Style rules (guarantees NF001-NF005 are always on):")
         for code in rules.STYLE:
             col.prop(self, "rule_" + code)

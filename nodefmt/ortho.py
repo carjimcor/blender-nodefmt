@@ -14,7 +14,9 @@ finishes with `straighten`, which reads back what Blender drew and fixes what ro
    source) onto the other socket's line;
 3. what is still off gets an extra bend: two reroutes, so the change of height is vertical.
 
-A drawn segment is orthogonal when |dx| <= TOL or |dy| <= TOL. With NF035 (fan=True), the last
+A drawn segment is orthogonal when |dx| <= TOL or |dy| <= TOL; with a straight tolerance
+(params.STRAIGHT, from `straight-tolerance`), a segment that far off is left as it is instead of
+getting a bend of a pixel or two. With NF035 (fan=True), the last
 stretch of a link from a reroute into a multi-input socket may be diagonal: it is never mended,
 and its reroute keeps the height of the wire into it, not the slot's (`fanned`).
 """
@@ -23,6 +25,7 @@ import math
 
 import bpy
 
+from . import params as P
 from .sockets import socket_location
 
 TOL = 0.5  # a segment is horizontal (vertical) if its ends differ by at most this in y (x)
@@ -75,8 +78,10 @@ def drawn(nt, gap=None):
 
 
 def bad(a, b):
-    """True if the segment a-b is neither horizontal nor vertical (beyond TOL)."""
-    return abs(a[0] - b[0]) > TOL + 1e-4 and abs(a[1] - b[1]) > TOL + 1e-4
+    """True if the segment a-b is neither horizontal nor vertical (beyond TOL, or the straight
+    tolerance if larger)."""
+    tol = max(TOL, P.STRAIGHT) + 1e-4
+    return abs(a[0] - b[0]) > tol and abs(a[1] - b[1]) > tol
 
 
 def fanned(lk, a, b):
@@ -287,9 +292,10 @@ def _bend(nt, left, s, st):
 
 
 def drop_straight(nt, movable=None):
-    """Remove unlabelled reroutes in the middle of a straight run (NF034), which rounding can
-    leave after straighten. Links into multi-input sockets are left alone (their order would
-    change). movable: only these reroutes (default all). Returns the number removed."""
+    """Remove unlabelled reroutes in the middle of a straight run (NF034, within the straight
+    tolerance), which rounding can leave after straighten. Links into multi-input sockets are left
+    alone (their order would change). movable: only these reroutes (default all). Returns the
+    number removed."""
     gap = slot_gap()
     out = 0
     for r in [n for n in nt.nodes if n.bl_idname == REROUTE and not n.label and (movable is None or n.name in movable)]:
@@ -297,8 +303,12 @@ def drop_straight(nt, movable=None):
         if len(ins) != 1 or len(outs) != 1 or outs[0].to_socket.is_multi_input:
             continue
         a, b, p = socket_location(ins[0].from_socket), link_end(outs[0], gap), tuple(r.location_absolute)
-        flat = abs(a[1] - p[1]) <= TOL and abs(b[1] - p[1]) <= TOL and min(a[0], b[0]) < p[0] < max(a[0], b[0])
-        tall = abs(a[0] - p[0]) <= TOL and abs(b[0] - p[0]) <= TOL and min(a[1], b[1]) < p[1] < max(a[1], b[1])
+        # within the straight tolerance too: the wire left without the reroute stays straight enough
+        tol = max(TOL, P.STRAIGHT)
+        flat = all(abs(u - v) <= tol for u, v in ((a[1], p[1]), (b[1], p[1]), (a[1], b[1])))
+        tall = all(abs(u - v) <= tol for u, v in ((a[0], p[0]), (b[0], p[0]), (a[0], b[0])))
+        flat = flat and min(a[0], b[0]) < p[0] < max(a[0], b[0])
+        tall = tall and min(a[1], b[1]) < p[1] < max(a[1], b[1])
         if not (flat or tall):
             continue
         frm, to, muted = ins[0].from_socket, outs[0].to_socket, ins[0].is_muted or outs[0].is_muted

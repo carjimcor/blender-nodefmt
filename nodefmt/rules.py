@@ -11,6 +11,7 @@ repository root; the first one found wins; [tool.nodefmt] in a pyproject.toml wo
     select = ["ALL"]          # or a list of codes; prefixes work: "NF03" selects NF030-NF039
     ignore = ["NF011"]        # codes or prefixes to switch off
     ui-scale = 1.4            # optional: the Resolution Scale to format for (default: Blender's)
+    straight-tolerance = 2    # optional: pixels a wire may be off straight without a bend (0: none)
 """
 
 import os
@@ -29,7 +30,8 @@ RULES = [
         "orthogonal-segments",
         "guarantee",
         (
-            "Every drawn wire segment is exactly horizontal or vertical (within half a unit) at the UI "
+            "Every drawn wire segment is exactly horizontal or vertical (within half a unit, or the "
+            "straight tolerance: 2 px by default) at the UI "
             "scale the tree is formatted for."
         ),
     ),
@@ -201,6 +203,7 @@ GUARANTEES = [c for c in CODES if KIND[c] == "guarantee"]
 STYLE = [c for c in CODES if KIND[c] == "style"]
 OPT_IN = {"NF022", "NF023", "NF035"}  # style rules that are off unless selected (by code, prefix, name or ALL)
 CONFIG_NAMES = ("nodefmt.toml", "pyproject.toml")
+STRAIGHT_PX = 2.0  # default straight tolerance (screen pixels)
 
 
 def _match(code, pats):
@@ -230,13 +233,15 @@ DEFAULT = resolve()
 
 
 class Config:
-    """Settings of one run: enabled rules and UI scale (None: Blender's)."""
+    """Settings of one run: enabled rules, UI scale (None: Blender's) and straight tolerance (screen
+    pixels a wire may be off the horizontal or vertical without a bend)."""
 
-    def __init__(self, rules=DEFAULT, ui_scale=None, source=None):
-        """Enabled rule codes, UI scale and the file the settings came from."""
+    def __init__(self, rules=DEFAULT, ui_scale=None, source=None, straight=STRAIGHT_PX):
+        """Enabled rule codes, UI scale, the file the settings came from and straight tolerance."""
         self.rules = frozenset(rules)
         self.ui_scale = ui_scale
         self.source = source
+        self.straight = straight
 
     def on(self, code):
         """True if rule `code` is enabled."""
@@ -245,7 +250,7 @@ class Config:
     def __repr__(self):
         """Short text: the rules that are off, and the options."""
         off = [c for c in STYLE if c not in self.rules]
-        return f"Config(off={off}, ui_scale={self.ui_scale}, source={self.source})"
+        return f"Config(off={off}, ui_scale={self.ui_scale}, straight={self.straight}, source={self.source})"
 
 
 def _parse_toml(text):
@@ -303,14 +308,28 @@ def find_config(start):
         d = up
 
 
-def load(start=None, select=None, ignore=None, extend_ignore=None, ui_scale=None):
+def load(start=None, select=None, ignore=None, extend_ignore=None, ui_scale=None, straight=None):
     """A Config from the first config file found from folder `start` upwards, with command line
     values on top (select replaces the file's select; ignore adds to the file's ignore)."""
     path, data = find_config(start)
     sel = select if select else data.get("select")
     ign = list(data.get("ignore", [])) + list(ignore or []) + list(extend_ignore or [])
     sc = ui_scale if ui_scale is not None else data.get("ui-scale", data.get("ui_scale"))
-    return Config(resolve(sel, ign), float(sc) if sc else None, path)
+    st = straight if straight is not None else data.get("straight-tolerance", data.get("straight_tolerance"))
+    st = STRAIGHT_PX if st is None else st
+    return Config(resolve(sel, ign), float(sc) if sc else None, path, float(st))
+
+
+def _scale(cfg):
+    """The UI scale a run is for: the Config's, else Blender's (1.0 without Blender)."""
+    if cfg.ui_scale:
+        return cfg.ui_scale
+    try:
+        import bpy
+
+        return bpy.context.preferences.system.ui_scale
+    except (ImportError, AttributeError):
+        return 1.0
 
 
 class applied:
@@ -342,6 +361,7 @@ class applied:
             "ZONE_LANE_GAP": 34.0 if on("NF032") else 20.0,
             "FAN": on("NF035"),
             "TRACK_SHARE": 10.0 if on("NF036") else 0.0,
+            "STRAIGHT": self.cfg.straight / _scale(self.cfg),
         }
         for k, v in new.items():
             self.saved[k] = getattr(P, k)

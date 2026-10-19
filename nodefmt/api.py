@@ -399,7 +399,8 @@ def unformatted(nt, mode="relayout", editor=None, cfg=None):
     try:
         editor.show(nt)
         cfg = cfg or rules.Config()
-        bad = ortho.faults(nt, fan=cfg.on("NF035"))
+        with rules.applied(cfg):  # the straight tolerance
+            bad = ortho.faults(nt, fan=cfg.on("NF035"))
         if bad:
             return sorted({n for lk, _, _ in bad for n in (lk.from_node.name, lk.to_node.name)})
         if _SETTLED.get(nt.as_pointer()) == _state_key(nt, mode, cfg):
@@ -458,7 +459,8 @@ def check_tree(nt, mode="relayout", editor=None, cfg=None, formatted=True):
         data = read_tree(nt, editor)
         editor.show(nt)
         d, labels, groups = metrics.drawing(nt, data)
-        out = lint.lint(d, cfg.rules, labels, groups)
+        with rules.applied(cfg):  # the straight tolerance
+            out = lint.lint(d, cfg.rules, labels, groups)
         if cfg.on("NF010") and mode == "relayout":
             with rules.applied(cfg):
                 plan = dup.plan(data, mode)

@@ -58,7 +58,7 @@ def lint(d, rules=None, labels=None, groups=None):
             pass  # NF035: the last stretch of a fan into a multi-input slot may be diagonal
         elif dx > 2.0 and dy > 2.0:
             out.append(_v("NF001", f"wire of {_name(s[0])} is drawn as a curve ({dx:.0f} x {dy:.0f})", mid, _ends(s)))
-        elif dx > 0.5 and dy > 0.5:
+        elif dx > max(0.5, P.STRAIGHT) and dy > max(0.5, P.STRAIGHT):
             out.append(_v("NF003", f"segment of {_name(s[0])} is off by {min(dx, dy):.1f} units", mid, _ends(s)))
         for name, box in d.boxes.items():
             if name not in (s[5], s[6]) and wires.behind(s, box):

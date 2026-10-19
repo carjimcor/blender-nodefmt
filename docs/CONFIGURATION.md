@@ -8,6 +8,7 @@ too.
 select = ["ALL"]        # codes, prefixes ("NF03") or names
 ignore = ["NF011"]      # rules switched off
 ui-scale = 1.4          # the Resolution Scale to sort for (default: Blender's)
+straight-tolerance = 2  # pixels a wire may be off straight without a bend (default: 2)
 ```
 
 - `select`: the style rules to apply and check: `"ALL"`, codes (`"NF031"`), prefixes (`"NF03"`
@@ -18,6 +19,11 @@ ui-scale = 1.4          # the Resolution Scale to sort for (default: Blender's)
   off.
 - `ui-scale`: the Resolution Scale the wires are made exact for. By default, the scale Blender
   runs at.
+- `straight-tolerance`: how many screen pixels a wire may be off the horizontal or vertical and
+  stay as it is. Rounding to whole pixels leaves some sockets a pixel or two apart; without a
+  tolerance each of those wires gets a bend of two reroutes, a tiny step that looks worse than a
+  wire a pixel off. Default 2; 0 gives every step its bend. The check (NF003) uses the same value.
+  In the add-on it is "Straight tolerance" in the preferences.
 
 A rule that is off is neither applied when sorting nor reported by a check.
 

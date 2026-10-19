@@ -11,6 +11,8 @@ Options:
   --ignore CODES     rules to switch off (added to the config file's ignore list)
   --config PATH      a nodefmt.toml to use (default: the first one found from the .blend's folder up)
   --ui-scale S       the Resolution Scale to format for (default: the config's, else Blender's)
+  --straight-tolerance PX  pixels a wire may be off the horizontal or vertical without a bend
+                     (default: the config's, else 2; 0: every step gets a bend)
   --tree NAME        only this tree (repeatable): a group name or "Material: <name>", ...
   --mode M           relayout (default) or keep (start from the current layout)
   --no-format-check  --check: report rule violations only, without trying a format (NF900)
@@ -59,6 +61,7 @@ ap.add_argument("--margin", type=int, default=40)
 ap.add_argument("--mode", choices=["relayout", "keep"], default="relayout")
 ap.add_argument("--tree", action="append", default=[])
 ap.add_argument("--ui-scale", type=float, default=None)
+ap.add_argument("--straight-tolerance", type=float, default=None)
 ap.add_argument("--select", default=None)
 ap.add_argument("--ignore", default=None)
 ap.add_argument("--config", default=None)
@@ -80,7 +83,9 @@ def config():
     start = os.path.dirname(bpy.data.filepath) if bpy.data.filepath else os.getcwd()
     if ARGS.config:
         start = os.path.dirname(os.path.abspath(ARGS.config))
-    cfg = rules.load(start, _codes(ARGS.select), _codes(ARGS.ignore), ui_scale=ARGS.ui_scale)
+    cfg = rules.load(
+        start, _codes(ARGS.select), _codes(ARGS.ignore), ui_scale=ARGS.ui_scale, straight=ARGS.straight_tolerance
+    )
     if ARGS.config and os.path.abspath(cfg.source or "") != os.path.abspath(ARGS.config):
         raise SystemExit(f"nodefmt: config {ARGS.config} not found or not readable")
     return cfg

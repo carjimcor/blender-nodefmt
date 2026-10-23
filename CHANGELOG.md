@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.14.0
+
+Fixes. With the default rules, node positions are the same as in 0.13.0, except in trees that hit
+one of these cases.
+
+- A frame that crosses a zone's border stays one block. A frame with some nodes inside a zone
+  (a Repeat, say) and others outside it used to be laid out as loose nodes, and Blender drew it
+  over everything between them: frames overlapped and covered other nodes and wires. Now its
+  nodes outside the zone join the zone when everything they feed is inside it (their own inputs
+  just enter the zone), and the frame is one block again. A frame that holds a whole zone is not
+  changed.
+- Links to a collapsed panel are kept. Blender draws every socket of a collapsed panel at the
+  panel's header, so two links from one source to two sockets of that panel ended at one point,
+  and one of them was lost: the logic check reverted the sort and the tree could not be sorted.
+  Both are now written.
+- A reroute label is never lost. With no reroute on its wire, the labelled reroute goes just
+  before the input that uses the wire (else on another run of the wire); when no spot is free,
+  it goes there anyway instead of being dropped.
+
 ## 0.13.0
 
 With the default rules, node positions are the same as in 0.12.0: some wires lose a tiny step

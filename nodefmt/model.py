@@ -160,6 +160,10 @@ def read(nt, where=None, part=None, pins=None):
 
     links = []
     old_routes = {}  # where each link ran before: its reroutes (stability, see engine.py)
+    # the sockets of a collapsed panel are all drawn on its header, so links from one source to
+    # several of them end at one point: one wire for the layout, the others (twins) are linked
+    # with it when the layout is written (blend.apply)
+    ends, twins = {}, {}
     inside = {n.name for n in nodes}
     for lk in nt.links:
         if lk.to_node.name in removable or lk.is_hidden or lk.to_node.bl_idname == FRAME:
@@ -171,6 +175,12 @@ def read(nt, where=None, part=None, pins=None):
                 continue
             sid = lk.multi_input_sort_id if lk.to_socket.is_multi_input else 0
             muted = any(c.is_muted for c in chain)
+            if not lk.to_socket.is_multi_input:
+                end = (gid_of(s), lk.to_node.name, tuple(round(v, 1) for v in socket_location(lk.to_socket)), muted)
+                if end in ends:
+                    twins.setdefault(ends[end], []).append(list(gid_of(lk.to_socket)))
+                    continue
+                ends[end] = gid_of(lk.to_socket)
             links.append([list(gid_of(s)), list(gid_of(lk.to_socket)), muted, sid])
             pts = []
             for c in chain[1:]:
@@ -188,6 +198,7 @@ def read(nt, where=None, part=None, pins=None):
         "scale": ui,
         "slot": ortho.slot_gap(ui),
         "routes": old_routes,
+        "twins": sorted([list(d), sorted(o)] for d, o in twins.items()),
     }
     linked = {tuple(g) for s, d, _, _ in links for g in (s, d)}
     for n in nodes:

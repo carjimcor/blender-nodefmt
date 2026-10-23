@@ -182,6 +182,22 @@ def apply_steps(nt, f):
         lk.is_muted = muted.get((s, d), False)
         if due():
             yield
+    # the sockets drawn at the same point as a link's end (model.read: twins) get the same source
+    for d, others in m.data.get("twins", []):
+        srcs = final.get(tuple(d))
+        if not srcs:
+            continue
+        s, p, _ = srcs[0]
+        frm = from_socket(s, p)
+        for o in others:
+            to = socket_of(nt, o)
+            old = to.links[0] if to.is_linked else None
+            if old is not None and old.from_socket.as_pointer() == frm.as_pointer():
+                continue
+            lk = nt.links.new(frm, to)
+            if lk is None:
+                raise RuntimeError(f"could not link {s} -> {o}")
+            lk.is_muted = muted.get((s, tuple(d)), False)
     # unlink the inputs that lost their link to a swap
     for _, a, b in f.swapped:
         for g in (a, b):

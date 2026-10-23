@@ -84,7 +84,7 @@ def containers(m, stacks=False):
             cand -= drop
         for w in [w for w in zones if z.all <= w.all]:
             w.all |= cand
-    frames = []
+    desc_of = {}
     for f in m.frames:
         desc = set()
         for n in m.real:
@@ -95,7 +95,29 @@ def containers(m, stacks=False):
                     break
                 p = m.parent(p)
         if desc:
-            frames.append(Container("frame", f, desc))
+            desc_of[f] = desc
+    # a frame with nodes on both sides of a zone's border would not be one block: its nodes outside
+    # the zone join it when they only feed nodes inside it (their own inputs just enter the zone),
+    # so the frame stays whole and nothing else ends up inside it
+    pairs = {n for z in zones for n in z.pair}
+    changed = True
+    while changed:
+        changed = False
+        for z in zones:
+            inside = z.all - {z.pair[0]}
+            around = [w for w in zones if z.all <= w.all]
+            for desc in desc_of.values():
+                if not desc & inside or desc <= z.all or z.all <= desc:
+                    continue  # the frame does not cross this zone's border (it holds it whole)
+                for n in sorted(desc - z.all):
+                    if n in pairs or any(n in w.all and w not in around for w in zones):
+                        continue  # a zone node, or a node of another zone
+                    if succ.get(n) and succ[n] <= inside:
+                        for w in around:
+                            w.all.add(n)
+                        inside.add(n)
+                        changed = True
+    frames = [Container("frame", f, desc) for f, desc in desc_of.items()]
     kept = list(zones)
     for f in sorted(frames, key=lambda c: -len(c.all)):
         if all(not (f.all & c.all) or f.all <= c.all or c.all <= f.all for c in kept):

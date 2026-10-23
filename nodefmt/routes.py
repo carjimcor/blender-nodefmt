@@ -145,8 +145,10 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
     one label near the start is enough. Labels of one source with the same text form a group;
     its label goes on the first reroute of the group's own part of the wire (after it splits
     from destinations outside the group), else of the whole wire (NF040, first=True; else the
-    reroute nearest where the label was). With no reroute there, a new one goes MARGIN along
-    the first horizontal run. The group's other labelled reroutes are dropped (blend.apply).
+    reroute nearest where the label was). With no reroute there, a new one goes MARGIN before
+    the input that uses the wire, on its last horizontal run (else on another run). A label is
+    never lost: with no free spot, it goes there anyway. The group's other labelled reroutes are
+    dropped (blend.apply).
 
     A new reroute never puts its text over another label or a node, nor its dot near another
     wire or reroute. With clear (NF041), a label whose text would overlap a label or a node or
@@ -220,9 +222,10 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
         if own and not first:  # NF040 off: the reroute nearest to where the label was
             own = sorted(own, key=lambda q: (abs(q[0] - lab["x"]) + abs(q[1] - lab["y"]), q))
 
-        def new(runs, t=t, src=src, text=text):
-            """A new reroute near the start of the first horizontal run of `runs` where it
-            troubles nothing (and is put on the tree), else None."""
+        def new(runs, t=t, src=src, text=text, from_end=False):
+            """A new reroute near the start of the first horizontal run of `runs` (from_end: near
+            the end, where the wire is consumed) where it troubles nothing (and is put on the
+            tree), else None."""
             for a, b in runs:
                 if abs(a[1] - b[1]) > 0.05 or abs(a[0] - b[0]) < 2.0:
                     continue
@@ -234,7 +237,7 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
                 # the greyed copies Blender will show on the reroutes after it
                 copies = [_label_box(c, text) for c in _below(t, b)] if clear else []
                 for d in ds:
-                    q = (round(a[0] + sign * d, 1), a[1])
+                    q = (round(b[0] - sign * d, 1), a[1]) if from_end else (round(a[0] + sign * d, 1), a[1])
                     if (
                         CLEAR <= d <= span - CLEAR
                         and free(src, q, text)
@@ -243,6 +246,19 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
                     ):
                         points.add((src, q))
                         return q
+            return None
+
+        def force(runs, t=t, src=src):
+            """A new reroute on the last horizontal run of `runs`, MARGIN before its end (or at
+            its middle), even where its text is in the way: a label is never dropped."""
+            for a, b in runs[::-1]:
+                if abs(a[1] - b[1]) > 0.05 or abs(a[0] - b[0]) < 2.0:
+                    continue
+                sign = 1.0 if b[0] > a[0] else -1.0
+                q = (round(b[0] - sign * min(MARGIN, abs(b[0] - a[0]) / 2), 1), a[1])
+                if _insert(t, a, b, q):
+                    points.add((src, q))
+                    return q
             return None
 
         p = None
@@ -259,8 +275,10 @@ def place_labels(trees, labels, boxes=(), first=True, clear=True):
             p = next(
                 (q for q in ok if not any(_overlap(_label_box(q, text), b) for b in boxes)), ok[0] if ok else own[0]
             )
-        elif p is None:  # no reroute on the way: a new one near the start of the first horizontal run
-            p = new(list(pairwise(path)))
+        elif p is None:  # no reroute on the way: a new one on the run into the input that uses the
+            # wire, else on any run, else in the way of something rather than lose the label
+            runs = list(pairwise(path))
+            p = new(runs[::-1], from_end=True) or new(runs) or force(runs)
             if p is None:
                 continue
         out[(src, p)] = (lab["name"], lab["label"])

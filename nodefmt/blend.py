@@ -4,7 +4,7 @@ links, and the links of swapped commutative inputs."""
 
 import time
 
-from . import routes
+from . import routes, wires
 from .ortho import to_px
 
 REROUTE = "NodeReroute"
@@ -103,17 +103,12 @@ def apply_steps(nt, f):
 
     # a reroute that lies inside a frame belongs to it (the innermost one); only the frame's
     # inner area counts, so a reroute never makes Blender grow the frame around it
-    rects = []
-    for r in sorted(f._frame_rects(), key=lambda r: r["w"] * r["h"]):
-        pl, pt, pr, pb = m.pads.get(r["name"], (30, 40, 30, 30))
-        rects.append((r["name"], r["x"] + pl, r["y"] + pt, r["x"] + r["w"] - pr, r["y"] + r["h"] - pb))
+    rects = f.frame_areas()
 
     def frame_at(p):
         """The innermost frame whose inner area holds layout point p, or None."""
-        for name, x0, y0, x1, y1 in rects:
-            if x0 <= p[0] <= x1 and y0 <= p[1] <= y1:
-                return nt.nodes.get(name)
-        return None
+        name = wires.frame_at(rects, p)
+        return nt.nodes.get(name) if name else None
 
     made = 0
     nodes_of = {}

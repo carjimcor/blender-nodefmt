@@ -28,12 +28,14 @@ E = 0.05  # points closer than this are the same (routes rounds to 0.1)
 class Drawing:
     """The wires of one tree as drawn (see the module docstring)."""
 
-    def __init__(self, trees, boxes, outlines=(), src_node=None, dst_node=None):
+    def __init__(self, trees, boxes, outlines=(), src_node=None, dst_node=None, frames=()):
         """trees: {tag: routes.Tree}; boxes: {node: (x0, y0, x1, y1)}; outlines: [(name,
-        [(x, y), ...])] closed polygons of zones and frames."""
+        [(x, y), ...])] closed polygons of zones and frames; frames: [(name, inner area, box)]
+        of the frames, innermost first (layout.Formatter.frame_areas)."""
         self.trees = trees
         self.boxes = boxes
         self.outlines = list(outlines)
+        self.frames = list(frames)
         # node of a source tag and of a destination key (for the clearance of a wire's own ends)
         self.src_node = src_node or (lambda tag: tag[0])
         self.dst_node = dst_node or (lambda key: key[0])
@@ -65,6 +67,22 @@ class Drawing:
         """Segments of every tree."""
         return [s for tag in sorted(self.trees, key=repr) for s in self.tree_segments(tag)]
 
+    def frame_at(self, p):
+        """The innermost frame whose inner area holds point p, or None."""
+        return frame_at(self.frames, p)
+
+    def may_move(self, p, q):
+        """True if a reroute may move from p to q without changing frames in a way Blender would
+        show: it joins no frame it was not in, and does not leave the box of the one it was in
+        (it may go into that frame's padding, where it is drawn inside the frame)."""
+        f, g = self.frame_at(p), self.frame_at(q)
+        if g is not None and g != f:
+            return False
+        if f is not None and g is None:
+            box = next(b for name, _, b in self.frames if name == f)
+            return _in_rect(box, q)
+        return True
+
     def reroutes(self, tag=None):
         """Reroute points [(tag, point)] of one tree or of all."""
         tags = [tag] if tag is not None else sorted(self.trees, key=repr)
@@ -72,6 +90,21 @@ class Drawing:
 
 
 # ---------------------------------------------------------------- geometry
+def _in_rect(r, p, m=0.1):
+    """True if point p lies in rectangle r (x0, y0, x1, y1); points are rounded to 0.1, so the
+    edges count."""
+    return r[0] - m <= p[0] <= r[2] + m and r[1] - m <= p[1] <= r[3] + m
+
+
+def frame_at(frames, p):
+    """The name of the innermost of frames [(name, inner area, box)] whose inner area holds
+    point p, or None."""
+    for name, inner, _ in frames:
+        if _in_rect(inner, p):
+            return name
+    return None
+
+
 def horiz(s):
     """True if segment s is horizontal (and not a point)."""
     return abs(s[1][1] - s[2][1]) <= 0.5 and abs(s[1][0] - s[2][0]) > 0.5
@@ -561,7 +594,8 @@ def _runs(t):
 
 def _levels(d, pa, a, b, c):
     """Heights a run from x = a to x = b may take: the levels before and after it, and just
-    above or below every node box in its way (a lane gap away)."""
+    above or below every node box in its way (a lane gap away), where its two reroutes stay in
+    their frames (Drawing.may_move)."""
     x0, x1 = sorted((a[0], b[0]))
     ys = {pa[1], c[1]}
     g = P.LANE_GAP
@@ -571,7 +605,11 @@ def _levels(d, pa, a, b, c):
             ys.add(round(box[3] + g, 1))
     lo, hi = min(pa[1], c[1], a[1]) - 400.0, max(pa[1], c[1], a[1]) + 400.0
     near = sorted((y for y in ys - {pa[1], c[1]} if lo <= y <= hi), key=lambda y: (abs(y - a[1]), y))[:6]
-    return sorted(y for y in set(near) | {pa[1], c[1]} if abs(y - a[1]) > 0.5)
+    return sorted(
+        y
+        for y in set(near) | {pa[1], c[1]}
+        if abs(y - a[1]) > 0.5 and d.may_move(a, (a[0], y)) and d.may_move(b, (b[0], y))
+    )
 
 
 def tidy(d, rules, passes=4):

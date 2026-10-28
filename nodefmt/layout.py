@@ -698,7 +698,7 @@ class Formatter:
         """Absolute positions: every container's local layout shifted to where its block sits;
         then (route=True) the reroute trees, the tidy pass and the labels."""
         m = self.m
-        self.pos, self.segments = {}, []
+        self.pos, self.segments, self.route_ys = {}, [], {}
         self._place(root, (0.0, 0.0))
         # the anchor (Group Output, else another output node, else the first node by name) stays
         # put, so formatting a formatted tree changes nothing
@@ -719,6 +719,7 @@ class Formatter:
         self.segments = [
             (t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d) for t, p, q, d in self.segments
         ]
+        self.route_ys = {k: [y + off[1] for y in ys] for k, ys in self.route_ys.items()}
         if not route:
             return
         if m.fan:  # NF035: a link laid out to its fan point goes on from there to its slot
@@ -765,7 +766,7 @@ class Formatter:
         for f in self._frame_rects():
             x0, y0, x1, y1 = f["x"], f["y"], f["x"] + f["w"], f["y"] + f["h"]
             outlines.append((f["name"], [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]))
-        return wires.Drawing(self.trees, boxes, outlines)
+        return wires.Drawing(self.trees, boxes, outlines, frames=self.frame_areas())
 
     def lint(self):
         """Violations of the formatted layout (lint.py), for the enabled rules."""
@@ -776,13 +777,22 @@ class Formatter:
         return lint.lint(self.drawing(), self.rules, labels, groups)
 
     def _frame_rects(self):
-        """Frames as Blender will draw them around their nodes: name, label and box."""
+        """Frames as Blender will draw them around their nodes and the reroutes of the wires
+        routed inside them (a wire that turns below or above every node of the frame): name,
+        label and box."""
         m = self.m
+        route_ys = getattr(self, "route_ys", {})
+
+        def inside(c):
+            """Route heights of container c and of the containers in it."""
+            return route_ys.get(id(c), []) + [y for ch in c.children for y in inside(ch)]
+
         frames = []
         for c, res in self.res.values():
             if c.kind == "frame":
                 xs = [self.pos[n][0] for n in c.all] + [self.pos[n][0] + m.box[n][2] for n in c.all]
                 ys = [self.pos[n][1] for n in c.all] + [self.pos[n][1] + m.box[n][3] for n in c.all]
+                ys += inside(c)
                 pl, pt, pr, pb = m.pads.get(c.key, (30, 40, 30, 30))
                 frames.append(
                     {
@@ -795,6 +805,18 @@ class Formatter:
                     }
                 )
         return frames
+
+    def frame_areas(self):
+        """Every frame, innermost first: [(name, inner area, box)], each a (x0, y0, x1, y1). The
+        inner area is the box less the padding: a reroute in it belongs to the frame without
+        making it grow."""
+        m = self.m
+        out = []
+        for r in sorted(self._frame_rects(), key=lambda r: r["w"] * r["h"]):
+            pl, pt, pr, pb = m.pads.get(r["name"], (30, 40, 30, 30))
+            x0, y0, x1, y1 = r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"]
+            out.append((r["name"], (x0 + pl, y0 + pt, x1 - pr, y1 - pb), (x0, y0, x1, y1)))
+        return out
 
     def _place(self, c, off):
         """Absolute positions of container c laid out at offset `off`, and its route segments
@@ -814,6 +836,7 @@ class Formatter:
             self.segments.append(
                 (retag.get(tag, tag), (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), self._dst(dst))
             )
+            self.route_ys.setdefault(id(c), []).extend((p[1] + off[1], q[1] + off[1]))
 
     def _dst(self, dst):
         """The real input socket a route segment ends at (None if the route continues)."""

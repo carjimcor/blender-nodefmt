@@ -294,7 +294,7 @@ def drawing(nt, data=None):
             continue
         x, y = n.location_absolute
         boxes[n.name] = (x, -y, x + n.dimensions.x / ui, -y + n.dimensions.y / ui)
-    outlines, groups = [], {}
+    outlines, groups, frames = [], {}, []
     for c in containers(m):
         if c.kind == "zone":
             inp, out = c.pair
@@ -306,7 +306,10 @@ def drawing(nt, data=None):
             x0, y0, x1, y1 = x, -y, x + f.dimensions.x / ui, -y + f.dimensions.y / ui
             outlines.append((c.key, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]))
             groups[c.key] = set(c.all)
-    return wires.Drawing(trees, boxes, outlines), labels, groups
+            pl, pt, pr, pb = m.pads.get(c.key, (30, 40, 30, 30))
+            frames.append((c.key, (x0 + pl, y0 + pt, x1 - pr, y1 - pb), (x0, y0, x1, y1)))
+    frames.sort(key=lambda f: (f[2][2] - f[2][0]) * (f[2][3] - f[2][1]))  # innermost first
+    return wires.Drawing(trees, boxes, outlines, frames=frames), labels, groups
 
 
 def _source_gid(lk):

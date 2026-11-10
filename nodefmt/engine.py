@@ -343,6 +343,9 @@ class _Layout(
         ys = [i.y for i in reals] + [i.y + i.h for i in reals] + [i.y for i in pts]
         for g in self.track_x:
             xs += list(g.values())
+        # wires drawn beside a box (NF023 a stack's side wires, NF035 fans) stay inside the block
+        for i in reals:
+            xs += [i.x - getattr(i, "reach_l", 0.0), i.x + i.w + getattr(i, "reach_r", 0.0)]
         minx, maxx = (min(xs), max(xs)) if xs else (0.0, 0.0)
         miny, maxy = (min(ys), max(ys)) if ys else (0.0, 0.0)
         miny = snap_down(miny)

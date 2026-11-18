@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.15.0
+
+Blender 5.3, and fixes for frames, fans and the order of branches. With the default rules, node
+positions are the same as in 0.14.0, except in trees that hit one of these cases.
+
+- Blender 5.3. nodefmt works in it as in 5.2. Blender 5.3 draws nodes a little shorter (a Math
+  node is 139 units tall instead of 148), so the wires of a tree sorted in 5.2 are a few units
+  off in 5.3: it is reported as not formatted (NF900) until it is sorted again.
+- Reroutes stay in the frame of their wire. The tidy pass could move a wire's run into another
+  frame, a wire that turns above or below every node of its frame got its reroutes outside it,
+  and so did the wires that turn beside a frame's first or last column (the side wires of a
+  stack, NF023) and a run made level with a socket a pixel away. Those reroutes stayed behind
+  when the frame was moved. Now they are children of the frame.
+- No wire over a frame's label. The tidy pass moved a horizontal run through a frame that holds
+  neither of its ends, across the label; and where a reroute was left out of its frame, Blender
+  drew the label over the wire. A run now stays out of such a frame.
+- NF035: the fan of a Join Geometry that ends a frame is clear. The vertical tracks before it
+  were placed on the fan points or right of them, so a reroute sat on another wire (NF034) and
+  a wire reached its fan point from the right, running backwards.
+- NF030: branches keep the order they leave a node in. A frame or zone is laid out as one box
+  and did not know where the wires that enter it come from, so the wires of one node could
+  enter in another order than its sockets and cross right after leaving it. Now they enter in
+  the order of the sockets, and the same holds for the wires that leave a block into one node.
+- NF030: links into one multi-input socket (Join Geometry) cost less to cross than the rest of a
+  bundle. Their order in the socket is part of the tree; when it disagrees with the order the
+  branches leave a node in, the branches keep that order and cross where they converge. The
+  check reports those crossings as before.
+
 ## 0.14.0
 
 Fixes. With the default rules, node positions are the same as in 0.13.0, except in trees that hit

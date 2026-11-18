@@ -61,6 +61,11 @@ Blender opens its window for a few seconds (node sizes only exist once a tree is
 closes itself. `--factory-startup` gives a fixed UI scale of 1.0; NF034 is tested at 1.25 and
 NF003-rows at 1.4, the scales their examples are made for.
 
+The examples are saved with Blender 5.3, and their wires are exact for its node sizes: run the
+tests with 5.3. In a version that draws nodes with other sizes (5.2 draws them a little taller)
+the check column fails until the examples are rebuilt there (`tools/make_examples.py`, then
+`tools/dump_examples.py` and the baseline, see above).
+
 Each example in `examples/` (a second example of a rule is `NF0xx-<what>.blend`) is tested for:
 
 - **check**: the check reports the example's rule on the tree as saved. Rules with no geometric

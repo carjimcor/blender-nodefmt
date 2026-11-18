@@ -23,6 +23,7 @@ from . import params as P
 from . import routes
 
 E = 0.05  # points closer than this are the same (routes rounds to 0.1)
+FRAME_TOL = 2.0  # a reroute this far outside a frame's inner area still belongs to the frame
 
 
 class Drawing:
@@ -72,15 +73,25 @@ class Drawing:
         return frame_at(self.frames, p)
 
     def may_move(self, p, q):
-        """True if a reroute may move from p to q without changing frames in a way Blender would
-        show: it joins no frame it was not in, and does not leave the box of the one it was in
-        (it may go into that frame's padding, where it is drawn inside the frame)."""
-        f, g = self.frame_at(p), self.frame_at(q)
-        if g is not None and g != f:
+        """True if a reroute may move from p to q and stay in the frame it was in: q lies in the
+        inner area of that frame (or of no frame) and in the box of no other frame. A reroute in
+        a frame's padding would be drawn inside the frame without belonging to it (a reroute
+        belongs to the frame whose inner area holds it), and Blender would leave it behind when
+        the frame moves."""
+        f = self.frame_at(p)
+        return self.frame_at(q) == f and box_at(self.frames, q) == f
+
+    def may_run(self, a, b, y):
+        """True if the horizontal run a -> b may move to height y: its two reroutes stay in their
+        frames (may_move), and the run passes through the box of no frame that holds neither of
+        them (there it would run over the frame's label or behind its nodes' backdrop)."""
+        p, q = (a[0], y), (b[0], y)
+        if not (self.may_move(a, p) and self.may_move(b, q)):
             return False
-        if f is not None and g is None:
-            box = next(b for name, _, b in self.frames if name == f)
-            return _in_rect(box, q)
+        x0, x1 = sorted((a[0], b[0]))
+        for _, _, box in self.frames:
+            if box[1] < y < box[3] and x0 < box[2] and x1 > box[0] and not (_in_rect(box, p) or _in_rect(box, q)):
+                return False
         return True
 
     def reroutes(self, tag=None):
@@ -98,9 +109,20 @@ def _in_rect(r, p, m=0.1):
 
 def frame_at(frames, p):
     """The name of the innermost of frames [(name, inner area, box)] whose inner area holds
-    point p, or None."""
+    point p, or None. A point up to FRAME_TOL outside the inner area still counts: a run made
+    level with a socket a pixel away (the straight tolerance) stays with its frame, which
+    Blender then draws that much bigger."""
     for name, inner, _ in frames:
-        if _in_rect(inner, p):
+        if _in_rect(inner, p, FRAME_TOL):
+            return name
+    return None
+
+
+def box_at(frames, p):
+    """The name of the innermost of frames [(name, inner area, box)] whose box holds point p,
+    or None."""
+    for name, _, box in frames:
+        if _in_rect(box, p):
             return name
     return None
 
@@ -595,7 +617,7 @@ def _runs(t):
 def _levels(d, pa, a, b, c):
     """Heights a run from x = a to x = b may take: the levels before and after it, and just
     above or below every node box in its way (a lane gap away), where its two reroutes stay in
-    their frames (Drawing.may_move)."""
+    their frames and the run crosses no other frame (Drawing.may_run)."""
     x0, x1 = sorted((a[0], b[0]))
     ys = {pa[1], c[1]}
     g = P.LANE_GAP
@@ -605,11 +627,7 @@ def _levels(d, pa, a, b, c):
             ys.add(round(box[3] + g, 1))
     lo, hi = min(pa[1], c[1], a[1]) - 400.0, max(pa[1], c[1], a[1]) + 400.0
     near = sorted((y for y in ys - {pa[1], c[1]} if lo <= y <= hi), key=lambda y: (abs(y - a[1]), y))[:6]
-    return sorted(
-        y
-        for y in set(near) | {pa[1], c[1]}
-        if abs(y - a[1]) > 0.5 and d.may_move(a, (a[0], y)) and d.may_move(b, (b[0], y))
-    )
+    return sorted(y for y in set(near) | {pa[1], c[1]} if abs(y - a[1]) > 0.5 and d.may_run(a, b, y))
 
 
 def tidy(d, rules, passes=4):

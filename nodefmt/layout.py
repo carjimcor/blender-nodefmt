@@ -698,7 +698,7 @@ class Formatter:
         """Absolute positions: every container's local layout shifted to where its block sits;
         then (route=True) the reroute trees, the tidy pass and the labels."""
         m = self.m
-        self.pos, self.segments, self.route_ys = {}, [], {}
+        self.pos, self.segments, self.route_ys, self.route_xs = {}, [], {}, {}
         self._place(root, (0.0, 0.0))
         # the anchor (Group Output, else another output node, else the first node by name) stays
         # put, so formatting a formatted tree changes nothing
@@ -720,6 +720,7 @@ class Formatter:
             (t, (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), d) for t, p, q, d in self.segments
         ]
         self.route_ys = {k: [y + off[1] for y in ys] for k, ys in self.route_ys.items()}
+        self.route_xs = {k: [x + off[0] for x in xs] for k, xs in self.route_xs.items()}
         if not route:
             return
         if m.fan:  # NF035: a link laid out to its fan point goes on from there to its slot
@@ -778,21 +779,23 @@ class Formatter:
 
     def _frame_rects(self):
         """Frames as Blender will draw them around their nodes and the reroutes of the wires
-        routed inside them (a wire that turns below or above every node of the frame): name,
-        label and box."""
+        routed inside them (a wire that turns below or above every node of the frame, or beside
+        its first or last column, like the side wires of a stack): name, label and box."""
         m = self.m
         route_ys = getattr(self, "route_ys", {})
+        route_xs = getattr(self, "route_xs", {})
 
-        def inside(c):
-            """Route heights of container c and of the containers in it."""
-            return route_ys.get(id(c), []) + [y for ch in c.children for y in inside(ch)]
+        def inside(c, routes):
+            """Route heights (or x of vertical runs) of container c and of the containers in it."""
+            return routes.get(id(c), []) + [v for ch in c.children for v in inside(ch, routes)]
 
         frames = []
         for c, res in self.res.values():
             if c.kind == "frame":
                 xs = [self.pos[n][0] for n in c.all] + [self.pos[n][0] + m.box[n][2] for n in c.all]
                 ys = [self.pos[n][1] for n in c.all] + [self.pos[n][1] + m.box[n][3] for n in c.all]
-                ys += inside(c)
+                xs += inside(c, route_xs)
+                ys += inside(c, route_ys)
                 pl, pt, pr, pb = m.pads.get(c.key, (30, 40, 30, 30))
                 frames.append(
                     {
@@ -837,6 +840,8 @@ class Formatter:
                 (retag.get(tag, tag), (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1]), self._dst(dst))
             )
             self.route_ys.setdefault(id(c), []).extend((p[1] + off[1], q[1] + off[1]))
+            if abs(p[0] - q[0]) <= 0.5 and abs(p[1] - q[1]) > 0.5:  # a vertical run: reroutes at its x
+                self.route_xs.setdefault(id(c), []).append(p[0] + off[0])
 
     def _dst(self, dst):
         """The real input socket a route segment ends at (None if the route continues)."""

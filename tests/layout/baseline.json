@@ -6,9 +6,9 @@
    "tree": "NF001",
    "nodes": 3,
    "seconds": 0.006,
-   "plan": 0.003,
+   "plan": 0.002,
    "runs": 1,
-   "fp": "9abd7ba7f075"
+   "fp": "f9933ca08c8e"
   },
   {
    "tree": "NF002",
@@ -16,15 +16,15 @@
    "seconds": 0.01,
    "plan": 0.004,
    "runs": 1,
-   "fp": "6e8a3baa477f"
+   "fp": "3add736ab536"
   },
   {
    "tree": "NF003-rows",
    "nodes": 5,
-   "seconds": 0.022,
+   "seconds": 0.021,
    "plan": 0.011,
    "runs": 1,
-   "fp": "a110d127bfcc"
+   "fp": "077e48fd5c41"
   },
   {
    "tree": "NF003",
@@ -32,119 +32,119 @@
    "seconds": 0.005,
    "plan": 0.002,
    "runs": 1,
-   "fp": "259764bcdedb"
+   "fp": "3584707e0b13"
   },
   {
    "tree": "NF004",
    "nodes": 3,
-   "seconds": 0.009,
-   "plan": 0.003,
+   "seconds": 0.007,
+   "plan": 0.002,
    "runs": 1,
-   "fp": "a15a0d7358bf"
+   "fp": "3e5fd52f0721"
   },
   {
    "tree": "NF005",
    "nodes": 9,
-   "seconds": 0.033,
+   "seconds": 0.031,
    "plan": 0.013,
    "runs": 1,
-   "fp": "5eb7f11477e0"
+   "fp": "d7ee12b36bae"
   },
   {
    "tree": "NF010",
    "nodes": 5,
-   "seconds": 0.016,
+   "seconds": 0.015,
    "plan": 0.009,
    "runs": 1,
-   "fp": "69cd488c37ab"
+   "fp": "5a0c3b0c306a"
   },
   {
    "tree": "NF011-frame",
    "nodes": 8,
-   "seconds": 0.044,
+   "seconds": 0.047,
    "plan": 0.012,
    "runs": 1,
-   "fp": "86851e7fb797"
+   "fp": "caed9cdb1d1b"
   },
   {
    "tree": "NF011-zone",
    "nodes": 9,
-   "seconds": 0.193,
-   "plan": 0.062,
+   "seconds": 0.243,
+   "plan": 0.06,
    "runs": 1,
-   "fp": "97459392a646"
+   "fp": "dc5ae8be47b1"
   },
   {
    "tree": "NF011",
    "nodes": 4,
-   "seconds": 0.008,
+   "seconds": 0.007,
    "plan": 0.003,
    "runs": 1,
-   "fp": "c08be145e2dc"
+   "fp": "472bac1b2cab"
   },
   {
    "tree": "NF020",
    "nodes": 6,
-   "seconds": 0.035,
-   "plan": 0.015,
+   "seconds": 0.034,
+   "plan": 0.014,
    "runs": 1,
-   "fp": "763ddbb0adf7"
+   "fp": "a45697526899"
   },
   {
    "tree": "NF021-alone",
    "nodes": 14,
-   "seconds": 0.07,
+   "seconds": 0.063,
    "plan": 0.03,
    "runs": 1,
-   "fp": "5853b8d81471"
+   "fp": "b584eeb32667"
   },
   {
    "tree": "NF021",
    "nodes": 8,
-   "seconds": 0.05,
-   "plan": 0.023,
+   "seconds": 0.044,
+   "plan": 0.02,
    "runs": 1,
-   "fp": "5837f2abfa89"
+   "fp": "c04e30801786"
   },
   {
    "tree": "NF022",
    "nodes": 7,
-   "seconds": 0.064,
-   "plan": 0.033,
+   "seconds": 0.058,
+   "plan": 0.03,
    "runs": 1,
-   "fp": "7e7806bf54aa"
+   "fp": "8262e86ccb88"
   },
   {
    "tree": "NF023",
    "nodes": 9,
-   "seconds": 0.025,
+   "seconds": 0.023,
    "plan": 0.01,
    "runs": 1,
-   "fp": "92fa4b014c6b"
+   "fp": "1f5dbfc301da"
   },
   {
    "tree": "NF030",
    "nodes": 4,
-   "seconds": 0.014,
-   "plan": 0.006,
+   "seconds": 0.013,
+   "plan": 0.005,
    "runs": 1,
-   "fp": "add0bc00dd8b"
+   "fp": "46e4d686a241"
   },
   {
    "tree": "NF031",
    "nodes": 5,
-   "seconds": 0.029,
-   "plan": 0.017,
+   "seconds": 0.037,
+   "plan": 0.016,
    "runs": 1,
-   "fp": "a10a14282173"
+   "fp": "8c18ee0f0436"
   },
   {
    "tree": "NF032",
    "nodes": 7,
-   "seconds": 0.206,
+   "seconds": 0.207,
    "plan": 0.074,
    "runs": 1,
-   "fp": "e472ad5229b8"
+   "fp": "c7f15be90384"
   },
   {
    "tree": "NF033",
@@ -152,7 +152,7 @@
    "seconds": 0.01,
    "plan": 0.004,
    "runs": 1,
-   "fp": "9548294c245e"
+   "fp": "0cfc39b87133"
   },
   {
    "tree": "NF034",
@@ -160,7 +160,7 @@
    "seconds": 0.016,
    "plan": 0.008,
    "runs": 1,
-   "fp": "cb02da35f965"
+   "fp": "e6dccc8180c1"
   },
   {
    "tree": "NF035-strings",
@@ -168,31 +168,31 @@
    "seconds": 0.006,
    "plan": 0.0,
    "runs": 1,
-   "fp": "07f2061cb51b"
+   "fp": "5c958c957472"
   },
   {
    "tree": "NF035",
    "nodes": 5,
-   "seconds": 0.008,
+   "seconds": 0.007,
    "plan": 0.0,
    "runs": 1,
-   "fp": "bdd45035660e"
+   "fp": "d48b101b365f"
   },
   {
    "tree": "NF036",
    "nodes": 10,
-   "seconds": 0.022,
+   "seconds": 0.021,
    "plan": 0.0,
    "runs": 1,
-   "fp": "0d09f93a009a"
+   "fp": "24dcb0580575"
   },
   {
    "tree": "NF040",
    "nodes": 3,
-   "seconds": 0.007,
+   "seconds": 0.008,
    "plan": 0.003,
    "runs": 1,
-   "fp": "16ea226cccad"
+   "fp": "e5b82c1bd713"
   },
   {
    "tree": "NF041",
@@ -200,15 +200,15 @@
    "seconds": 0.008,
    "plan": 0.003,
    "runs": 1,
-   "fp": "d0290b09f461"
+   "fp": "03f13f28d47c"
   },
   {
    "tree": "selection",
    "nodes": 9,
-   "seconds": 0.034,
-   "plan": 0.014,
+   "seconds": 0.031,
+   "plan": 0.013,
    "runs": 1,
-   "fp": "8c380e9e9ebe"
+   "fp": "ba60178e4ee7"
   }
  ]
 }

@@ -4,9 +4,13 @@
   scale socket offsets evenly, so at another scale links are off by a few units and `--check`
   reports the tree. Sort at the scale you work at.
 - **Blender version.** Socket positions are read from Blender's internal data with ctypes
-  (`sockets.py`), which matches Blender 5.2 and must be checked for each new version. If a
-  version changed the layout of that data, a sort or a check stops with a message instead of
+  (`sockets.py`), which matches Blender 5.2 and 5.3 and must be checked for each new version. If
+  a version changed the layout of that data, a sort or a check stops with a message instead of
   placing nodes wrongly.
+- **Trees sorted in another Blender version.** Wires are exact for the node sizes of the version
+  the tree was sorted in. Blender 5.3 draws nodes a little shorter than 5.2 (a Math node is 139
+  units tall instead of 148), so in a tree sorted in 5.2 the links are off by a few units and
+  `--check` reports it. Sort it again.
 - **Speed.** A small tree sorts in about a second; a large one (100 nodes or more) can take from
   several seconds to a few minutes.
 - **Unavoidable crossings.** Some crossings cannot be avoided (for example inside a bundle of

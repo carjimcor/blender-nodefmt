@@ -113,7 +113,7 @@ def verify(nt):
             if not ok:
                 raise UnsupportedBlender(
                     f"nodefmt cannot read socket positions in Blender "
-                    f"{'.'.join(map(str, bpy.app.version))} (checked up to 5.2): update nodefmt"
+                    f"{'.'.join(map(str, bpy.app.version))} (checked up to 5.3): update nodefmt"
                 )
         return
 

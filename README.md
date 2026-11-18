@@ -32,8 +32,8 @@ result is more satisfying.
 
 ## Install
 
-Blender 5.2 or newer. Download the `nodefmt-<version>.zip` of the latest
-[release](https://github.com/carjimcor/blender-nodefmt/releases) (or build it with
+Blender 5.2 or newer (tested with 5.2 and 5.3). Download the `nodefmt-<version>.zip` of the
+latest [release](https://github.com/carjimcor/blender-nodefmt/releases) (or build it with
 `tools/build.sh`), then in Blender: Edit > Preferences > Get Extensions > the arrow menu > Install
 from Disk.
 

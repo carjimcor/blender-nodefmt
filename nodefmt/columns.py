@@ -150,11 +150,14 @@ class ColumnsMixin:
         col_x = [0.0] * (self.R + 1)
         # wires drawn outside a box (NF023 a stack's side wires, NF035 fans) on the right of its
         # column or in the gap before it: the tracks of a gap keep clear of them
+        # (an item that hangs out of its column on the right still reaches out on its left)
         reach_r, reach_l = [0.0] * (self.R + 1), [0.0] * (self.R + 1)
         for i in self.items:
-            if not i.is_point and i not in hang and i not in sats:
+            if i.is_point or i in sats:
+                continue
+            reach_l[i.rank] = max(reach_l[i.rank], getattr(i, "reach_l", 0.0))
+            if i not in hang:
                 reach_r[i.rank] = max(reach_r[i.rank], i.w + getattr(i, "reach_r", 0.0) - colw[i.rank])
-                reach_l[i.rank] = max(reach_l[i.rank], getattr(i, "reach_l", 0.0))
         for k in range(self.R + 1):
             if k == 0:
                 col_x[0] = 0.0

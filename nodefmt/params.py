@@ -28,6 +28,7 @@ FAN_SLOPE = 1.5  # NF035: the reach is at least this times the largest drop of a
 
 # ---------------------------------------------------------------- track order (columns.py)
 EXACT_TRACKS = 8  # gaps with up to this many tracks are ordered exactly
+MULTI_BUNDLE = 0.7  # share of a bundle crossing's extra cost for two links into one multi-input socket
 TRACK_BUNDLE = 4.0  # a crossing inside a bundle (same source or destination node) counts this much
 TRACK_TOUCH = 8.0  # a wire that runs into another wire's corner counts this much
 TRACK_SHARE = 10.0  # NF036: tracks of a gap this far apart in height share one x (0: never; RR_CLEAR)

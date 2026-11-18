@@ -17,7 +17,7 @@ A weighted sum (weights W_* in params.py) of the faults of the routed wires:
 from bisect import bisect_left, bisect_right
 
 from . import params as P
-from .graph import slot_of
+from .graph import bundle_weight, end_of, slot_of
 
 
 def _near(p, q, d):
@@ -89,18 +89,46 @@ class CostMixin:
                 n += 1
         return n
 
-    def _dest_nodes(self, item):
-        """Real items a point (dummy, port) or node leads to; used to find bundles."""
+    def _dests(self, e):
+        """The ends (graph.end_of) of the real items link e leads to, through dummies and ports;
+        used to find bundles."""
         memo = self.__dict__.setdefault("_dest_memo", {})
-        if item in memo:
-            return memo[item]
-        if not item.is_point or item.kind in ("pin_out", "label"):
-            res = frozenset([item.id])
+        if e in memo:
+            return memo[e]
+        if not e.v.is_point or e.v.kind in ("pin_out", "label"):
+            res = frozenset([end_of(e.v.id, e.vk)])
         else:
-            memo[item] = frozenset()
-            res = frozenset().union(*[self._dest_nodes(f.v) for f in self.succ_edges[item]])
-        memo[item] = res
+            memo[e] = frozenset()
+            res = frozenset().union(*[self._dests(f) for f in self.succ_edges[e.v]])
+        memo[e] = res
         return res
+
+    def _outer(self):
+        """Pairs of border links that cross the border in the wrong order, as (bundle, plain):
+        two links from different sockets of one outside node that enter with the lower socket
+        above, or two links into one outside node that leave so. Each pair is a crossing the
+        parent container cannot avoid (it lays this container out as one box): one inside a
+        bundle, or a lighter one for two links into one multi-input socket (graph.bundle_weight)."""
+        ins, outs = {}, {}
+        for i in self.items:
+            for key, (node, sy, tag) in getattr(i, "ext_in", {}).items():
+                y = i.y if key is None else self._sock_y(i, key, False)
+                ins.setdefault(node, []).append((sy, y, tag, None))
+            for key, dests in getattr(i, "ext_out", {}).items():
+                y = i.y if key is None else self._sock_y(i, key, True)
+                for node, dy, multi in dests:
+                    outs.setdefault(node, []).append((dy, y, i.tag if key is None else key, multi))
+        bundle = plain = 0
+        for ends in list(ins.values()) + list(outs.values()):
+            for a in range(len(ends)):
+                for b in range(a + 1, len(ends)):
+                    (sa, ya, ta, ma), (sb, yb, tb, mb) = ends[a], ends[b]
+                    if ta != tb and (sa - sb) * (ya - yb) < -P.EPS:
+                        if ma is not None and ma == mb:
+                            plain += 1
+                        else:
+                            bundle += 1
+        return bundle, plain
 
     def faults(self):
         """Counts of the wire faults of the current layout (see the module docstring)."""
@@ -124,12 +152,11 @@ class CostMixin:
             else:
                 ds.append(s)
 
-        def dst(s):
-            return self._dest_nodes(s[3].v)
-
         def bundle(s, t):
-            """True if two segments belong to links that leave the same node or enter the same node."""
-            return s[0][0] == t[0][0] or bool(dst(s) & dst(t))
+            """How much two segments belong to a bundle: 1 for links that leave the same node or
+            enter the same node, less for two links into one multi-input socket
+            (graph.bundle_weight)."""
+            return 1.0 if s[0][0] == t[0][0] else bundle_weight(self._dests(s[3]), self._dests(t[3]))
 
         def dirty(x, s):
             """A crossing at x is too close to an end of segment s."""
@@ -157,14 +184,12 @@ class CostMixin:
                     bad += 1
                 else:
                     clean += 1
-                if bundle(h, v):
-                    inbundle += 1
+                inbundle += bundle(h, v)
         for d in ds:  # diagonal segments (none: every link is routed orthogonally)
             for t in hs + vs:
                 if t[0] != d[0] and _segments_cross(d[1], d[2], t[1], t[2]):
                     bad += 1
-                    if bundle(d, t):
-                        inbundle += 1
+                    inbundle += bundle(d, t)
         # collinear: two wires of different sources on one line (or almost)
         collinear = 0
         for group, axis in ((hs, 1), (vs, 0)):
@@ -211,6 +236,7 @@ class CostMixin:
                     continue
                 if min(s[1][1], s[2][1]) + 1 < pt[1] < max(s[1][1], s[2][1]) - 1:
                     on_wire += 1
+        outer, outer_plain = self._outer()
         return {
             "clean": clean,
             "bad": bad,
@@ -219,6 +245,8 @@ class CostMixin:
             "clash": clash,
             "on_wire": on_wire,
             "label": self._label_faults(bends, segs),
+            "outer": outer,
+            "outer_plain": outer_plain,
         }
 
     def _label_faults(self, bends, segs):
@@ -305,6 +333,8 @@ class CostMixin:
             P.W_CROSS * f["clean"]
             + P.W_CROSS_BAD * f["bad"]
             + P.W_CROSS_BUNDLE * f["bundle"]
+            + (P.W_CROSS + P.W_CROSS_BUNDLE) * f["outer"]
+            + (P.W_CROSS + P.MULTI_BUNDLE * P.W_CROSS_BUNDLE) * f["outer_plain"]
             + P.W_OVERLAP * f["collinear"]
             + P.W_CLASH * (f["clash"] + f["on_wire"])
             + P.W_BEND * bends

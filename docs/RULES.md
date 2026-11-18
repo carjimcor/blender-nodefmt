@@ -305,6 +305,15 @@ end side by side.
 socket. Without the rule Combine XYZ sits lower, so the wire from Separate XYZ comes down across
 it just before the Group Output. With the rule Combine XYZ sits on top and the wires do not cross.
 
+A frame or zone is laid out before what is around it, so it also counts the wires that cross
+its border: the wires from one node outside it enter in the order of that node's sockets, and
+the wires into one node outside it leave in the order of that node's sockets.
+
+The wires into one multi-input socket (Join Geometry) cost less to cross than the rest of a
+bundle (`MULTI_BUNDLE`, 0.7 of the extra cost): their order in the socket is part of the tree,
+so when it disagrees with the order they leave a node in, the branches keep that order and cross
+where they converge.
+
 **Off:** crossings inside a bundle cost as much as any other crossing.
 
 | Before | After |

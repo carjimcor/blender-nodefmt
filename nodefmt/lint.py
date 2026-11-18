@@ -12,6 +12,7 @@ from itertools import pairwise
 
 from . import params as P
 from . import routes, wires
+from .graph import bundle_weight, end_of
 from .rules import NAMES
 
 # x, y: where (y up); nodes: the nodes involved (the Check panel selects them and the reroutes at x, y)
@@ -94,7 +95,7 @@ def lint(d, rules=None, labels=None, groups=None):
     below = {tag: _below(d.trees[tag]) for tag in d.trees}
 
     def dests(s):
-        """Destination nodes a segment leads to."""
+        """Ends (graph.end_of) of the destinations a segment leads to."""
         return below[s[0]].get(s[2], frozenset())
 
     hs = [s for s in segs if wires.horiz(s)]
@@ -109,7 +110,7 @@ def lint(d, rules=None, labels=None, groups=None):
                 crosses.append((h, v, x))
     if "NF030" in rules:
         for h, v, x in crosses:
-            if h[0][0] == v[0][0] or (dests(h) & dests(v)):
+            if h[0][0] == v[0][0] or bundle_weight(dests(h), dests(v)) > 0:
                 out.append(
                     _v(
                         "NF030",
@@ -364,14 +365,14 @@ def report(vs, prefix=""):
 
 # ---------------------------------------------------------------- helpers
 def _below(t):
-    """For every point of tree t, the destination nodes below it."""
+    """For every point of tree t, the ends (graph.end_of) of the destinations below it."""
     memo = {}
 
     def go(p, depth=0):
-        """Destination nodes below point p."""
+        """Ends of the destinations below point p."""
         if p in memo:
             return memo[p]
-        s = {t.dst[p][0]} if p in t.dst else set()
+        s = {end_of(t.dst[p][0], t.dst[p])} if p in t.dst else set()
         if depth < 500:
             for c in t.children.get(p, ()):
                 s |= go(c, depth + 1)

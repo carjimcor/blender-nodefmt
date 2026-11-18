@@ -440,18 +440,25 @@ class Formatter:
         ports_in, ports_out = {}, {}
         direct_in, direct_out = {}, {}
         all_edges = list(edges.values())
+        # where each border link comes from or goes to outside (cost.CostMixin._outer): the links
+        # of one outside node cross the border in the order of its sockets
+        for it in items:
+            it.ext_in, it.ext_out = {}, {}
         for s, d in b_in:
             b = self.item_of(c, d[0])
             bk = d if b.kind in ("node", "label") else self._port_key(self.cont_of[b.id], s, d)
+            ext = (s[0], m.outs[s[0]].get(s, (0.0, 0.0))[1], s)
             if b.rank == 0:
                 key = (PORT_D, b.id, bk)
                 direct_in[key] = (b, bk)
                 b.comm = None  # fed from outside: the parent exchanges this pair (_border_pairs)
+                b.ext_in[bk] = ext
             else:
                 key = (PORT_IN, s)
                 if key not in ports_in:
                     p = engine.Item(("pin", s, c.kind, c.key), "pin_in", pin="first")
                     p.tag = s
+                    p.ext_in, p.ext_out = {None: ext}, {}
                     ports_in[key] = p
                     items.append(p)
                 e = engine.Edge(ports_in[key], "out", b, bk, s, m.geo[s])
@@ -460,16 +467,21 @@ class Formatter:
                     all_edges.append(e)
         for s, d in b_out:
             a = self.item_of(c, s[0])
+            ext = (d[0], m.slot_at(d)[1], d[:3] if len(d) == 4 else None)
             if a.rank == R or a.pin == "last":
                 direct_out[s] = a
+                a.ext_out.setdefault(s, []).append(ext)
             elif s not in ports_out:
                 p = engine.Item(("pout", s, c.kind, c.key), "pin_out", pin="last")
                 p.tag = s
+                p.ext_in, p.ext_out = {}, {None: [ext]}
                 ports_out[s] = p
                 items.append(p)
                 e = engine.Edge(a, s, p, "in", s, m.geo[s])
                 e.route = routes_of.get((s, d))
                 all_edges.append(e)
+            else:
+                ports_out[s].ext_out[None].append(ext)
         for it in items:
             if it.kind == "pin_in":
                 it.ins = {}

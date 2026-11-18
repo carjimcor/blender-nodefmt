@@ -24,6 +24,27 @@ def slot_of(key):
     return key if isinstance(key, tuple) and len(key) == 4 else None
 
 
+def end_of(node, key):
+    """Where a link ends, for finding bundles: (node, its multi-input socket or None)."""
+    k = slot_of(key)
+    return (node, k[:3] if k is not None else None)
+
+
+def bundle_weight(a, b):
+    """How much two sets of link ends (end_of) make a bundle: 1 for links that enter one node,
+    0 for none. The links into the slots of one multi-input socket (Join Geometry) count
+    MULTI_BUNDLE: their order there is part of the tree, so when it disagrees with the order
+    they leave their sources in, they keep that order and cross where they converge."""
+    w = 0.0
+    for n, k in a:
+        for n2, k2 in b:
+            if n == n2:
+                if k is None or k != k2:
+                    return 1.0
+                w = P.MULTI_BUNDLE
+    return w
+
+
 SNAP_TOL = 1e-3  # sizes read from Blender carry float noise (140.00002 or 139.99993 for 140)
 
 

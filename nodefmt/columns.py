@@ -5,7 +5,7 @@ Entry points: assign_x() (columns, track order, satellites) and shelf() (items w
 """
 
 from . import params as P
-from .graph import _name, snap_down, snap_up
+from .graph import _name, bundle_weight, end_of, snap_down, snap_up
 
 
 class ColumnsMixin:
@@ -144,7 +144,7 @@ class ColumnsMixin:
             k = e.u.rank
             t = self._turn_y(e)
             if t is not None:  # every link that is not straight turns on a track
-                bends[k].setdefault(e.tag, []).append((self._sock_y(e.u, e.uk, True), t, _node_of(e.v)))
+                bends[k].setdefault(e.tag, []).append((self._sock_y(e.u, e.uk, True), t, end_of(e.v.id, e.vk)))
         self.bends = bends
         self.track_x = [{} for _ in range(self.R)]
         col_x = [0.0] * (self.R + 1)
@@ -221,7 +221,7 @@ class ColumnsMixin:
             """Crossings (weighted) when track a is left of track b."""
             _sa, oa, lo_a, hi_a, va = info[a]
             sb, _ob, lo_b, hi_b, vb = info[b]
-            w = P.TRACK_BUNDLE if (a[0] == b[0] or va & vb) else 1.0
+            w = 1.0 + (P.TRACK_BUNDLE - 1.0) * (1.0 if a[0] == b[0] else bundle_weight(va, vb))
             c = 0.0
             if lo_a + P.EPS < sb < hi_a - P.EPS:  # b's entry passes a's vertical
                 c += w
@@ -304,11 +304,6 @@ def _slots(tags, segs):
                 s = max(s, slot[u] + 1)
         span[t], slot[t] = (lo, hi), s
     return slot
-
-
-def _node_of(item):
-    """The node a routed link enters (dummies and ports stand for themselves)."""
-    return item.id
 
 
 def _exact_order(W):

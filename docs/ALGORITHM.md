@@ -199,7 +199,7 @@ The cost of a container's layout is a weighted sum (`params.py`, section "layout
 |---|---|---|
 | `W_CROSS` | 4 | each clean crossing: a horizontal and a vertical wire, away from bends (`NEAR_RR` 10) and sockets (`NEAR_SOCK` 20) |
 | `W_CROSS_BAD` | 12 | each crossing near a bend, a reroute or a socket |
-| `W_CROSS_BUNDLE` | 15 | extra for each crossing of two wires that leave the same node or enter the same node |
+| `W_CROSS_BUNDLE` | 15 | extra for each crossing of two wires that leave the same node or enter the same node (`MULTI_BUNDLE`, 0.7 of it, for two wires into one multi-input socket); also, with `W_CROSS`, for each pair of wires of one outside node that cross a frame's or zone's border in the wrong order |
 | `W_OVERLAP` | 40 | each pair of wires of different sources on one line, or closer than `COLLINEAR` (6) |
 | `W_CLASH` | 40 | each reroute closer than `RR_CLEAR` (10) to another, or closer than `ON_WIRE` (6) to another wire |
 | `W_BEND` | 3 | each link that is not straight (it needs two reroutes) |

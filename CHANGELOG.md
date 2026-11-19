@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.1
+
+Fixes for NF010 (copies of input nodes). With the default rules, node positions are the same as
+in 0.15.0, except in trees that hit one of these cases.
+
+- NF010: constants are never copied. A copy of a Value, Vector, Color, Object, Material or any
+  other constant held the value in two places: change one and the other stayed. Constants of any
+  type (Value, Integer, Integer Vector, Boolean, Vector, Color, Rotation, String, Menu, Object,
+  Collection, Material, Image, Font, RGB) now keep one node and its wire, and two existing
+  constants with the same value are no longer merged. Group Input, field inputs (Index,
+  Position, ...) and Named Attribute are copied as before.
+- NF010: a copy goes in the frame of the nodes it feeds. When two frames held the same input
+  node (an Index in each, say), a copy for nodes in one of them could be placed outside it.
+
 ## 0.15.0
 
 Blender 5.3, and fixes for frames, fans and the order of branches. With the default rules, node

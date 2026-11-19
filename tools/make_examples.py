@@ -289,6 +289,34 @@ def nf010_constants():
     return t
 
 
+def nf010_frames():
+    """A Position in frame "Shape" feeds a Multiply next to it and a Set Position at the far end
+    of the same frame. An Index in "Shape" and one in frame "Scale" compute the same thing, and
+    "Scale" feeds "Shape": merged into one Index, the two frames form a cycle. The copy of the
+    Position for the far Set Position must still go in "Shape"."""
+    t = Tree("NF010", inputs=(), name="NF010 duplicate-input-nodes (frames)")
+    sh = frame(t, "Shape")
+    ix = t.node("GeometryNodeInputIndex", 220, -200, parent=sh)  # "Index", the merged one
+    sc = frame(t, "Scale")
+    i2 = t.node("GeometryNodeInputIndex", 0, 300, parent=sc)
+    sm = t.node("ShaderNodeMath", 200, 300, parent=sc, operation="MULTIPLY")
+    cl = t.node("GeometryNodeCurvePrimitiveLine", 0, 0, parent=sh)
+    pos = t.node("GeometryNodeInputPosition", 0, -300, parent=sh)
+    vm = t.node("ShaderNodeVectorMath", 220, -300, parent=sh, operation="MULTIPLY")
+    sp = t.node("GeometryNodeSetPosition", 440, 0, parent=sh)
+    rs = t.node("GeometryNodeResampleCurve", 660, 0, parent=sh)
+    sp2 = t.node("GeometryNodeSetPosition", 880, 0, parent=sh)
+    go = t.node("NodeGroupOutput", 1100, 0)
+    chain(t, [cl, sp, rs, sp2, go])
+    t.link(i2, 0, sm, 0)
+    t.link(sm, 0, rs, "Count")
+    t.link(ix, 0, sp, "Selection")
+    t.link(pos, 0, vm, 0)
+    t.link(vm, 0, sp, "Offset")
+    t.link(pos, 0, sp2, "Position")
+    return t
+
+
 def nf011():
     """The wires into the two inputs of an Add cross: X goes to the lower input, Y to the upper."""
     t = Tree("NF011", inputs=(), outputs=(("Value", "Float"),))
@@ -698,6 +726,7 @@ EXAMPLES = {
     "NF005": nf005,
     "NF010": nf010,
     "NF010-constants": nf010_constants,
+    "NF010-frames": nf010_frames,
     "NF011": nf011,
     "NF011-frame": nf011_frame,
     "NF011-zone": nf011_zone,

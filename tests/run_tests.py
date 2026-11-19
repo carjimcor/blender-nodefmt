@@ -153,16 +153,38 @@ def not_centred(nt):
     return int(not centred(nt))
 
 
+def outside_frame(nt):
+    """Input nodes outside the frame that holds every node they feed (through reroutes)."""
+    from nodefmt import dup
+
+    n = 0
+    for v in nt.nodes:
+        if not dup.duplicable(v):
+            continue
+        todo = [lk.to_node for o in v.outputs for lk in o.links]
+        frames = set()
+        while todo:
+            c = todo.pop()
+            if c.bl_idname == "NodeReroute":
+                todo += [lk.to_node for lk in c.outputs[0].links]
+            else:
+                frames.add(c.parent)
+        n += len(frames) == 1 and v.parent not in frames
+    return n
+
+
 def vector_copies(nt):
     """Vector nodes beyond the first: NF010 never copies a constant (NF010-constants has one)."""
     return max(0, sum(n.bl_idname == "FunctionNodeInputVector" for n in nt.nodes) - 1)
 
 
 # tests of one example (its file name): what, measure(tree) -> number that must be 0. NF022: the
-# '>' shape also with the default rules, which used to hide it. NF010-constants: one Vector
+# '>' shape also with the default rules, which used to hide it. NF010-constants: one Vector.
+# NF010-frames: the copies of an input node go in the frame of the nodes they feed
 EXTRA = {
     "NF003-rows": ("tiny steps", tiny_steps),
     "NF010-constants": ("Vector copies", vector_copies),
+    "NF010-frames": ("input nodes outside their consumers' frame", outside_frame),
     "NF022": ("output not between its inputs", not_centred),
 }
 

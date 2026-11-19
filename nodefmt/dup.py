@@ -305,12 +305,10 @@ def plan(data, mode="relayout"):
                 own.append(g)
         out = []
         for g in [keep] + own:
-            homes = {t["home"] for t in g}
-            parent = None
-            if len(homes) == 1:
-                h = next(iter(homes))
-                if h.kind == "frame":
-                    parent = h.key
+            # the frame the consumers sit in, read from the tree: the merged layout above may lay
+            # a frame out as loose nodes (merging members of different frames can make a cycle)
+            frames = {mdata["nodes"][t["d"][0]]["parent"] for t in g}
+            parent = next(iter(frames)) if len(frames) == 1 else None
             out.append({"dsts": sorted((t["k"], t["d"]) for t in g), "parent": parent})
         # existing members keep the groups they already feed most; other groups reuse a free
         # member (moved to the group's frame), else get a new copy

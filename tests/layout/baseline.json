@@ -59,6 +59,14 @@
    "fp": "5262f8c4712c"
   },
   {
+   "tree": "NF010-frames",
+   "nodes": 10,
+   "seconds": 0.122,
+   "plan": 0.085,
+   "runs": 1,
+   "fp": "9349535473f4"
+  },
+  {
    "tree": "NF010",
    "nodes": 5,
    "seconds": 0.015,

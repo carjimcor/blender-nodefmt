@@ -170,6 +170,16 @@ node and its wire, so its value is set in one place.
 |---|---|
 | ![NF010-constants before: long wires from the Group Input and the Vector](rules/NF010-constants-before.png) | ![NF010-constants after: a Group Input copy, one Vector](rules/NF010-constants-after.png) |
 
+A copy goes in the frame of the nodes it feeds.
+
+**Third example** (`NF010-frames`): the Position in frame "Shape" feeds a Multiply next to it and
+the Set Position at the far end of the frame. The two Index nodes, one per frame, compute the
+same thing. With the rule, the far Set Position gets its own Position, inside "Shape".
+
+| Before | After |
+|---|---|
+| ![NF010-frames before: a long wire from the Position inside frame Shape](rules/NF010-frames-before.png) | ![NF010-frames after: a Position copy next to Set Position, inside Shape](rules/NF010-frames-after.png) |
+
 ### NF011 commutative-swaps
 
 The two inputs of a commutative node (Add, Multiply, Minimum, Maximum, AND, OR, XOR, Equal, Not

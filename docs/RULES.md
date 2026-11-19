@@ -144,9 +144,11 @@ of a hash of the fingerprint, under the tree.
 
 ### NF010 duplicate-input-nodes
 
-Input-like nodes (Group Input, Named Attribute, Position, constants, ...) get a copy next to each
-distant group of consumers instead of long wires from one node. Never copied: String nodes,
-labelled nodes, and nodes that load data (Image Texture, Render Layers, ...).
+Input-like nodes (Group Input, Named Attribute, Position, ...) get a copy next to each distant
+group of consumers instead of long wires from one node. Never copied: constants of any type
+(Value, Integer, Boolean, Vector, Color, Rotation, String, Menu, Object, Collection, Material,
+Image, Font, RGB), whose copies would hold the value in two places, labelled nodes, and nodes
+that load data (Image Texture, Render Layers, ...).
 
 **Why:** a long wire across the tree is hard to follow and crosses everything on its way; a copy
 next to the consumer says the same thing locally.
@@ -159,6 +161,14 @@ With the rule, Transform Geometry gets its own Group Input.
 | Before | After |
 |---|---|
 | ![NF010 before: a long wire from the Group Input](rules/NF010-before.png) | ![NF010 after: a Group Input copy next to Transform](rules/NF010-after.png) |
+
+**Second example** (`NF010-constants`): a Group Input and a Vector each feed Set Position and
+Transform Geometry. The Group Input gets a copy next to Transform Geometry; the Vector keeps one
+node and its wire, so its value is set in one place.
+
+| Before | After |
+|---|---|
+| ![NF010-constants before: long wires from the Group Input and the Vector](rules/NF010-constants-before.png) | ![NF010-constants after: a Group Input copy, one Vector](rules/NF010-constants-after.png) |
 
 ### NF011 commutative-swaps
 

@@ -153,9 +153,18 @@ def not_centred(nt):
     return int(not centred(nt))
 
 
+def vector_copies(nt):
+    """Vector nodes beyond the first: NF010 never copies a constant (NF010-constants has one)."""
+    return max(0, sum(n.bl_idname == "FunctionNodeInputVector" for n in nt.nodes) - 1)
+
+
 # tests of one example (its file name): what, measure(tree) -> number that must be 0. NF022: the
-# '>' shape also with the default rules, which used to hide it
-EXTRA = {"NF003-rows": ("tiny steps", tiny_steps), "NF022": ("output not between its inputs", not_centred)}
+# '>' shape also with the default rules, which used to hide it. NF010-constants: one Vector
+EXTRA = {
+    "NF003-rows": ("tiny steps", tiny_steps),
+    "NF010-constants": ("Vector copies", vector_copies),
+    "NF022": ("output not between its inputs", not_centred),
+}
 
 # rules with no geometric check: what to measure instead (the rule must change the value, a
 # sort with the rule off must keep the example's)

@@ -48,7 +48,15 @@
    "seconds": 0.031,
    "plan": 0.013,
    "runs": 1,
-   "fp": "d7ee12b36bae"
+   "fp": "160cf61d8bc0"
+  },
+  {
+   "tree": "NF010-constants",
+   "nodes": 8,
+   "seconds": 0.051,
+   "plan": 0.023,
+   "runs": 1,
+   "fp": "5262f8c4712c"
   },
   {
    "tree": "NF010",
@@ -96,7 +104,7 @@
    "seconds": 0.063,
    "plan": 0.03,
    "runs": 1,
-   "fp": "b584eeb32667"
+   "fp": "3f1ff17ac19d"
   },
   {
    "tree": "NF021",
@@ -208,7 +216,7 @@
    "seconds": 0.031,
    "plan": 0.013,
    "runs": 1,
-   "fp": "ba60178e4ee7"
+   "fp": "aacca6c5a03f"
   }
  ]
 }

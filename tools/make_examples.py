@@ -266,6 +266,29 @@ def nf010():
     return t
 
 
+def nf010_constants():
+    """A Group Input and a Vector each feed a node next to them and Transform far to the right.
+    The Group Input gets a copy; the Vector is a constant and is never copied, so its value stays
+    in one place."""
+    t = Tree(
+        "NF010", inputs=(("Geometry", "Geometry"), ("Scale", "Float")), name="NF010 duplicate-input-nodes (constants)"
+    )
+    gi = t.node("NodeGroupInput", 0, 0)
+    vec = t.node("FunctionNodeInputVector", 0, -200)
+    vec.vector = (0.0, 0.0, 0.5)
+    sd = t.node("GeometryNodeSubdivideMesh", 220, 0)
+    sp = t.node("GeometryNodeSetPosition", 440, 0)
+    tri = t.node("GeometryNodeTriangulate", 660, 0)
+    du = t.node("GeometryNodeDualMesh", 880, 0)
+    tr = t.node("GeometryNodeTransform", 1100, 0)
+    go = t.node("NodeGroupOutput", 1340, 0)
+    chain(t, [gi, sd, sp, tri, du, tr, go])
+    t.link(vec, 0, sp, "Offset")
+    t.wire(gi, 1, tr, "Scale", [(180, "src"), (180, "bottom", -40), (1060, "bottom", -40), (1060, "dst")])
+    t.wire(vec, 0, tr, "Translation", [(400, "src"), (400, "bottom", -20), (1040, "bottom", -20), (1040, "dst")])
+    return t
+
+
 def nf011():
     """The wires into the two inputs of an Add cross: X goes to the lower input, Y to the upper."""
     t = Tree("NF011", inputs=(), outputs=(("Value", "Float"),))
@@ -674,6 +697,7 @@ EXAMPLES = {
     "NF004": nf004,
     "NF005": nf005,
     "NF010": nf010,
+    "NF010-constants": nf010_constants,
     "NF011": nf011,
     "NF011-frame": nf011_frame,
     "NF011-zone": nf011_zone,

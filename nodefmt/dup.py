@@ -2,9 +2,10 @@
 """Copies of input-like nodes, so that each group of consumers gets a source next to it.
 
 An input-like node has nothing linked into it (Group Input, Named Attribute, Index, Position,
-constants, ...). Nodes that compute the same thing (same type, properties and socket values)
-form a class, whose members the logic check treats as one source (check.py). Never copied:
-String nodes, labelled nodes, reroutes, frames, zone and output nodes, and nodes that load data.
+...). Nodes that compute the same thing (same type, properties and socket values) form a class,
+whose members the logic check treats as one source (check.py). Never copied: constants (Value,
+Vector, Color, Object, Material, ...: a copy would hold the value in two places), labelled
+nodes, reroutes, frames, zone and output nodes, and nodes that load data.
 
 plan() (pure) merges each class into one member, lays the merged tree out, groups the
 consumers by where they land and gives each distant group its own member: existing members are
@@ -17,19 +18,12 @@ import hashlib
 
 INPUTS = {
     "NodeGroupInput",
-    "ShaderNodeValue",
-    "FunctionNodeInputInt",
-    "FunctionNodeInputBool",
-    "FunctionNodeInputVector",
-    "FunctionNodeInputColor",
-    "FunctionNodeInputRotation",
     "FunctionNodeInputSpecialCharacters",
     "GeometryNodeCollectionInfo",
     "GeometryNodeObjectInfo",
     "GeometryNodeSelfObject",
     "GeometryNodeIsViewport",
-    # shader nodes that only read the shading point or hold a constant (no inputs)
-    "ShaderNodeRGB",
+    # shader nodes that only read the shading point (no inputs)
     "ShaderNodeTexCoord",
     "ShaderNodeAttribute",
     "ShaderNodeNewGeometry",
@@ -42,15 +36,29 @@ INPUTS = {
     "ShaderNodePointInfo",
     "ShaderNodeParticleInfo",
     "ShaderNodeVolumeInfo",
-    # compositor constants
+}
+# never copied: constants of any type (a copy would hold the value in two places: change one and
+# the other stays), and nodes that load data or render (images, textures, render layers, masks,
+# movie clips, scene and sequencer inputs), even with nothing linked in
+NEVER = {
+    "ShaderNodeValue",
+    "ShaderNodeRGB",
+    "FunctionNodeInputInt",
+    "FunctionNodeInputIntVector",
+    "FunctionNodeInputBool",
+    "FunctionNodeInputVector",
+    "FunctionNodeInputColor",
+    "FunctionNodeInputRotation",
+    "FunctionNodeInputString",
+    "FunctionNodeInputMenu",
+    "GeometryNodeInputObject",
+    "GeometryNodeInputCollection",
+    "GeometryNodeInputMaterial",
+    "GeometryNodeInputImage",
+    "GeometryNodeInputFont",
     "CompositorNodeRGB",
     "CompositorNodeValue",
     "CompositorNodeNormal",
-}
-# never copied: text, and nodes that load data or render (images, textures, render layers, masks,
-# movie clips, scene and sequencer inputs), even with nothing linked in
-NEVER = {
-    "FunctionNodeInputString",
     "ShaderNodeTexImage",
     "ShaderNodeTexEnvironment",
     "CompositorNodeImage",

@@ -52,8 +52,9 @@ RULES = [
         "duplicate-input-nodes",
         "style",
         (
-            "Input-like nodes (Group Input, Named Attribute, constants, ...) get a copy next to each "
-            "distant group of consumers instead of long wires from one node."
+            "Input-like nodes (Group Input, Named Attribute, Position, ...) get a copy next to each "
+            "distant group of consumers instead of long wires from one node. Constants are never "
+            "copied."
         ),
     ),
     (

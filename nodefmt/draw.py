@@ -92,15 +92,17 @@ class Editor:
             return
         pin, tree, path = self.space
         sp = area.spaces.active
-        if [p.node_tree for p in sp.path] == path and sp.pin == pin:
-            return
-        try:
-            sp.node_tree = tree
-            for parent, child in pairwise(path):
-                node = next((n for n in parent.nodes if getattr(n, "node_tree", None) == child), None)
-                sp.path.append(child, node=node)
-        except Exception:  # noqa: BLE001, S110 - restoring the editor's path is best effort
-            pass
+        if [p.node_tree for p in sp.path] != path:
+            # Rebuild the path pinned: setting the root of an unpinned editor that shows a modifier's
+            # group path leaves the group alone with no root, and Blender crashes drawing it.
+            try:
+                sp.pin = True
+                sp.node_tree = tree
+                for parent, child in pairwise(path):
+                    node = next((n for n in parent.nodes if getattr(n, "node_tree", None) == child), None)
+                    sp.path.append(child, node=node)
+            except Exception:  # noqa: BLE001, S110 - restoring the editor's path is best effort
+                pass
         sp.pin = pin
 
 

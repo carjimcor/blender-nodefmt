@@ -181,9 +181,48 @@ def run():
         r = bpy.ops.node.nodefmt_sort_all("EXEC_DEFAULT", True)
     test("sort all from a script", r == {"FINISHED"} and state(names) != start, str(r))
 
+    # A pinned editor inside a group that a modifier uses: the path and the pin come back
+    yield from pinned_path_tests(ui, names[1])
+    show(names[1])
+    yield 0.3
+
     # Capture Tree: at two UI scales, the selection, no undo step, Esc
     yield from capture_tests(ui)
     ui.unregister()
+
+
+def pinned_path_tests(ui, child):
+    """Sort Current Tree in an editor pinned to a group path (parent > child) where the parent is
+    a modifier's tree: the sort shows the child through the modifier (unpinned) and must put the
+    path and the pin back, and the editor must still draw."""
+    parent = bpy.data.node_groups.new("Pinned Parent", "GeometryNodeTree")
+    parent.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    group = parent.nodes.new("GeometryNodeGroup")
+    group.node_tree = bpy.data.node_groups[child]
+    host = bpy.data.objects.new("Pinned Host", bpy.data.meshes.new("Pinned Host"))
+    bpy.context.scene.collection.objects.link(host)
+    host.modifiers.new("Pinned", "NODES").node_group = parent
+    sp = editor()[1].spaces.active
+    for mode in ("INVOKE_DEFAULT", "EXEC_DEFAULT"):
+        sp.pin = True
+        sp.node_tree = parent
+        sp.path.append(bpy.data.node_groups[child], node=group)
+        yield 0.3
+        with override():
+            r = bpy.ops.node.nodefmt_sort_tree(mode, True)
+        yield from wait_job(ui, [])
+        path = [p.node_tree.name if p.node_tree else None for p in sp.path]
+        test(
+            f"pinned group path kept ({mode})",
+            r != {"CANCELLED"} and path == [parent.name, child] and sp.pin,
+            f"{path}, pin {sp.pin}",
+        )
+        with override():
+            bpy.ops.wm.redraw_timer(type="DRAW_WIN", iterations=2)
+        test(f"editor draws after the sort ({mode})", True)  # a broken path crashes Blender here
+    sp.pin = False
+    bpy.data.objects.remove(host)
+    bpy.data.node_groups.remove(parent)
 
 
 def check_tests(ui):
